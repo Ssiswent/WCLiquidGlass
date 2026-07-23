@@ -393,9 +393,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 %hook BaseMsgContentViewController
 
+- (void)viewWillDisappear:(BOOL)animated {
+    [WCLiquidGlassManager.sharedManager hideChatToolbarImmediately];
+    %orig;
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    [WCLiquidGlassManager.sharedManager refreshChatToolbar];
+    [WCLiquidGlassManager.sharedManager resumeChatToolbar];
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
