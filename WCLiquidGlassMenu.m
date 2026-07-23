@@ -1403,21 +1403,162 @@ BOOL WCLiquidGlassCurrentChatInputHasText(void) {
     return NO;
 }
 
-static UIView *WCLiquidGlassCurrentChatInputContainer(void) {
-    UIView *inputView = WCLiquidGlassCurrentChatInputView();
-    UIView *fallback = nil;
-    for (UIView *view = inputView; view; view = view.superview) {
-        NSString *className = NSStringFromClass(view.class);
-        if ([className containsString:@"MMInputToolView"] ||
-            [className containsString:@"MessageInputTool"] ||
-            [className containsString:@"ChatInputTool"]) {
-            return view;
-        }
-        if (!fallback && [className containsString:@"MMGrowTextView"]) {
-            fallback = view;
+static BOOL WCLiquidGlassIsChatController(UIViewController *controller) {
+    Class chatControllerClass = NSClassFromString(@"BaseMsgContentViewController");
+    return chatControllerClass != Nil && [controller isKindOfClass:chatControllerClass];
+}
+
+static UIViewController *WCLiquidGlassFindChatController(UIViewController *controller,
+                                                           NSUInteger depth) {
+    if (!controller || depth > 16) {
+        return nil;
+    }
+    if (WCLiquidGlassIsChatController(controller)) {
+        return controller;
+    }
+    UIViewController *candidate = WCLiquidGlassFindChatController(controller.presentedViewController,
+                                                                    depth + 1);
+    if (candidate) {
+        return candidate;
+    }
+    if ([controller isKindOfClass:UINavigationController.class]) {
+        candidate = WCLiquidGlassFindChatController(((UINavigationController *)controller).visibleViewController,
+                                                     depth + 1);
+        if (candidate) {
+            return candidate;
         }
     }
-    return fallback ?: inputView;
+    if ([controller isKindOfClass:UITabBarController.class]) {
+        candidate = WCLiquidGlassFindChatController(((UITabBarController *)controller).selectedViewController,
+                                                     depth + 1);
+        if (candidate) {
+            return candidate;
+        }
+    }
+    for (UIViewController *child in controller.childViewControllers.reverseObjectEnumerator) {
+        candidate = WCLiquidGlassFindChatController(child, depth + 1);
+        if (candidate) {
+            return candidate;
+        }
+    }
+    return nil;
+}
+
+static UIViewController *WCLiquidGlassCurrentChatController(void) {
+    UIViewController *visibleController = WCLiquidGlassVisibleController();
+    if (WCLiquidGlassIsChatController(visibleController)) {
+        return visibleController;
+    }
+    return WCLiquidGlassFindChatController(WCLiquidGlassApplicationWindow().rootViewController, 0);
+}
+
+static void WCLiquidGlassFindInputToolViewInView(UIView *view,
+                                                  UIView **bestView,
+                                                  NSInteger *bestScore) {
+    NSString *className = NSStringFromClass(view.class);
+    if ([className containsString:@"InputToolView"]) {
+        NSInteger score = [className containsString:@"MMInputToolView"] ? 1000 : 700;
+        if (!view.hidden && view.alpha > 0.01 && view.window) {
+            score += 200;
+        }
+        score += (NSInteger)MIN(400.0, CGRectGetMaxY(view.frame));
+        if (score > *bestScore) {
+            *bestView = view;
+            *bestScore = score;
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassFindInputToolViewInView(subview, bestView, bestScore);
+    }
+}
+
+static UIView *WCLiquidGlassInputToolViewForChatController(UIViewController *chatController) {
+    if (!chatController.viewIfLoaded) {
+        return nil;
+    }
+    UIView *inputToolView = nil;
+    NSInteger score = NSIntegerMin;
+    WCLiquidGlassFindInputToolViewInView(chatController.view, &inputToolView, &score);
+    return inputToolView;
+}
+
+static BOOL WCLiquidGlassMethodReturnsCGRect(NSMethodSignature *signature) {
+    if (!signature || signature.numberOfArguments != 2) {
+        return NO;
+    }
+    const char *returnType = signature.methodReturnType;
+    while (returnType && strchr("rnNoORV", returnType[0]) != NULL) {
+        returnType += 1;
+    }
+    return returnType && returnType[0] == '{';
+}
+
+static CGFloat WCLiquidGlassInputToolFrameDistance(CGRect first, CGRect second) {
+    return fabs(CGRectGetMinY(first) - CGRectGetMinY(second)) +
+        fabs(CGRectGetMidX(first) - CGRectGetMidX(second)) * 0.20 +
+        fabs(CGRectGetWidth(first) - CGRectGetWidth(second)) * 0.08;
+}
+
+static BOOL WCLiquidGlassCurrentChatInputToolFrames(UIView *hostView,
+                                                     CGRect *containerFrame,
+                                                     CGRect *inputFrame) {
+    UIViewController *chatController = WCLiquidGlassCurrentChatController();
+    UIView *inputToolView = WCLiquidGlassInputToolViewForChatController(chatController);
+    CGRect resolvedContainerFrame = CGRectNull;
+    if (inputToolView) {
+        resolvedContainerFrame = [inputToolView convertRect:inputToolView.bounds toView:hostView];
+    }
+
+    SEL frameSelector = NSSelectorFromString(@"getInputToolViewFrame");
+    if (chatController && [chatController respondsToSelector:frameSelector] &&
+        WCLiquidGlassMethodReturnsCGRect([chatController methodSignatureForSelector:frameSelector])) {
+        @try {
+            CGRect rawFrame = ((CGRect (*)(id, SEL))objc_msgSend)(chatController, frameSelector);
+            if (CGRectGetWidth(rawFrame) > 1.0 && CGRectGetHeight(rawFrame) > 1.0) {
+                CGRect controllerFrame = [chatController.view convertRect:rawFrame toView:hostView];
+                CGRect bestFrame = controllerFrame;
+                UIWindow *applicationWindow = WCLiquidGlassApplicationWindow();
+                if (applicationWindow && !CGRectIsNull(resolvedContainerFrame)) {
+                    CGRect windowFrame = [applicationWindow convertRect:rawFrame toView:hostView];
+                    if (WCLiquidGlassInputToolFrameDistance(windowFrame, resolvedContainerFrame) <
+                        WCLiquidGlassInputToolFrameDistance(bestFrame, resolvedContainerFrame)) {
+                        bestFrame = windowFrame;
+                    }
+                }
+                if (CGRectIsNull(resolvedContainerFrame) ||
+                    WCLiquidGlassInputToolFrameDistance(bestFrame, resolvedContainerFrame) <= 40.0) {
+                    resolvedContainerFrame = bestFrame;
+                }
+            }
+        } @catch (__unused NSException *exception) {
+        }
+    }
+
+    if (CGRectIsNull(resolvedContainerFrame) || CGRectGetWidth(resolvedContainerFrame) < 1.0) {
+        return NO;
+    }
+
+    UIView *resolvedInputView = nil;
+    NSInteger inputScore = NSIntegerMin;
+    if (inputToolView) {
+        WCLiquidGlassFindChatInputViewInView(inputToolView, &resolvedInputView, &inputScore);
+    }
+    if (!resolvedInputView) {
+        UIView *fallbackInputView = WCLiquidGlassCurrentChatInputView();
+        if (fallbackInputView && chatController.viewIfLoaded &&
+            [fallbackInputView isDescendantOfView:chatController.view]) {
+            resolvedInputView = fallbackInputView;
+        }
+    }
+    if (containerFrame) {
+        *containerFrame = resolvedContainerFrame;
+    }
+    if (inputFrame) {
+        *inputFrame = resolvedInputView
+            ? [resolvedInputView convertRect:resolvedInputView.bounds toView:hostView]
+            : resolvedContainerFrame;
+    }
+    return YES;
 }
 
 static NSArray<NSString *> *WCLiquidGlassDoutuButtonPropertyNames(void) {
@@ -2461,11 +2602,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (void)wc_refreshChatToolbarAnimated:(BOOL)animated {
-    UIView *inputView = WCLiquidGlassCurrentChatInputView();
-    UIView *inputContainer = WCLiquidGlassCurrentChatInputContainer();
+    CGRect inputContainerFrame = CGRectNull;
+    CGRect inputFrame = CGRectNull;
+    BOOL hasInputToolFrame = WCLiquidGlassCurrentChatInputToolFrames(self,
+                                                                       &inputContainerFrame,
+                                                                       &inputFrame);
     NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
     BOOL shouldShow = WCLiquidGlassPreferences.chatToolbarEnabled &&
-        inputView && inputContainer && !inputView.hidden && inputView.alpha > 0.01 && items.count > 0;
+        hasInputToolFrame && items.count > 0;
     if (!shouldShow) {
         if (self.chatToolbar.hidden) {
             return;
@@ -2521,24 +2665,25 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (void)wc_layoutChatToolbarAnimated:(BOOL)animated {
-    UIView *inputView = WCLiquidGlassCurrentChatInputView();
-    UIView *inputContainer = WCLiquidGlassCurrentChatInputContainer();
+    CGRect inputContainerFrame = CGRectNull;
+    CGRect inputFrame = CGRectNull;
+    BOOL hasInputToolFrame = WCLiquidGlassCurrentChatInputToolFrames(self,
+                                                                       &inputContainerFrame,
+                                                                       &inputFrame);
     BOOL shouldShow = WCLiquidGlassPreferences.chatToolbarEnabled &&
-        inputView && inputContainer && !inputView.hidden && inputView.alpha > 0.01 &&
+        hasInputToolFrame &&
         self.chatToolbar.actionIdentifiers.count > 0;
     if (!shouldShow) {
         [self wc_refreshChatToolbarAnimated:animated];
         return;
     }
 
-    CGRect inputFrame = [inputView convertRect:inputView.bounds toView:self];
-    CGRect containerFrame = [inputContainer convertRect:inputContainer.bounds toView:self];
     CGFloat availableWidth = MAX(0.0, CGRectGetWidth(self.bounds) - 24.0);
     CGFloat toolbarWidth = MIN(availableWidth, MAX(164.0, CGRectGetWidth(inputFrame) + 12.0));
     CGFloat toolbarHeight = 48.0;
     CGFloat toolbarX = CGRectGetMidX(inputFrame) - toolbarWidth * 0.5;
     toolbarX = MIN(CGRectGetWidth(self.bounds) - toolbarWidth - 12.0, MAX(12.0, toolbarX));
-    CGFloat toolbarY = CGRectGetMinY(containerFrame) - toolbarHeight - 10.0;
+    CGFloat toolbarY = CGRectGetMinY(inputContainerFrame) - toolbarHeight - 10.0;
     CGFloat minimumY = self.safeAreaInsets.top + 8.0;
     if (toolbarY < minimumY || CGRectGetWidth(inputFrame) < 1.0) {
         self.chatToolbar.alpha = 0.0;
