@@ -382,6 +382,21 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
+    [WCLiquidGlassManager.sharedManager refreshChatToolbar];
+}
+
+%end
+
+%hook BaseMsgContentViewController
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    [WCLiquidGlassManager.sharedManager refreshChatToolbar];
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    %orig;
+    [WCLiquidGlassManager.sharedManager refreshChatToolbar];
 }
 
 %end
