@@ -1262,12 +1262,6 @@ static BOOL WCLiquidGlassMethodReturnsCGRect(NSMethodSignature *signature) {
     return returnType && returnType[0] == '{';
 }
 
-static CGFloat WCLiquidGlassInputToolFrameDistance(CGRect first, CGRect second) {
-    return fabs(CGRectGetMinY(first) - CGRectGetMinY(second)) +
-        fabs(CGRectGetMidX(first) - CGRectGetMidX(second)) * 0.20 +
-        fabs(CGRectGetWidth(first) - CGRectGetWidth(second)) * 0.08;
-}
-
 static BOOL WCLiquidGlassCurrentChatInputToolFrames(UIView *hostView,
                                                      CGRect *containerFrame,
                                                      CGRect *inputFrame) {
@@ -1284,20 +1278,7 @@ static BOOL WCLiquidGlassCurrentChatInputToolFrames(UIView *hostView,
         @try {
             CGRect rawFrame = ((CGRect (*)(id, SEL))objc_msgSend)(chatController, frameSelector);
             if (CGRectGetWidth(rawFrame) > 1.0 && CGRectGetHeight(rawFrame) > 1.0) {
-                CGRect controllerFrame = [chatController.view convertRect:rawFrame toView:hostView];
-                CGRect bestFrame = controllerFrame;
-                UIWindow *applicationWindow = WCLiquidGlassApplicationWindow();
-                if (applicationWindow && !CGRectIsNull(resolvedContainerFrame)) {
-                    CGRect windowFrame = [applicationWindow convertRect:rawFrame toView:hostView];
-                    if (WCLiquidGlassInputToolFrameDistance(windowFrame, resolvedContainerFrame) <
-                        WCLiquidGlassInputToolFrameDistance(bestFrame, resolvedContainerFrame)) {
-                        bestFrame = windowFrame;
-                    }
-                }
-                if (CGRectIsNull(resolvedContainerFrame) ||
-                    WCLiquidGlassInputToolFrameDistance(bestFrame, resolvedContainerFrame) <= 40.0) {
-                    resolvedContainerFrame = bestFrame;
-                }
+                resolvedContainerFrame = [chatController.view convertRect:rawFrame toView:hostView];
             }
         } @catch (__unused NSException *exception) {
         }
