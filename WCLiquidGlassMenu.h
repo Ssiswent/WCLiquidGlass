@@ -46,6 +46,8 @@ extern NSString *const WCLiquidGlassManualTextEditNotification;
 - (void)hideChatToolbarImmediately;
 - (void)resumeChatToolbar;
 - (void)resumeChatToolbarImmediately;
+- (void)beginChatToolbarAppearanceTransition;
+- (void)endChatToolbarAppearanceTransition;
 
 @end
 
