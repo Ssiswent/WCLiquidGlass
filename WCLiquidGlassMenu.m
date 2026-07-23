@@ -1981,6 +1981,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, assign) BOOL chatToolbarLayoutAnimated;
 @property(nonatomic, assign) NSUInteger chatToolbarLayoutGeneration;
 @property(nonatomic, assign) BOOL chatToolbarSuppressed;
+@property(nonatomic, assign) BOOL chatToolbarAppearanceTransitionActive;
 @property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
 @property(nonatomic, weak) WCLiquidGlassOrbView *pressedOrb;
 
@@ -2009,6 +2010,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_hideChatToolbarImmediately;
 - (void)wc_resumeChatToolbar;
 - (void)wc_resumeChatToolbarImmediately;
+- (void)wc_beginChatToolbarAppearanceTransition;
+- (void)wc_endChatToolbarAppearanceTransition;
 - (void)wc_toolbarActionTapped:(NSString *)actionIdentifier;
 
 @end
@@ -2204,6 +2207,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
     BOOL shouldShow = WCLiquidGlassPreferences.chatToolbarEnabled &&
         hasInputToolFrame && items.count > 0;
+    BOOL shouldAnimate = animated && !self.chatToolbarAppearanceTransitionActive;
     if (!shouldShow) {
         if (self.chatToolbar.hidden) {
             return;
@@ -2212,7 +2216,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             self.chatToolbar.alpha = 0.0;
             self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
         };
-        if (animated) {
+        if (shouldAnimate) {
             [UIView animateWithDuration:0.16
                                   delay:0.0
                                 options:UIViewAnimationOptionBeginFromCurrentState |
@@ -2229,14 +2233,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
 
     [self.chatToolbar updateWithItems:items
-                             animated:animated
+                             animated:shouldAnimate
                voiceTranscriptionActive:self.voiceTranscriptionActive];
     if (self.chatToolbar.hidden) {
         self.chatToolbar.hidden = NO;
         self.chatToolbar.alpha = 0.0;
         self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
     }
-    [self wc_scheduleChatToolbarLayoutAnimated:animated];
+    [self wc_scheduleChatToolbarLayoutAnimated:shouldAnimate];
 }
 
 - (void)wc_scheduleChatToolbarLayoutAnimated:(BOOL)animated {
@@ -2290,6 +2294,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
     CGRect targetFrame = CGRectIntegral(CGRectMake(toolbarX, toolbarY, toolbarWidth, toolbarHeight));
     BOOL frameChanged = !CGRectEqualToRect(self.chatToolbar.frame, targetFrame);
+    BOOL shouldAnimate = animated && !self.chatToolbarAppearanceTransitionActive;
     void (^changes)(void) = ^{
         self.chatToolbar.frame = targetFrame;
         self.chatToolbar.alpha = 1.0;
@@ -2299,7 +2304,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         CGAffineTransformIsIdentity(self.chatToolbar.transform)) {
         return;
     }
-    if (animated) {
+    if (shouldAnimate) {
         [UIView animateWithDuration:0.22
                               delay:0.0
              usingSpringWithDamping:0.88
@@ -2332,6 +2337,19 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.chatToolbarSuppressed = NO;
     [self wc_refreshChatToolbarAnimated:NO];
     [self wc_layoutChatToolbarAnimated:NO];
+}
+
+- (void)wc_beginChatToolbarAppearanceTransition {
+    self.chatToolbarAppearanceTransitionActive = YES;
+    [self.chatToolbar.layer removeAllAnimations];
+}
+
+- (void)wc_endChatToolbarAppearanceTransition {
+    if (!self.chatToolbarAppearanceTransitionActive) {
+        return;
+    }
+    self.chatToolbarAppearanceTransitionActive = NO;
+    [self wc_resumeChatToolbarImmediately];
 }
 
 - (void)wc_toolbarActionTapped:(NSString *)actionIdentifier {
@@ -3471,6 +3489,28 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         resume();
     } else {
         dispatch_async(dispatch_get_main_queue(), resume);
+    }
+}
+
+- (void)beginChatToolbarAppearanceTransition {
+    void (^begin)(void) = ^{
+        [self.hostController.hostView wc_beginChatToolbarAppearanceTransition];
+    };
+    if (NSThread.isMainThread) {
+        begin();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), begin);
+    }
+}
+
+- (void)endChatToolbarAppearanceTransition {
+    void (^end)(void) = ^{
+        [self.hostController.hostView wc_endChatToolbarAppearanceTransition];
+    };
+    if (NSThread.isMainThread) {
+        end();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), end);
     }
 }
 

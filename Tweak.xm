@@ -395,8 +395,21 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 }
 
 - (void)viewWillAppear:(BOOL)animated {
+    [WCLiquidGlassManager.sharedManager beginChatToolbarAppearanceTransition];
     %orig;
     [WCLiquidGlassManager.sharedManager resumeChatToolbarImmediately];
+    UIViewController *chatController = (UIViewController *)self;
+    id<UIViewControllerTransitionCoordinator> coordinator = chatController.transitionCoordinator;
+    if (coordinator) {
+        [coordinator animateAlongsideTransition:nil
+                                     completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
+            [WCLiquidGlassManager.sharedManager endChatToolbarAppearanceTransition];
+        }];
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [WCLiquidGlassManager.sharedManager endChatToolbarAppearanceTransition];
+        });
+    }
 }
 
 - (void)viewDidAppear:(BOOL)animated {
