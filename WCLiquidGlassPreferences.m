@@ -48,6 +48,7 @@ static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnL
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
 static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
 static NSString *const WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey = @"WCLiquidGlass.Compatibility.WCGlassIOS27ReturnCrashFixEnabled";
+static NSString *const WCLiquidGlassChatToolbarEnabledKey = @"WCLiquidGlass.ChatToolbarEnabled";
 static NSString *const WCLiquidGlassButtonItemsKey = @"WCLiquidGlass.ButtonItems";
 static NSString *const WCLiquidGlassLegacySearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded";
 static NSString *const WCLiquidGlassSearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded.V2";
@@ -213,6 +214,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassAnchorYKey: @0.62,
         WCLiquidGlassFullCrashReportsEnabledKey: @NO,
         WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey: @YES,
+        WCLiquidGlassChatToolbarEnabledKey: @YES,
         WCLiquidGlassButtonItemsKey: WCLiquidGlassDefaultButtonItems()
     }];
     WCLiquidGlassMigrateButtonItemsIfNeeded();
@@ -373,6 +375,15 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
                                                       object:nil];
 }
 
++ (BOOL)chatToolbarEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassChatToolbarEnabledKey];
+}
+
++ (void)setChatToolbarEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatToolbarEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems {
     NSArray *storedItems = [NSUserDefaults.standardUserDefaults arrayForKey:WCLiquidGlassButtonItemsKey];
     if (![storedItems isKindOfClass:NSArray.class] || storedItems.count == 0) {
@@ -426,6 +437,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassAnchorYKey];
     [defaults removeObjectForKey:WCLiquidGlassFullCrashReportsEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey];
+    [defaults removeObjectForKey:WCLiquidGlassChatToolbarEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassButtonItemsKey];
     [defaults removeObjectForKey:WCLiquidGlassLegacySearchRecordsMigrationKey];
     [defaults removeObjectForKey:WCLiquidGlassSearchRecordsMigrationKey];

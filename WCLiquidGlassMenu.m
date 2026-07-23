@@ -1403,6 +1403,23 @@ BOOL WCLiquidGlassCurrentChatInputHasText(void) {
     return NO;
 }
 
+static UIView *WCLiquidGlassCurrentChatInputContainer(void) {
+    UIView *inputView = WCLiquidGlassCurrentChatInputView();
+    UIView *fallback = nil;
+    for (UIView *view = inputView; view; view = view.superview) {
+        NSString *className = NSStringFromClass(view.class);
+        if ([className containsString:@"MMInputToolView"] ||
+            [className containsString:@"MessageInputTool"] ||
+            [className containsString:@"ChatInputTool"]) {
+            return view;
+        }
+        if (!fallback && [className containsString:@"MMGrowTextView"]) {
+            fallback = view;
+        }
+    }
+    return fallback ?: inputView;
+}
+
 static NSArray<NSString *> *WCLiquidGlassDoutuButtonPropertyNames(void) {
     return @[@"doutuButton", @"DoutuButton", @"douTuButton", @"doutu", @"DouTu"];
 }
@@ -1962,10 +1979,234 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 @end
 
+@interface WCLiquidGlassToolbarButton : UIControl
+
+@property(nonatomic, copy) NSString *actionIdentifier;
+@property(nonatomic, strong) UIVisualEffectView *glassView;
+@property(nonatomic, strong) UIImageView *iconView;
+
+- (void)configureWithActionIdentifier:(NSString *)actionIdentifier;
+- (void)setToggleActiveAppearance:(BOOL)active;
+
+@end
+
+@implementation WCLiquidGlassToolbarButton
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) {
+        return nil;
+    }
+
+    self.backgroundColor = UIColor.clearColor;
+    self.isAccessibilityElement = YES;
+    _glassView = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassMakeEffect()];
+    _glassView.userInteractionEnabled = NO;
+    _glassView.clipsToBounds = YES;
+    [_glassView.contentView addSubview:(_iconView = [[UIImageView alloc] init])];
+    _iconView.contentMode = UIViewContentModeScaleAspectFit;
+    _iconView.tintColor = UIColor.labelColor;
+    _iconView.userInteractionEnabled = NO;
+    [self addSubview:_glassView];
+    return self;
+}
+
+- (void)configureWithActionIdentifier:(NSString *)actionIdentifier {
+    self.actionIdentifier = actionIdentifier;
+    self.accessibilityLabel = WCLiquidGlassActionTitle(actionIdentifier);
+    self.accessibilityValue = nil;
+    self.glassView.layer.borderWidth = 0.0;
+    self.glassView.layer.borderColor = UIColor.clearColor.CGColor;
+    self.iconView.tintColor = UIColor.labelColor;
+    self.iconView.image = WCLiquidGlassImageForAction(actionIdentifier, 36.0);
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    self.glassView.frame = self.bounds;
+    self.glassView.layer.cornerRadius = CGRectGetHeight(self.bounds) * 0.5;
+    self.glassView.layer.cornerCurve = kCACornerCurveContinuous;
+    CGFloat iconSide = floor(MIN(CGRectGetWidth(self.bounds), CGRectGetHeight(self.bounds)) * 0.56);
+    self.iconView.bounds = CGRectMake(0.0, 0.0, iconSide, iconSide);
+    self.iconView.center = CGPointMake(CGRectGetMidX(self.glassView.contentView.bounds),
+                                       CGRectGetMidY(self.glassView.contentView.bounds));
+}
+
+- (void)setHighlighted:(BOOL)highlighted {
+    [super setHighlighted:highlighted];
+    [UIView animateWithDuration:0.14
+                          delay:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+        self.transform = highlighted ? CGAffineTransformMakeScale(0.90, 0.90)
+                                     : CGAffineTransformIdentity;
+    } completion:nil];
+}
+
+- (void)setToggleActiveAppearance:(BOOL)active {
+    UIColor *activeColor = UIColor.systemGreenColor;
+    self.glassView.layer.borderWidth = active ? 2.0 : 0.0;
+    self.glassView.layer.borderColor = active ? activeColor.CGColor : UIColor.clearColor.CGColor;
+    self.iconView.tintColor = active ? activeColor : UIColor.labelColor;
+    self.accessibilityValue = active ? @"已开启" : @"已关闭";
+}
+
+@end
+
+@interface WCLiquidGlassChatToolbarView : UIView
+
+@property(nonatomic, strong) UIVisualEffectView *glassView;
+@property(nonatomic, strong) UIScrollView *scrollView;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, WCLiquidGlassToolbarButton *> *buttonsByAction;
+@property(nonatomic, copy) NSArray<NSString *> *actionIdentifiers;
+@property(nonatomic, copy) void (^actionHandler)(NSString *actionIdentifier);
+
+- (void)updateWithItems:(NSArray<NSDictionary<NSString *, id> *> *)items
+                animated:(BOOL)animated
+  voiceTranscriptionActive:(BOOL)voiceTranscriptionActive;
+- (void)setVoiceTranscriptionActive:(BOOL)active;
+
+@end
+
+@implementation WCLiquidGlassChatToolbarView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) {
+        return nil;
+    }
+
+    self.backgroundColor = UIColor.clearColor;
+    self.clipsToBounds = NO;
+    _buttonsByAction = [NSMutableDictionary dictionary];
+    _actionIdentifiers = @[];
+    _glassView = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassMakeEffect()];
+    _glassView.backgroundColor = UIColor.clearColor;
+    _glassView.clipsToBounds = YES;
+    _glassView.userInteractionEnabled = YES;
+    [self addSubview:_glassView];
+
+    _scrollView = [[UIScrollView alloc] init];
+    _scrollView.showsHorizontalScrollIndicator = NO;
+    _scrollView.showsVerticalScrollIndicator = NO;
+    _scrollView.alwaysBounceHorizontal = YES;
+    _scrollView.directionalLockEnabled = YES;
+    _scrollView.delaysContentTouches = NO;
+    [_glassView.contentView addSubview:_scrollView];
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    self.glassView.frame = self.bounds;
+    self.glassView.layer.cornerRadius = CGRectGetHeight(self.bounds) * 0.5;
+    self.glassView.layer.cornerCurve = kCACornerCurveContinuous;
+    self.scrollView.frame = CGRectInset(self.glassView.contentView.bounds, 5.0, 5.0);
+
+    const CGFloat buttonSide = 38.0;
+    const CGFloat spacing = 6.0;
+    CGFloat x = 1.0;
+    for (NSString *actionIdentifier in self.actionIdentifiers) {
+        WCLiquidGlassToolbarButton *button = self.buttonsByAction[actionIdentifier];
+        button.frame = CGRectMake(x, 0.0, buttonSide, buttonSide);
+        x += buttonSide + spacing;
+    }
+    CGFloat contentWidth = MAX(CGRectGetWidth(self.scrollView.bounds), MAX(0.0, x - spacing + 1.0));
+    self.scrollView.contentSize = CGSizeMake(contentWidth, buttonSide);
+}
+
+- (void)updateWithItems:(NSArray<NSDictionary<NSString *, id> *> *)items
+                animated:(BOOL)animated
+  voiceTranscriptionActive:(BOOL)voiceTranscriptionActive {
+    NSMutableArray<NSString *> *newIdentifiers = [NSMutableArray arrayWithCapacity:items.count];
+    for (NSDictionary<NSString *, id> *item in items) {
+        NSString *actionIdentifier = item[@"action"];
+        if ([actionIdentifier isKindOfClass:NSString.class]) {
+            [newIdentifiers addObject:actionIdentifier];
+        }
+    }
+    if ([self.actionIdentifiers isEqualToArray:newIdentifiers]) {
+        [self setVoiceTranscriptionActive:voiceTranscriptionActive];
+        return;
+    }
+
+    NSMutableSet<NSString *> *remaining = [NSMutableSet setWithArray:self.actionIdentifiers];
+    for (NSString *actionIdentifier in newIdentifiers) {
+        WCLiquidGlassToolbarButton *button = self.buttonsByAction[actionIdentifier];
+        if (button) {
+            [remaining removeObject:actionIdentifier];
+            continue;
+        }
+        button = [[WCLiquidGlassToolbarButton alloc] initWithFrame:CGRectMake(0.0, 0.0, 38.0, 38.0)];
+        [button configureWithActionIdentifier:actionIdentifier];
+        [button addTarget:self action:@selector(wc_buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        button.alpha = animated ? 0.0 : 1.0;
+        button.transform = animated ? CGAffineTransformMakeScale(0.72, 0.72) : CGAffineTransformIdentity;
+        self.buttonsByAction[actionIdentifier] = button;
+        [self.scrollView addSubview:button];
+    }
+
+    for (NSString *actionIdentifier in remaining) {
+        WCLiquidGlassToolbarButton *button = self.buttonsByAction[actionIdentifier];
+        [self.buttonsByAction removeObjectForKey:actionIdentifier];
+        void (^remove)(void) = ^{
+            button.alpha = 0.0;
+            button.transform = CGAffineTransformMakeScale(0.72, 0.72);
+        };
+        if (animated) {
+            [UIView animateWithDuration:0.18
+                                  delay:0.0
+                                options:UIViewAnimationOptionBeginFromCurrentState |
+                                        UIViewAnimationOptionAllowUserInteraction
+                             animations:remove
+                             completion:^(__unused BOOL finished) {
+                [button removeFromSuperview];
+            }];
+        } else {
+            remove();
+            [button removeFromSuperview];
+        }
+    }
+
+    self.actionIdentifiers = newIdentifiers.copy;
+    [self setNeedsLayout];
+    [self layoutIfNeeded];
+    [self setVoiceTranscriptionActive:voiceTranscriptionActive];
+    if (animated) {
+        [UIView animateWithDuration:0.24
+                              delay:0.0
+             usingSpringWithDamping:0.82
+              initialSpringVelocity:0.35
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
+                         animations:^{
+            for (NSString *actionIdentifier in newIdentifiers) {
+                WCLiquidGlassToolbarButton *button = self.buttonsByAction[actionIdentifier];
+                button.alpha = 1.0;
+                button.transform = CGAffineTransformIdentity;
+            }
+        } completion:nil];
+    }
+}
+
+- (void)setVoiceTranscriptionActive:(BOOL)active {
+    [self.buttonsByAction[WCLiquidGlassActionVoiceInput] setToggleActiveAppearance:active];
+}
+
+- (void)wc_buttonTapped:(WCLiquidGlassToolbarButton *)button {
+    if (button.actionIdentifier.length > 0 && self.actionHandler) {
+        self.actionHandler(button.actionIdentifier);
+    }
+}
+
+@end
+
 @interface WCLiquidGlassHostView : UIView <UIGestureRecognizerDelegate>
 
 @property(nonatomic, strong) UIVisualEffectView *glassContainer;
 @property(nonatomic, strong) UIControl *dismissControl;
+@property(nonatomic, strong) WCLiquidGlassChatToolbarView *chatToolbar;
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
 @property(nonatomic, copy) NSArray<WCLiquidGlassOrbView *> *optionOrbs;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *visibleItems;
@@ -1986,6 +2227,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, assign) NSUInteger manualInputGeneration;
 @property(nonatomic, assign) CGFloat keyboardTop;
 @property(nonatomic, assign) CGFloat resolvedOptionDiameter;
+@property(nonatomic, assign) BOOL chatToolbarLayoutScheduled;
+@property(nonatomic, assign) BOOL chatToolbarLayoutAnimated;
+@property(nonatomic, assign) NSUInteger chatToolbarLayoutGeneration;
 @property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
 @property(nonatomic, weak) WCLiquidGlassOrbView *pressedOrb;
 @property(nonatomic, assign) BOOL observesInputNotifications;
@@ -2014,6 +2258,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_beginPressOnOrb:(WCLiquidGlassOrbView *)orb towardPoint:(CGPoint)point;
 - (void)wc_updatePressTowardPoint:(CGPoint)point;
 - (void)wc_endPressAnimated:(BOOL)animated;
+- (void)wc_refreshChatToolbarAnimated:(BOOL)animated;
+- (void)wc_scheduleChatToolbarLayoutAnimated:(BOOL)animated;
+- (void)wc_layoutChatToolbarAnimated:(BOOL)animated;
+- (void)wc_toolbarActionTapped:(NSString *)actionIdentifier;
 
 @end
 
@@ -2053,6 +2301,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     _glassContainer.contentView.clipsToBounds = NO;
     [self addSubview:_glassContainer];
 
+    _chatToolbar = [[WCLiquidGlassChatToolbarView alloc] initWithFrame:CGRectMake(0.0, 0.0, 220.0, 48.0)];
+    _chatToolbar.hidden = YES;
+    __weak typeof(self) weakSelf = self;
+    _chatToolbar.actionHandler = ^(NSString *actionIdentifier) {
+        [weakSelf wc_toolbarActionTapped:actionIdentifier];
+    };
+    [self.glassContainer.contentView addSubview:_chatToolbar];
+
     if (observesInputNotifications) {
         NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
         [notificationCenter addObserver:self
@@ -2062,6 +2318,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         [notificationCenter addObserver:self
                                selector:@selector(wc_chatInputContentDidChange:)
                                    name:UITextFieldTextDidChangeNotification
+                                 object:nil];
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_chatInputDidEndEditing:)
+                                   name:UITextViewTextDidEndEditingNotification
+                                 object:nil];
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_chatInputDidEndEditing:)
+                                   name:UITextFieldTextDidEndEditingNotification
                                  object:nil];
         [notificationCenter addObserver:self
                                selector:@selector(wc_manualTextEdit:)
@@ -2125,6 +2389,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    if (!self.chatToolbar.hidden && self.chatToolbar.alpha > 0.01) {
+        CGPoint toolbarPoint = [self.chatToolbar convertPoint:point fromView:self];
+        UIView *toolbarHit = [self.chatToolbar hitTest:toolbarPoint withEvent:event];
+        if (toolbarHit) {
+            return toolbarHit;
+        }
+    }
     for (WCLiquidGlassOrbView *orb in self.optionOrbs.reverseObjectEnumerator) {
         if (!orb.hidden && orb.alpha > 0.01) {
             CGPoint localPoint = [orb convertPoint:point fromView:self];
@@ -2189,6 +2460,136 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     return orb;
 }
 
+- (void)wc_refreshChatToolbarAnimated:(BOOL)animated {
+    UIView *inputView = WCLiquidGlassCurrentChatInputView();
+    UIView *inputContainer = WCLiquidGlassCurrentChatInputContainer();
+    NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
+    BOOL shouldShow = WCLiquidGlassPreferences.chatToolbarEnabled &&
+        inputView && inputContainer && !inputView.hidden && inputView.alpha > 0.01 && items.count > 0;
+    if (!shouldShow) {
+        if (self.chatToolbar.hidden) {
+            return;
+        }
+        void (^hide)(void) = ^{
+            self.chatToolbar.alpha = 0.0;
+            self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
+        };
+        if (animated) {
+            [UIView animateWithDuration:0.16
+                                  delay:0.0
+                                options:UIViewAnimationOptionBeginFromCurrentState |
+                                        UIViewAnimationOptionAllowUserInteraction
+                             animations:hide
+                             completion:^(__unused BOOL finished) {
+                self.chatToolbar.hidden = YES;
+            }];
+        } else {
+            hide();
+            self.chatToolbar.hidden = YES;
+        }
+        return;
+    }
+
+    [self.chatToolbar updateWithItems:items
+                             animated:animated
+               voiceTranscriptionActive:self.voiceTranscriptionActive];
+    if (self.chatToolbar.hidden) {
+        self.chatToolbar.hidden = NO;
+        self.chatToolbar.alpha = 0.0;
+        self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
+    }
+    [self wc_scheduleChatToolbarLayoutAnimated:animated];
+}
+
+- (void)wc_scheduleChatToolbarLayoutAnimated:(BOOL)animated {
+    self.chatToolbarLayoutAnimated = self.chatToolbarLayoutAnimated || animated;
+    if (self.chatToolbarLayoutScheduled) {
+        return;
+    }
+    self.chatToolbarLayoutScheduled = YES;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) {
+            return;
+        }
+        BOOL shouldAnimate = self.chatToolbarLayoutAnimated;
+        self.chatToolbarLayoutScheduled = NO;
+        self.chatToolbarLayoutAnimated = NO;
+        [self wc_layoutChatToolbarAnimated:shouldAnimate];
+    });
+}
+
+- (void)wc_layoutChatToolbarAnimated:(BOOL)animated {
+    UIView *inputView = WCLiquidGlassCurrentChatInputView();
+    UIView *inputContainer = WCLiquidGlassCurrentChatInputContainer();
+    BOOL shouldShow = WCLiquidGlassPreferences.chatToolbarEnabled &&
+        inputView && inputContainer && !inputView.hidden && inputView.alpha > 0.01 &&
+        self.chatToolbar.actionIdentifiers.count > 0;
+    if (!shouldShow) {
+        [self wc_refreshChatToolbarAnimated:animated];
+        return;
+    }
+
+    CGRect inputFrame = [inputView convertRect:inputView.bounds toView:self];
+    CGRect containerFrame = [inputContainer convertRect:inputContainer.bounds toView:self];
+    CGFloat availableWidth = MAX(0.0, CGRectGetWidth(self.bounds) - 24.0);
+    CGFloat toolbarWidth = MIN(availableWidth, MAX(164.0, CGRectGetWidth(inputFrame) + 12.0));
+    CGFloat toolbarHeight = 48.0;
+    CGFloat toolbarX = CGRectGetMidX(inputFrame) - toolbarWidth * 0.5;
+    toolbarX = MIN(CGRectGetWidth(self.bounds) - toolbarWidth - 12.0, MAX(12.0, toolbarX));
+    CGFloat toolbarY = CGRectGetMinY(containerFrame) - toolbarHeight - 10.0;
+    CGFloat minimumY = self.safeAreaInsets.top + 8.0;
+    if (toolbarY < minimumY || CGRectGetWidth(inputFrame) < 1.0) {
+        self.chatToolbar.alpha = 0.0;
+        self.chatToolbar.hidden = YES;
+        return;
+    }
+
+    CGRect targetFrame = CGRectIntegral(CGRectMake(toolbarX, toolbarY, toolbarWidth, toolbarHeight));
+    BOOL frameChanged = !CGRectEqualToRect(self.chatToolbar.frame, targetFrame);
+    void (^changes)(void) = ^{
+        self.chatToolbar.frame = targetFrame;
+        self.chatToolbar.alpha = 1.0;
+        self.chatToolbar.transform = CGAffineTransformIdentity;
+    };
+    if (!frameChanged && self.chatToolbar.alpha >= 0.99 &&
+        CGAffineTransformIsIdentity(self.chatToolbar.transform)) {
+        return;
+    }
+    if (animated) {
+        [UIView animateWithDuration:0.22
+                              delay:0.0
+             usingSpringWithDamping:0.88
+              initialSpringVelocity:0.25
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
+                         animations:changes
+                         completion:nil];
+    } else {
+        changes();
+    }
+}
+
+- (void)wc_toolbarActionTapped:(NSString *)actionIdentifier {
+    if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
+        UIControl *control = WCLiquidGlassVoiceTranscriptionControl();
+        if (!control) {
+            WCLiquidGlassShowActionError(@"当前页面没有找到微信原生的语音转述按钮。");
+            return;
+        }
+        [control sendActionsForControlEvents:UIControlEventTouchUpInside];
+        self.voiceTranscriptionActive = !self.voiceTranscriptionActive;
+        [self wc_updateVoiceOrbToggleAppearance];
+        [self wc_emitSelectionFeedback];
+        [self wc_refreshChatToolbarAnimated:YES];
+        return;
+    }
+    [self wc_emitSelectionFeedback];
+    WCLiquidGlassPerformAction(actionIdentifier);
+    [self wc_scheduleChatToolbarLayoutAnimated:YES];
+}
+
 - (void)reload {
     [self wc_resetMenuImmediately];
     self.anchorIdleHidden = NO;
@@ -2235,6 +2636,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.visibleItems = newVisibleItems;
     self.optionOrbs = orbs.copy;
 
+    [self wc_refreshChatToolbarAnimated:NO];
+
     if (!self.anchorOrb || fabs(self.anchorOrb.diameter - diameter) > 0.1) {
         [self.anchorOrb removeFromSuperview];
         self.anchorOrb = [[WCLiquidGlassOrbView alloc] initWithDiameter:diameter];
@@ -2273,6 +2676,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     } else {
         [self wc_layoutOptionOrbsAnimated:NO];
     }
+    [self wc_scheduleChatToolbarLayoutAnimated:NO];
 }
 
 - (void)wc_layoutAnchorFromPreferences {
@@ -2315,7 +2719,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         if (self.menuOpen) {
             [self wc_layoutOptionOrbsAnimated:NO];
         }
+        [self wc_layoutChatToolbarAnimated:NO];
     }];
+    [self wc_scheduleChatToolbarLayoutAnimated:YES];
 }
 
 - (void)wc_keyboardWillChangeFrame:(NSNotification *)notification {
@@ -2383,6 +2789,17 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         [self wc_updateVoiceOrbToggleAppearance];
     }
 
+    [self wc_refreshChatToolbarAnimated:YES];
+    NSUInteger toolbarGeneration = ++self.chatToolbarLayoutGeneration;
+    __weak typeof(self) weakToolbarSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        __strong typeof(weakToolbarSelf) self = weakToolbarSelf;
+        if (self && toolbarGeneration == self.chatToolbarLayoutGeneration) {
+            [self wc_scheduleChatToolbarLayoutAnimated:YES];
+        }
+    });
+
     if (!self.menuOpen || !WCLiquidGlassDoutuAssistantEnabled() ||
         ![self wc_shouldRetryDoutuRefreshForInputHasText:inputHasText]) {
         return;
@@ -2426,6 +2843,20 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             return [item[@"action"] isEqualToString:WCLiquidGlassActionDoutuAssistant];
         }] != NSNotFound;
     return doutuIsVisible != inputHasText;
+}
+
+- (void)wc_chatInputDidEndEditing:(NSNotification *)notification {
+    if (![notification.object isKindOfClass:UIView.class]) {
+        return;
+    }
+    NSUInteger toolbarGeneration = ++self.chatToolbarLayoutGeneration;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (self && toolbarGeneration == self.chatToolbarLayoutGeneration) {
+            [self wc_refreshChatToolbarAnimated:YES];
+        }
+    });
 }
 
 - (void)wc_manualTextEdit:(NSNotification *)notification {
@@ -2479,6 +2910,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             break;
         }
     }
+    [self.chatToolbar setVoiceTranscriptionActive:self.voiceTranscriptionActive];
 }
 
 - (void)wc_cancelIdleHide {
@@ -3331,6 +3763,7 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
 @property(nonatomic, strong) WCLiquidGlassWindow *window;
 @property(nonatomic, strong) WCLiquidGlassHostController *hostController;
 @property(nonatomic, assign) BOOL started;
+@property(nonatomic, assign) BOOL chatToolbarRefreshQueued;
 
 @end
 
@@ -3373,6 +3806,17 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
         [self wc_ensureWindow];
         [self.hostController.hostView reload];
         self.window.hidden = !WCLiquidGlassPreferences.enabled;
+    });
+}
+
+- (void)refreshChatToolbar {
+    if (self.chatToolbarRefreshQueued) {
+        return;
+    }
+    self.chatToolbarRefreshQueued = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.chatToolbarRefreshQueued = NO;
+        [self.hostController.hostView wc_refreshChatToolbarAnimated:YES];
     });
 }
 

@@ -1259,6 +1259,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *enabledSwitch;
 @property(nonatomic, strong) UISwitch *chatTimeGlassSwitch;
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
+@property(nonatomic, strong) UISwitch *chatToolbarSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 
 @end
@@ -1414,7 +1415,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 0) {
         return 4;
     }
-    return section == 1 ? 4 : (section == 3 ? 2 : 1);
+    if (section == 1) {
+        return 5;
+    }
+    return section == 3 ? 2 : 1;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1431,7 +1435,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条和长按菜单液态均跟随本插件材质设置；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。");
+        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、长按菜单与输入框工具栏均跟随本插件材质设置；工具栏仅在聊天输入区显示，会随多行输入和引用内容平滑跟随；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。");
@@ -1447,7 +1451,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条和长按菜单液态均跟随本插件材质设置；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。", 88.0);
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、长按菜单与输入框工具栏均跟随本插件材质设置；工具栏仅在聊天输入区显示，会随多行输入和引用内容平滑跟随；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。", 108.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
@@ -1485,11 +1489,19 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 1 && indexPath.row == 0) {
+        WCLiquidGlassConfigureCell(cell, @"输入框工具栏", @"在聊天输入区顶部显示常用动作",
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
+        self.chatToolbarSwitch = [[UISwitch alloc] init];
+        self.chatToolbarSwitch.on = WCLiquidGlassPreferences.chatToolbarEnabled;
+        [self.chatToolbarSwitch addTarget:self action:@selector(wc_chatToolbarChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = self.chatToolbarSwitch;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else if (indexPath.section == 1 && indexPath.row == 1) {
         NSString *count = [NSString stringWithFormat:@"%lu 个槽位", (unsigned long)WCLiquidGlassPreferences.buttonItems.count];
         WCLiquidGlassConfigureCell(cell, @"按钮与动作", count,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindActions, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 1 && indexPath.row == 1) {
+    } else if (indexPath.section == 1 && indexPath.row == 2) {
         WCLiquidGlassConfigureCell(cell, @"聊天时间条液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         self.chatTimeGlassSwitch = [[UISwitch alloc] init];
@@ -1497,7 +1509,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.chatTimeGlassSwitch addTarget:self action:@selector(wc_chatTimeGlassChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = self.chatTimeGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    } else if (indexPath.section == 1 && indexPath.row == 2) {
+    } else if (indexPath.section == 1 && indexPath.row == 3) {
         WCLiquidGlassConfigureCell(cell, @"长按菜单液态", @"接管 WCGlass 消息菜单",
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         self.wcGlassLongPressMenuSwitch = [[UISwitch alloc] init];
@@ -1505,7 +1517,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.wcGlassLongPressMenuSwitch addTarget:self action:@selector(wc_wcGlassLongPressMenuChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = self.wcGlassLongPressMenuSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    } else if (indexPath.section == 1) {
+    } else if (indexPath.section == 1 && indexPath.row == 4) {
         WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -1546,9 +1558,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 0 && indexPath.row == 3) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
-    } else if (indexPath.section == 1 && indexPath.row == 0) {
+    } else if (indexPath.section == 1 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
-    } else if (indexPath.section == 1 && indexPath.row == 3) {
+    } else if (indexPath.section == 1 && indexPath.row == 4) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
@@ -1567,6 +1579,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_wcGlassLongPressMenuChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setWCGlassLongPressMenuEnabled:sender.isOn];
+}
+
+- (void)wc_chatToolbarChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setChatToolbarEnabled:sender.isOn];
 }
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {
@@ -1652,7 +1668,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_confirmRestore {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认设置？"
-                                                                   message:@"开关、按钮大小、紧凑布局、入口位置、按钮动作、兼容性和诊断选项都会恢复。"
+                                                                   message:@"开关、按钮大小、紧凑布局、入口位置、按钮动作、工具栏、兼容性和诊断选项都会恢复。"
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"恢复"
