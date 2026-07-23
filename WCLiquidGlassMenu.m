@@ -1449,6 +1449,82 @@ static UIView *WCLiquidGlassInputToolViewForChatController(UIViewController *cha
     return inputToolView;
 }
 
+static void WCLiquidGlassFindInputBackgroundEffectView(UIView *view,
+                                                        UIView *inputView,
+                                                        UIView *coordinateView,
+                                                        UIVisualEffectView **bestView,
+                                                        CGFloat *bestScore) {
+    if ([view isKindOfClass:UIVisualEffectView.class]) {
+        UIVisualEffectView *effectView = (UIVisualEffectView *)view;
+        if (effectView.effect && !effectView.hidden && effectView.alpha > 0.01) {
+            CGRect effectFrame = [effectView convertRect:effectView.bounds toView:coordinateView];
+            CGRect inputFrame = [inputView convertRect:inputView.bounds toView:coordinateView];
+            CGRect overlap = CGRectIntersection(effectFrame, inputFrame);
+            if (!CGRectIsNull(overlap) && CGRectGetWidth(overlap) > 0.0 &&
+                CGRectGetHeight(overlap) > 0.0) {
+                CGFloat inputArea = MAX(1.0, CGRectGetWidth(inputFrame) * CGRectGetHeight(inputFrame));
+                CGFloat overlapArea = CGRectGetWidth(overlap) * CGRectGetHeight(overlap);
+                CGFloat score = overlapArea / inputArea * 1000.0;
+                if ([inputView isDescendantOfView:effectView]) {
+                    score += 1200.0;
+                }
+                if (CGRectContainsRect(effectFrame, inputFrame)) {
+                    score += 600.0;
+                }
+                CGFloat verticalDistance = fabs(CGRectGetMidY(effectFrame) - CGRectGetMidY(inputFrame));
+                score -= MIN(240.0, verticalDistance);
+                if (score > *bestScore) {
+                    *bestView = effectView;
+                    *bestScore = score;
+                }
+            }
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassFindInputBackgroundEffectView(subview,
+                                                    inputView,
+                                                    coordinateView,
+                                                    bestView,
+                                                    bestScore);
+    }
+}
+
+static UIVisualEffect *WCLiquidGlassCurrentChatInputBackgroundEffect(void) {
+    UIViewController *chatController = WCLiquidGlassCurrentChatController();
+    UIView *inputToolView = WCLiquidGlassInputToolViewForChatController(chatController);
+    if (!inputToolView) {
+        return nil;
+    }
+
+    UIView *inputView = nil;
+    NSInteger inputScore = NSIntegerMin;
+    WCLiquidGlassFindChatInputViewInView(inputToolView, &inputView, &inputScore);
+    if (!inputView) {
+        return nil;
+    }
+
+    for (UIView *ancestor = inputView.superview; ancestor; ancestor = ancestor.superview) {
+        if ([ancestor isKindOfClass:UIVisualEffectView.class]) {
+            UIVisualEffect *effect = ((UIVisualEffectView *)ancestor).effect;
+            if (effect) {
+                return effect;
+            }
+        }
+        if (ancestor == inputToolView) {
+            break;
+        }
+    }
+
+    UIVisualEffectView *effectView = nil;
+    CGFloat score = -CGFLOAT_MAX;
+    WCLiquidGlassFindInputBackgroundEffectView(inputToolView,
+                                                inputView,
+                                                inputToolView,
+                                                &effectView,
+                                                &score);
+    return effectView.effect;
+}
+
 static BOOL WCLiquidGlassMethodReturnsCGRect(NSMethodSignature *signature) {
     if (!signature || signature.numberOfArguments != 2) {
         return NO;
@@ -2137,11 +2213,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, strong) UIScrollView *scrollView;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, WCLiquidGlassToolbarButton *> *buttonsByAction;
 @property(nonatomic, copy) NSArray<NSString *> *actionIdentifiers;
+@property(nonatomic, strong) UIVisualEffect *inputBackgroundEffect;
+@property(nonatomic, assign) BOOL inputBackgroundEffectResolved;
 @property(nonatomic, copy) void (^actionHandler)(NSString *actionIdentifier);
 
 - (void)updateWithItems:(NSArray<NSDictionary<NSString *, id> *> *)items
                 animated:(BOOL)animated
   voiceTranscriptionActive:(BOOL)voiceTranscriptionActive;
+- (void)setInputBackgroundEffect:(UIVisualEffect *)effect;
+- (void)invalidateInputBackgroundEffect;
 - (void)setVoiceTranscriptionActive:(BOOL)active;
 
 @end
@@ -2195,6 +2275,24 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     CGFloat contentWidth = MAX(CGRectGetWidth(self.scrollView.bounds), MAX(0.0, x - spacing + 1.0));
     self.scrollView.contentSize = CGSizeMake(contentWidth, buttonSide);
     self.scrollView.scrollEnabled = contentWidth > CGRectGetWidth(self.scrollView.bounds) + 0.5;
+}
+
+- (void)setInputBackgroundEffect:(UIVisualEffect *)effect {
+    _inputBackgroundEffectResolved = YES;
+    if (!effect || _inputBackgroundEffect == effect) {
+        return;
+    }
+    _inputBackgroundEffect = effect;
+    self.glassView.effect = [effect copy];
+}
+
+- (void)invalidateInputBackgroundEffect {
+    if (!_inputBackgroundEffect && !_inputBackgroundEffectResolved) {
+        return;
+    }
+    _inputBackgroundEffect = nil;
+    _inputBackgroundEffectResolved = NO;
+    self.glassView.effect = WCLiquidGlassMakeEffect();
 }
 
 - (void)updateWithItems:(NSArray<NSDictionary<NSString *, id> *> *)items
@@ -2312,6 +2410,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, assign) BOOL chatToolbarLayoutAnimated;
 @property(nonatomic, assign) NSUInteger chatToolbarLayoutGeneration;
 @property(nonatomic, assign) BOOL chatToolbarSuppressed;
+@property(nonatomic, assign) BOOL chatToolbarInitialLayoutPending;
 @property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
 @property(nonatomic, weak) WCLiquidGlassOrbView *pressedOrb;
 @property(nonatomic, assign) BOOL observesInputNotifications;
@@ -2366,6 +2465,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.clipsToBounds = NO;
     _highlightedIndex = NSNotFound;
     _keyboardTop = CGFLOAT_MAX;
+    _chatToolbarInitialLayoutPending = YES;
     _selectionFeedbackGenerator = [[UISelectionFeedbackGenerator alloc] init];
     _observesInputNotifications = observesInputNotifications;
     if (observesInputNotifications) {
@@ -2558,6 +2658,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
     BOOL shouldShow = WCLiquidGlassPreferences.chatToolbarEnabled &&
         hasInputToolFrame && items.count > 0;
+    BOOL shouldAnimate = animated && !self.chatToolbarInitialLayoutPending;
     if (!shouldShow) {
         if (self.chatToolbar.hidden) {
             return;
@@ -2566,7 +2667,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             self.chatToolbar.alpha = 0.0;
             self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
         };
-        if (animated) {
+        if (shouldAnimate) {
             [UIView animateWithDuration:0.16
                                   delay:0.0
                                 options:UIViewAnimationOptionBeginFromCurrentState |
@@ -2574,23 +2675,33 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                              animations:hide
                              completion:^(__unused BOOL finished) {
                 self.chatToolbar.hidden = YES;
+                [self.chatToolbar invalidateInputBackgroundEffect];
             }];
         } else {
             hide();
             self.chatToolbar.hidden = YES;
+            [self.chatToolbar invalidateInputBackgroundEffect];
         }
         return;
     }
 
+    if (!self.chatToolbar.inputBackgroundEffectResolved) {
+        [self.chatToolbar setInputBackgroundEffect:WCLiquidGlassCurrentChatInputBackgroundEffect()];
+    }
     [self.chatToolbar updateWithItems:items
-                             animated:animated
+                             animated:shouldAnimate
                voiceTranscriptionActive:self.voiceTranscriptionActive];
     if (self.chatToolbar.hidden) {
         self.chatToolbar.hidden = NO;
-        self.chatToolbar.alpha = 0.0;
-        self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
+        if (shouldAnimate) {
+            self.chatToolbar.alpha = 0.0;
+            self.chatToolbar.transform = CGAffineTransformMakeScale(0.96, 0.96);
+        } else {
+            self.chatToolbar.alpha = 1.0;
+            self.chatToolbar.transform = CGAffineTransformIdentity;
+        }
     }
-    [self wc_scheduleChatToolbarLayoutAnimated:animated];
+    [self wc_scheduleChatToolbarLayoutAnimated:shouldAnimate];
 }
 
 - (void)wc_scheduleChatToolbarLayoutAnimated:(BOOL)animated {
@@ -2637,13 +2748,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     CGFloat toolbarY = CGRectGetMinY(inputContainerFrame) - toolbarHeight - 10.0;
     CGFloat minimumY = self.safeAreaInsets.top + 8.0;
     if (toolbarY < minimumY || CGRectGetWidth(inputFrame) < 1.0) {
-        self.chatToolbar.alpha = 0.0;
-        self.chatToolbar.hidden = YES;
+        [self wc_hideChatToolbarImmediately];
         return;
     }
 
     CGRect targetFrame = CGRectIntegral(CGRectMake(toolbarX, toolbarY, toolbarWidth, toolbarHeight));
     BOOL frameChanged = !CGRectEqualToRect(self.chatToolbar.frame, targetFrame);
+    BOOL shouldAnimate = animated && !self.chatToolbarInitialLayoutPending;
     void (^changes)(void) = ^{
         self.chatToolbar.frame = targetFrame;
         self.chatToolbar.alpha = 1.0;
@@ -2651,9 +2762,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     };
     if (!frameChanged && self.chatToolbar.alpha >= 0.99 &&
         CGAffineTransformIsIdentity(self.chatToolbar.transform)) {
+        self.chatToolbarInitialLayoutPending = NO;
         return;
     }
-    if (animated) {
+    if (shouldAnimate) {
         [UIView animateWithDuration:0.22
                               delay:0.0
              usingSpringWithDamping:0.88
@@ -2665,6 +2777,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     } else {
         changes();
     }
+    self.chatToolbarInitialLayoutPending = NO;
 }
 
 - (void)wc_hideChatToolbarImmediately {
@@ -2675,6 +2788,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.chatToolbar.hidden = YES;
     self.chatToolbar.alpha = 0.0;
     self.chatToolbar.transform = CGAffineTransformIdentity;
+    self.chatToolbarInitialLayoutPending = YES;
+    [self.chatToolbar invalidateInputBackgroundEffect];
 }
 
 - (void)wc_resumeChatToolbar {
