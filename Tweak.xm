@@ -396,7 +396,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 - (void)viewWillAppear:(BOOL)animated {
     %orig;
-    [WCLiquidGlassManager.sharedManager hideChatToolbarImmediately];
+    [WCLiquidGlassManager.sharedManager resumeChatToolbarImmediately];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
