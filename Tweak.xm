@@ -398,9 +398,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
     %orig;
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    [WCLiquidGlassManager.sharedManager resumeChatToolbarImmediately];
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    [WCLiquidGlassManager.sharedManager resumeChatToolbar];
+    [WCLiquidGlassManager.sharedManager resumeChatToolbarImmediately];
 }
 
 - (void)viewDidDisappear:(BOOL)animated {

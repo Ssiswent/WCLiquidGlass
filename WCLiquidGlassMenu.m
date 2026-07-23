@@ -2169,7 +2169,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     _scrollView.showsVerticalScrollIndicator = NO;
     _scrollView.alwaysBounceHorizontal = YES;
     _scrollView.directionalLockEnabled = YES;
-    _scrollView.delaysContentTouches = NO;
+    _scrollView.delaysContentTouches = YES;
+    _scrollView.canCancelContentTouches = YES;
+    _scrollView.decelerationRate = UIScrollViewDecelerationRateFast;
+    _scrollView.panGestureRecognizer.cancelsTouchesInView = YES;
     [_glassView.contentView addSubview:_scrollView];
     return self;
 }
@@ -2191,6 +2194,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
     CGFloat contentWidth = MAX(CGRectGetWidth(self.scrollView.bounds), MAX(0.0, x - spacing + 1.0));
     self.scrollView.contentSize = CGSizeMake(contentWidth, buttonSide);
+    self.scrollView.scrollEnabled = contentWidth > CGRectGetWidth(self.scrollView.bounds) + 0.5;
 }
 
 - (void)updateWithItems:(NSArray<NSDictionary<NSString *, id> *> *)items
@@ -2341,6 +2345,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_layoutChatToolbarAnimated:(BOOL)animated;
 - (void)wc_hideChatToolbarImmediately;
 - (void)wc_resumeChatToolbar;
+- (void)wc_resumeChatToolbarImmediately;
 - (void)wc_toolbarActionTapped:(NSString *)actionIdentifier;
 
 @end
@@ -2625,11 +2630,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         return;
     }
 
-    CGFloat availableWidth = MAX(0.0, CGRectGetWidth(self.bounds) - 24.0);
-    CGFloat toolbarWidth = MIN(availableWidth, MAX(164.0, CGRectGetWidth(inputFrame) + 12.0));
+    const CGFloat toolbarSideMargin = 20.0;
+    CGFloat toolbarWidth = MAX(0.0, CGRectGetWidth(self.bounds) - toolbarSideMargin * 2.0);
     CGFloat toolbarHeight = 48.0;
-    CGFloat toolbarX = CGRectGetMidX(inputFrame) - toolbarWidth * 0.5;
-    toolbarX = MIN(CGRectGetWidth(self.bounds) - toolbarWidth - 12.0, MAX(12.0, toolbarX));
+    CGFloat toolbarX = toolbarSideMargin;
     CGFloat toolbarY = CGRectGetMinY(inputContainerFrame) - toolbarHeight - 10.0;
     CGFloat minimumY = self.safeAreaInsets.top + 8.0;
     if (toolbarY < minimumY || CGRectGetWidth(inputFrame) < 1.0) {
@@ -2676,6 +2680,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_resumeChatToolbar {
     self.chatToolbarSuppressed = NO;
     [self wc_refreshChatToolbarAnimated:YES];
+}
+
+- (void)wc_resumeChatToolbarImmediately {
+    self.chatToolbarSuppressed = NO;
+    [self wc_refreshChatToolbarAnimated:NO];
+    [self wc_layoutChatToolbarAnimated:NO];
 }
 
 - (void)wc_toolbarActionTapped:(NSString *)actionIdentifier {
@@ -3942,6 +3952,17 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
 - (void)resumeChatToolbar {
     void (^resume)(void) = ^{
         [self.hostController.hostView wc_resumeChatToolbar];
+    };
+    if (NSThread.isMainThread) {
+        resume();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), resume);
+    }
+}
+
+- (void)resumeChatToolbarImmediately {
+    void (^resume)(void) = ^{
+        [self.hostController.hostView wc_resumeChatToolbarImmediately];
     };
     if (NSThread.isMainThread) {
         resume();
