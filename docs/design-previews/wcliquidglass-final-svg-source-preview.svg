@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1220" viewBox="0 0 1400 1220">
+  <rect width="1400" height="1220" fill="#f7f4ee"/>
+  <style>
+    .title { font: 700 42px 'PingFang SC', sans-serif; fill: #151515; }
+    .subtitle { font: 400 22px 'PingFang SC', sans-serif; fill: #7d776e; }
+    .section { font: 500 22px 'PingFang SC', sans-serif; fill: #8a847b; }
+    .row-title { font: 500 27px 'PingFang SC', sans-serif; fill: #101010; }
+    .row-value { font: 400 22px 'PingFang SC', sans-serif; fill: #98938b; }
+    .caption { font: 400 18px 'PingFang SC', sans-serif; fill: #8b857d; }
+    .panel { fill: #fffefd; stroke: #ded8ce; stroke-width: 2; }
+    .black { fill: #050505; }
+    .gray { fill: #b9b7b2; }
+  </style>
+
+  <defs>
+    <!-- Final brand mark. All geometry uses the same 100x100 source grid as production. -->
+    <g id="brand-final" transform="scale(.208768)">
+      <path class="gray" d="M232 298 C262 307 288 303 314 295 C340 287 366 293 389 303 C410 312 431 309 447 297 C443 311 429 318 407 319 C382 321 363 312 344 307 C320 300 299 307 279 313 C258 319 238 315 222 309 Z"/>
+      <path class="black" d="M123 330 C140 313 164 317 174 338 C184 359 182 398 175 424 C169 447 146 454 124 448 C103 442 96 423 98 398 C100 371 104 349 123 330 Z"/>
+      <path class="black" d="M224 327 C241 311 264 316 275 337 C285 358 283 399 277 425 C271 448 248 454 226 448 C205 442 199 422 201 398 C202 370 206 347 224 327 Z"/>
+      <path class="gray" d="M325 329 C342 313 365 317 376 338 C386 359 385 398 379 424 C373 447 350 454 328 448 C307 442 301 423 302 398 C304 371 307 349 325 329 Z"/>
+      <path class="black" d="M16 255 C10 196 34 133 80 81 C120 37 176 18 238 17 C302 16 361 37 405 79 C446 118 468 175 468 233 C468 269 455 290 429 301 C402 312 379 294 355 288 C326 281 299 294 272 304 C245 314 220 311 195 299 C170 287 150 286 128 294 C101 305 78 306 55 297 C31 288 18 272 16 255 Z"/>
+      <path class="gray" d="M347 178 C374 170 404 178 420 198 C434 216 430 239 412 251 C391 264 359 258 342 239 C325 219 328 187 347 178 Z"/>
+      <path class="black" d="M418 210 C427 211 432 218 432 228 C432 238 427 245 418 247 C412 242 409 236 409 229 C409 221 412 215 418 210 Z"/>
+    </g>
+
+    <!-- A: soft solid layering. Front object remains dominant; gray layer is visibly offset. -->
+    <g id="icon-menu">
+      <g class="gray">
+        <circle cx="50" cy="16" r="10"/><circle cx="79.44" cy="33" r="10"/><circle cx="79.44" cy="67" r="10"/>
+        <circle cx="50" cy="84" r="10"/><circle cx="20.56" cy="67" r="10"/><circle cx="20.56" cy="33" r="10"/>
+      </g>
+      <g class="black">
+        <circle cx="50" cy="22" r="10"/><circle cx="74.25" cy="36" r="10"/><circle cx="74.25" cy="64" r="10"/>
+        <circle cx="50" cy="78" r="10"/><circle cx="25.75" cy="64" r="10"/><circle cx="25.75" cy="36" r="10"/>
+      </g>
+      <circle class="gray" cx="50" cy="50" r="8"/>
+    </g>
+    <g id="icon-compact">
+      <g class="gray">
+        <rect x="30" y="30" width="24" height="24" rx="8"/>
+        <rect x="64" y="30" width="24" height="24" rx="8"/>
+        <rect x="30" y="64" width="24" height="24" rx="8"/>
+        <rect x="64" y="64" width="24" height="24" rx="8"/>
+      </g>
+      <g class="black">
+        <rect x="20" y="20" width="24" height="24" rx="8"/>
+        <rect x="54" y="20" width="24" height="24" rx="8"/>
+        <rect x="20" y="54" width="24" height="24" rx="8"/>
+        <rect x="54" y="54" width="24" height="24" rx="8"/>
+      </g>
+    </g>
+    <g id="icon-compatibility">
+      <path class="gray" d="M57 20 L84 30 V52 C82 70 68 81 57 86 C45 81 31 70 29 52 V30 Z"/>
+      <path class="black" d="M47 14 L74 24 V46 C72 64 58 75 47 80 C35 75 21 64 19 46 V24 Z"/>
+      <rect class="gray" x="42" y="38" width="11" height="25" rx="5.5"/>
+    </g>
+    <g id="icon-crash">
+      <rect class="gray" x="23" y="29" width="68" height="47" rx="15"/>
+      <rect class="black" x="13" y="19" width="68" height="47" rx="15"/>
+      <path d="M25 43 H35 L42 31 L53 56 L62 38 H73" fill="none" stroke="#b9b7b2" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g id="icon-logs">
+      <rect class="gray" x="34" y="18" width="43" height="65" rx="11"/>
+      <rect class="black" x="23" y="23" width="43" height="65" rx="11"/>
+      <rect class="gray" x="34" y="39" width="22" height="7" rx="3.5"/>
+      <rect class="gray" x="34" y="53" width="16" height="7" rx="3.5"/>
+      <circle class="gray" cx="66" cy="67" r="14"/>
+      <circle class="black" cx="66" cy="67" r="8"/>
+    </g>
+    <g id="icon-restore">
+      <path d="M28 59 A29 29 0 1 0 42 28" fill="none" stroke="#b9b7b2" stroke-width="13" stroke-linecap="round"/>
+      <path d="M20 51 A29 29 0 1 0 34 20" fill="none" stroke="#050505" stroke-width="13" stroke-linecap="round"/>
+      <path class="black" d="M18 17 L44 19 L28 42 Z"/>
+    </g>
+
+    <!-- B: ink-stone objects. Used only for size and action management. -->
+    <g id="icon-size">
+      <circle class="gray" cx="57" cy="57" r="29"/>
+      <circle class="black" cx="47" cy="47" r="29"/>
+      <circle class="gray" cx="47" cy="47" r="12"/>
+    </g>
+    <g id="icon-actions">
+      <circle class="black" cx="27" cy="27" r="9"/>
+      <rect class="gray" x="48" y="22" width="38" height="12" rx="6"/>
+      <circle class="black" cx="27" cy="50" r="9"/>
+      <rect class="gray" x="48" y="45" width="47" height="12" rx="6"/>
+      <circle class="black" cx="27" cy="73" r="9"/>
+      <rect class="gray" x="48" y="68" width="31" height="12" rx="6"/>
+    </g>
+  </defs>
+
+  <text class="title" x="70" y="78">WCLiquidGlass 最终图标资源预览</text>
+  <text class="subtitle" x="70" y="118">品牌使用确认截图 PNG；其余图标从 SVG 母版渲染为生产用固定 PNG，不包含运行时代码绘制。</text>
+
+  <rect class="panel" x="70" y="160" width="1260" height="230" rx="34"/>
+  <image href="../../Resources/Icons/Source/Brand.png" x="110" y="190" width="165" height="160" preserveAspectRatio="xMidYMid meet"/>
+  <text class="row-title" x="320" y="235">WCLiquidGlass</text>
+  <text class="row-value" x="320" y="275">为微信打造的模块化交互增强</text>
+  <rect x="320" y="300" width="185" height="46" rx="23" fill="#ddd7cd"/>
+  <text x="344" y="331" font-family="'PingFang SC', sans-serif" font-size="20" fill="#575149">Version 1.5.40 RC2</text>
+  <text class="caption" x="940" y="235">品牌母版：已确认截图原始像素</text>
+
+  <text class="section" x="70" y="452">菜单</text>
+  <rect class="panel" x="70" y="480" width="1260" height="270" rx="32"/>
+
+  <g transform="translate(102 508) scale(.56)"><use href="#icon-menu"/></g>
+  <text class="row-title" x="180" y="556">启用全局环形菜单</text>
+
+  <g transform="translate(102 588) scale(.56)"><use href="#icon-size"/></g>
+  <text class="row-title" x="180" y="636">按钮大小</text>
+  <text class="row-value" x="1090" y="636">紧凑 · 53pt</text>
+
+  <g transform="translate(102 668) scale(.56)"><use href="#icon-compact"/></g>
+  <text class="row-title" x="180" y="716">紧凑布局</text>
+  <text class="row-value" x="1090" y="716">花瓣环簇</text>
+
+  <text class="section" x="70" y="812">内容与维护</text>
+  <rect class="panel" x="70" y="840" width="1260" height="255" rx="32"/>
+
+  <g transform="translate(102 868) scale(.56)"><use href="#icon-actions"/></g>
+  <text class="row-title" x="180" y="916">按钮与动作</text>
+  <text class="row-value" x="1110" y="916">9 个槽位</text>
+
+  <g transform="translate(102 948) scale(.56)"><use href="#icon-compatibility"/></g>
+  <text class="row-title" x="180" y="996">WCGlass iOS 27 兼容修复</text>
+
+  <g transform="translate(690 868) scale(.56)"><use href="#icon-crash"/></g>
+  <text class="row-title" x="768" y="916">完整崩溃采集</text>
+
+  <g transform="translate(690 948) scale(.56)"><use href="#icon-logs"/></g>
+  <text class="row-title" x="768" y="996">崩溃日志</text>
+
+  <g transform="translate(690 1025) scale(.56)"><use href="#icon-restore"/></g>
+  <text x="768" y="1073" font-family="'PingFang SC', sans-serif" font-size="27" fill="#ff3b30">恢复默认设置</text>
+
+  <text class="caption" x="70" y="1170">真机设置行图标按 32pt 渲染；右侧品牌对照按 58pt 渲染。灰色层偏移已按缩小后的可见性重新校准。</text>
+</svg>

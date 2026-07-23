@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1320" viewBox="0 0 1800 1320">
+  <rect width="1800" height="1320" fill="#f6f4ef"/>
+  <style>
+    .title { font-family: 'PingFang SC', Arial, sans-serif; fill: #111111; font-weight: 700; }
+    .body { font-family: 'PingFang SC', Arial, sans-serif; fill: #67635c; font-weight: 400; }
+    .label { font-family: 'PingFang SC', Arial, sans-serif; fill: #26231f; font-weight: 600; }
+    .caption { font-family: 'PingFang SC', Arial, sans-serif; fill: #817b72; font-weight: 400; }
+    .panel { fill: #ffffff; stroke: #e3ded4; stroke-width: 2; }
+    .rule { stroke: #e8e2d7; stroke-width: 2; }
+    .black { fill: #111111; }
+    .gray { fill: #b7b4ae; }
+    .lightgray { fill: #d8d4ce; }
+  </style>
+
+  <defs>
+    <!-- Final brand mark: broad low dome, gray inset with a black bite, three centered tentacles. -->
+    <g id="brand-mark">
+      <path class="gray" d="M47 49 C59 56 77 57 86 51 C87 60 83 66 77 69 C67 70 58 68 51 63 Z"/>
+      <rect class="black" x="35" y="62" width="10" height="25" rx="5" transform="rotate(-6 40 74.5)"/>
+      <rect class="black" x="47" y="62" width="10" height="25" rx="5"/>
+      <rect class="gray" x="60" y="61" width="10" height="25" rx="5" transform="rotate(6 65 73.5)"/>
+      <path class="black" d="M14 50 C15 29 31 16 50 16 C70 16 85 29 86 50 C86 55 83 58 78 58 C74 58 71 55 67 58 C63 61 59 61 56 58 C52 55 49 55 45 58 C41 61 37 61 33 58 C29 55 26 58 22 58 C17 58 14 55 14 50 Z"/>
+      <rect class="gray" x="60" y="42" width="16" height="10" rx="5"/>
+      <circle class="black" cx="76" cy="47" r="4"/>
+    </g>
+
+    <!-- A: rounded black foreground with a neutral-gray rear physical layer. -->
+    <g id="a-menu"><circle class="gray" cx="54" cy="54" r="30"/><circle class="black" cx="48" cy="48" r="30"/><circle class="gray" cx="48" cy="48" r="13"/></g>
+    <g id="a-size"><circle class="gray" cx="55" cy="55" r="31"/><circle class="black" cx="48" cy="48" r="31"/><circle class="gray" cx="48" cy="48" r="18"/></g>
+    <g id="a-grid"><g class="gray"><rect x="28" y="28" width="23" height="23" rx="8"/><rect x="61" y="28" width="23" height="23" rx="8"/><rect x="28" y="61" width="23" height="23" rx="8"/><rect x="61" y="61" width="23" height="23" rx="8"/></g><g class="black"><rect x="21" y="21" width="23" height="23" rx="8"/><rect x="54" y="21" width="23" height="23" rx="8"/><rect x="21" y="54" width="23" height="23" rx="8"/><rect x="54" y="54" width="23" height="23" rx="8"/></g></g>
+    <g id="a-actions"><g class="gray"><rect x="30" y="25" width="51" height="12" rx="6"/><rect x="30" y="50" width="61" height="12" rx="6"/><rect x="30" y="75" width="43" height="12" rx="6"/></g><g class="black"><rect x="20" y="18" width="51" height="12" rx="6"/><rect x="20" y="43" width="61" height="12" rx="6"/><rect x="20" y="68" width="43" height="12" rx="6"/></g><g class="gray"><circle cx="84" cy="24" r="8"/><circle cx="94" cy="49" r="8"/><circle cx="76" cy="74" r="8"/></g></g>
+    <g id="a-shield"><path class="gray" d="M54 17 L82 28 V51 C80 70 65 81 54 86 C42 81 28 70 26 51 V28 Z"/><path class="black" d="M47 14 L75 25 V48 C73 67 58 78 47 83 C35 78 21 67 19 48 V25 Z"/><rect class="gray" x="42" y="40" width="11" height="25" rx="5.5"/></g>
+    <g id="a-pulse"><rect class="gray" x="22" y="27" width="67" height="47" rx="16"/><rect class="black" x="13" y="20" width="67" height="47" rx="16"/><path d="M24 44 H35 L42 32 L53 57 L63 39 H73" fill="none" stroke="#b7b4ae" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="a-log"><rect class="gray" x="32" y="16" width="44" height="65" rx="11"/><rect class="black" x="23" y="21" width="44" height="65" rx="11"/><rect class="gray" x="34" y="38" width="23" height="7" rx="3.5"/><rect class="gray" x="34" y="52" width="16" height="7" rx="3.5"/><circle class="gray" cx="63" cy="65" r="15"/><circle class="black" cx="63" cy="65" r="9"/></g>
+    <g id="a-restore"><path d="M24 53 A29 29 0 1 0 38 25" fill="none" stroke="#b7b4ae" stroke-width="13" stroke-linecap="round"/><path d="M18 47 A29 29 0 1 0 32 19" fill="none" stroke="#111111" stroke-width="13" stroke-linecap="round"/><path class="black" d="M17 20 L42 20 L28 43 Z"/></g>
+
+    <!-- B: chunky ink-and-pebble objects, more playful but still semantic. -->
+    <g id="b-menu"><circle class="black" cx="32" cy="50" r="13"/><circle class="black" cx="50" cy="32" r="13"/><circle class="black" cx="68" cy="50" r="13"/><circle class="black" cx="50" cy="68" r="13"/><circle class="gray" cx="57" cy="57" r="13"/></g>
+    <g id="b-size"><rect class="gray" x="31" y="31" width="47" height="47" rx="23"/><rect class="black" x="21" y="21" width="47" height="47" rx="23"/><circle class="gray" cx="44" cy="44" r="13"/></g>
+    <g id="b-grid"><g class="black"><circle cx="33" cy="33" r="12"/><circle cx="67" cy="33" r="12"/><circle cx="33" cy="67" r="12"/><circle cx="67" cy="67" r="12"/></g><g class="gray"><circle cx="40" cy="40" r="12"/><circle cx="74" cy="40" r="12"/><circle cx="40" cy="74" r="12"/><circle cx="74" cy="74" r="12"/></g></g>
+    <g id="b-actions"><rect class="black" x="19" y="22" width="18" height="18" rx="9"/><rect class="gray" x="47" y="26" width="37" height="11" rx="5.5"/><rect class="black" x="19" y="45" width="18" height="18" rx="9"/><rect class="gray" x="47" y="49" width="46" height="11" rx="5.5"/><rect class="black" x="19" y="68" width="18" height="18" rx="9"/><rect class="gray" x="47" y="72" width="30" height="11" rx="5.5"/></g>
+    <g id="b-shield"><path class="black" d="M50 16 L78 27 V50 C76 69 62 80 50 85 C38 80 24 69 22 50 V27 Z"/><path class="gray" d="M50 30 L66 36 V49 C65 59 57 66 50 69 C43 66 35 59 34 49 V36 Z"/></g>
+    <g id="b-pulse"><rect class="black" x="17" y="27" width="66" height="45" rx="22"/><path d="M28 50 H38 L46 38 L55 62 L64 45 H73" fill="none" stroke="#b7b4ae" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="b-log"><rect class="black" x="24" y="18" width="50" height="65" rx="13"/><rect class="gray" x="36" y="36" width="25" height="8" rx="4"/><rect class="gray" x="36" y="52" width="18" height="8" rx="4"/><circle class="gray" cx="63" cy="69" r="14"/></g>
+    <g id="b-restore"><circle class="gray" cx="55" cy="55" r="31"/><path d="M20 50 A30 30 0 1 0 35 26" fill="none" stroke="#111111" stroke-width="12" stroke-linecap="round"/><path class="black" d="M16 22 L42 22 L27 47 Z"/></g>
+
+    <!-- C: brand-derived mini creatures. This option is visually unified but intentionally less literal. -->
+    <g id="c-menu"><use href="#brand-mark"/><circle class="gray" cx="18" cy="24" r="7"/><circle class="gray" cx="82" cy="24" r="7"/></g>
+    <g id="c-size"><use href="#brand-mark"/><rect class="gray" x="26" y="8" width="48" height="7" rx="3.5"/></g>
+    <g id="c-grid"><use href="#brand-mark"/><rect class="gray" x="13" y="24" width="9" height="9" rx="4.5"/><rect class="gray" x="78" y="24" width="9" height="9" rx="4.5"/></g>
+    <g id="c-actions"><use href="#brand-mark"/><rect class="gray" x="8" y="35" width="10" height="35" rx="5"/><rect class="gray" x="82" y="29" width="10" height="41" rx="5"/></g>
+    <g id="c-shield"><use href="#brand-mark"/><path class="gray" d="M50 5 L66 11 V21 H34 V11 Z"/></g>
+    <g id="c-pulse"><use href="#brand-mark"/><path d="M18 46 H31 L38 35 L46 51" fill="none" stroke="#b7b4ae" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="c-log"><use href="#brand-mark"/><rect class="gray" x="23" y="8" width="54" height="8" rx="4"/></g>
+    <g id="c-restore"><use href="#brand-mark"/><path d="M18 38 A33 33 0 0 1 38 16" fill="none" stroke="#b7b4ae" stroke-width="7" stroke-linecap="round"/><path class="gray" d="M17 14 L39 14 L26 33 Z"/></g>
+  </defs>
+
+  <text class="title" x="80" y="96" font-size="48">WCLiquidGlass 设置页图标方向</text>
+  <text class="body" x="80" y="144" font-size="25">仅设计预览，不改插件。品牌图标按最终确认稿锁定；下面三套只比较其他设置图标的家族语言。</text>
+
+  <rect class="panel" x="80" y="190" width="1640" height="245" rx="34"/>
+  <g transform="translate(130 215) scale(1.85)"><use href="#brand-mark"/></g>
+  <text class="title" x="340" y="270" font-size="34">最终品牌图标（锁定）</text>
+  <text class="body" x="340" y="317" font-size="24">宽低圆顶 · 右侧灰色液态窗口与黑色缺口 · 三根等距触须</text>
+  <text class="body" x="340" y="354" font-size="24">左右触须仅轻微外八；透明背景；不使用蓝色底板、描边、渐变或高光</text>
+  <text class="caption" x="340" y="394" font-size="21">生产实现将以该轮廓为准，不再用概念稿替代。</text>
+
+  <!-- Panel A -->
+  <rect class="panel" x="80" y="485" width="505" height="760" rx="34"/>
+  <text class="title" x="120" y="550" font-size="30">A · 软实体层叠（推荐）</text>
+  <text class="body" x="120" y="588" font-size="20">黑色前层 + 灰色后层，最贴近品牌结构</text>
+  <line class="rule" x1="120" y1="618" x2="545" y2="618"/>
+  <g transform="translate(135 650) scale(.85)"><use href="#a-menu"/></g><text class="label" x="245" y="703" font-size="21">全局菜单</text>
+  <g transform="translate(365 650) scale(.85)"><use href="#a-size"/></g><text class="label" x="425" y="783" font-size="21">按钮大小</text>
+  <g transform="translate(135 810) scale(.85)"><use href="#a-grid"/></g><text class="label" x="245" y="863" font-size="21">紧凑布局</text>
+  <g transform="translate(365 810) scale(.85)"><use href="#a-actions"/></g><text class="label" x="425" y="943" font-size="21">按钮与动作</text>
+  <g transform="translate(135 970) scale(.85)"><use href="#a-shield"/></g><text class="label" x="245" y="1023" font-size="21">兼容修复</text>
+  <g transform="translate(365 970) scale(.85)"><use href="#a-pulse"/></g><text class="label" x="425" y="1103" font-size="21">崩溃采集</text>
+  <g transform="translate(135 1130) scale(.85)"><use href="#a-log"/></g><text class="label" x="245" y="1183" font-size="21">崩溃日志</text>
+  <g transform="translate(365 1130) scale(.85)"><use href="#a-restore"/></g><text class="label" x="425" y="1263" font-size="21">恢复</text>
+
+  <!-- Panel B -->
+  <rect class="panel" x="648" y="485" width="505" height="760" rx="34"/>
+  <text class="title" x="688" y="550" font-size="30">B · 墨石小物</text>
+  <text class="body" x="688" y="588" font-size="20">更可爱、更颗粒化，识别性最强</text>
+  <line class="rule" x1="688" y1="618" x2="1113" y2="618"/>
+  <g transform="translate(703 650) scale(.85)"><use href="#b-menu"/></g><text class="label" x="813" y="703" font-size="21">全局菜单</text>
+  <g transform="translate(933 650) scale(.85)"><use href="#b-size"/></g><text class="label" x="993" y="783" font-size="21">按钮大小</text>
+  <g transform="translate(703 810) scale(.85)"><use href="#b-grid"/></g><text class="label" x="813" y="863" font-size="21">紧凑布局</text>
+  <g transform="translate(933 810) scale(.85)"><use href="#b-actions"/></g><text class="label" x="993" y="943" font-size="21">按钮与动作</text>
+  <g transform="translate(703 970) scale(.85)"><use href="#b-shield"/></g><text class="label" x="813" y="1023" font-size="21">兼容修复</text>
+  <g transform="translate(933 970) scale(.85)"><use href="#b-pulse"/></g><text class="label" x="993" y="1103" font-size="21">崩溃采集</text>
+  <g transform="translate(703 1130) scale(.85)"><use href="#b-log"/></g><text class="label" x="813" y="1183" font-size="21">崩溃日志</text>
+  <g transform="translate(933 1130) scale(.85)"><use href="#b-restore"/></g><text class="label" x="993" y="1263" font-size="21">恢复</text>
+
+  <!-- Panel C -->
+  <rect class="panel" x="1216" y="485" width="505" height="760" rx="34"/>
+  <text class="title" x="1256" y="550" font-size="30">C · 水母派生</text>
+  <text class="body" x="1256" y="588" font-size="20">品牌感最强，但功能轮廓最弱</text>
+  <line class="rule" x1="1256" y1="618" x2="1681" y2="618"/>
+  <g transform="translate(1271 650) scale(.85)"><use href="#c-menu"/></g><text class="label" x="1381" y="703" font-size="21">全局菜单</text>
+  <g transform="translate(1501 650) scale(.85)"><use href="#c-size"/></g><text class="label" x="1561" y="783" font-size="21">按钮大小</text>
+  <g transform="translate(1271 810) scale(.85)"><use href="#c-grid"/></g><text class="label" x="1381" y="863" font-size="21">紧凑布局</text>
+  <g transform="translate(1501 810) scale(.85)"><use href="#c-actions"/></g><text class="label" x="1561" y="943" font-size="21">按钮与动作</text>
+  <g transform="translate(1271 970) scale(.85)"><use href="#c-shield"/></g><text class="label" x="1381" y="1023" font-size="21">兼容修复</text>
+  <g transform="translate(1501 970) scale(.85)"><use href="#c-pulse"/></g><text class="label" x="1561" y="1103" font-size="21">崩溃采集</text>
+  <g transform="translate(1271 1130) scale(.85)"><use href="#c-log"/></g><text class="label" x="1381" y="1183" font-size="21">崩溃日志</text>
+  <g transform="translate(1501 1130) scale(.85)"><use href="#c-restore"/></g><text class="label" x="1561" y="1263" font-size="21">恢复</text>
+</svg>

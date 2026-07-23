@@ -1,0 +1,7 @@
+.DS_Store
+
+# Theos build and staging outputs
+.theos/
+layout/
+packages/
+*.deb

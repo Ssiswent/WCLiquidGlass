@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WCLiquidGlass Layout Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eef7ff;
+      --muted: #9cb3c8;
+      --panel: rgba(10, 28, 44, 0.88);
+      --line: rgba(139, 214, 255, 0.34);
+      --accent: #8bddff;
+      --good: #79efb4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 16% 8%, rgba(80, 180, 225, 0.24), transparent 36rem),
+        radial-gradient(circle at 90% 80%, rgba(50, 110, 170, 0.22), transparent 40rem),
+        #06111c;
+      font-family: "Avenir Next", "PingFang SC", sans-serif;
+    }
+
+    header {
+      width: min(1180px, calc(100% - 40px));
+      margin: 32px auto 22px;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 4vw, 46px);
+      letter-spacing: -0.045em;
+    }
+
+    header p {
+      max-width: 520px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      text-align: right;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto 48px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    article {
+      padding: 18px;
+      border: 1px solid rgba(151, 210, 239, 0.18);
+      border-radius: 28px;
+      background: linear-gradient(150deg, rgba(18, 45, 67, 0.94), var(--panel));
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 4px 14px;
+    }
+
+    .meta h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .metric {
+      color: var(--good);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .phone {
+      position: relative;
+      width: 390px;
+      height: 544px;
+      max-width: 100%;
+      margin: auto;
+      overflow: hidden;
+      border: 1px solid rgba(210, 239, 255, 0.24);
+      border-radius: 34px;
+      background:
+        linear-gradient(rgba(116, 183, 225, 0.34), rgba(149, 219, 229, 0.2)),
+        radial-gradient(circle at 72% 34%, #69a8d1 0 18%, transparent 46%),
+        linear-gradient(#79b6d7 0 58%, #73c9d4 58% 76%, #dceef0 76%);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    }
+
+    .phone::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(255,255,255,.045) 31px 32px),
+        repeating-linear-gradient(90deg, transparent 0 31px, rgba(255,255,255,.045) 31px 32px);
+      pointer-events: none;
+    }
+
+    .keyboard {
+      position: absolute;
+      inset: 515px 0 0;
+      border-top: 1px dashed rgba(255,255,255,.72);
+      background: rgba(225, 235, 240, 0.74);
+    }
+
+    svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .guide {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.5;
+      stroke-dasharray: 5 6;
+    }
+
+    .center-guide {
+      fill: rgba(139, 221, 255, 0.75);
+    }
+
+    .orb circle {
+      fill: rgba(220, 246, 255, 0.72);
+      stroke: rgba(18, 58, 83, 0.45);
+      stroke-width: 1.2;
+      filter: drop-shadow(0 6px 8px rgba(9, 37, 56, 0.22));
+    }
+
+    .orb text {
+      fill: #082034;
+      font-size: 13px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+
+    .anchor circle {
+      fill: rgba(228, 248, 255, 0.88);
+      stroke: rgba(18, 58, 83, 0.52);
+      stroke-width: 1.4;
+    }
+
+    .anchor path {
+      stroke: #0b2234;
+      stroke-width: 7;
+      stroke-linecap: round;
+    }
+
+    @media (max-width: 900px) {
+      header { align-items: start; flex-direction: column; }
+      header p { text-align: left; }
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Layout Lab</h1>
+    <p>真机比例几何回归：390pt 宽、9 个 52pt 按钮、左侧锚点、515pt 键盘边界。虚线只用于检查轨迹，不会进入插件。</p>
+  </header>
+  <main id="layouts"></main>
+
+  <script>
+    const WIDTH = 390;
+    const HEIGHT = 544;
+    const DIAMETER = 52;
+    const COUNT = 9;
+    const ANCHOR = { x: 38, y: 278 };
+    const CLEARANCE = 68;
+    const TARGET = 62;
+    const MIN_Y = 42;
+    const MAX_Y = 473;
+
+    const pointOnS = (t, startX, amplitude, halfHeight) => ({
+      x: startX + amplitude + amplitude * Math.sin(t * Math.PI),
+      y: t * halfHeight
+    });
+
+    function equalArcPoints(count, sampler, samples = 360) {
+      const curve = [];
+      let total = 0;
+      for (let index = 0; index <= samples; index += 1) {
+        const t = index / samples * 2 - 1;
+        const point = sampler(t);
+        if (curve.length) {
+          const previous = curve[curve.length - 1];
+          total += Math.hypot(point.x - previous.x, point.y - previous.y);
+        }
+        curve.push({ ...point, length: total });
+      }
+      const result = [];
+      for (let index = 0; index < count; index += 1) {
+        const target = total * index / (count - 1);
+        let upper = curve.findIndex(point => point.length >= target);
+        upper = Math.max(1, upper);
+        const before = curve[upper - 1];
+        const after = curve[upper];
+        const progress = (target - before.length) / Math.max(after.length - before.length, 0.0001);
+        result.push({
+          x: before.x + (after.x - before.x) * progress,
+          y: before.y + (after.y - before.y) * progress
+        });
+      }
+      return result;
+    }
+
+    function sCurve() {
+      const startX = 38;
+      const amplitude = 118;
+      const halfHeight = 112;
+      return {
+        points: equalArcPoints(COUNT, t => pointOnS(t, startX, amplitude, halfHeight)),
+        guides: [{ type: "path", points: Array.from({ length: 121 }, (_, i) => pointOnS(i / 60 - 1, startX, amplitude, halfHeight)) }]
+      };
+    }
+
+    function wideFan() {
+      const polar = (radius, degrees) => {
+        const angle = degrees * Math.PI / 180;
+        return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+      };
+      const innerRadius = 68;
+      const middleRadius = 134;
+      const outerRadius = 200;
+      const middleAngles = [-34, 0, 34];
+      const outerAngles = [-52, -26, 0, 26, 52];
+      return {
+        points: [polar(innerRadius, 0),
+                 ...middleAngles.map(angle => polar(middleRadius, angle)),
+                 ...outerAngles.map(angle => polar(outerRadius, angle))],
+        guides: [
+          { type: "ray", radius: outerRadius, angle: -52 },
+          { type: "ray", radius: outerRadius, angle: 0 },
+          { type: "ray", radius: outerRadius, angle: 52 },
+          { type: "arc", radius: middleRadius, start: -34, end: 34 },
+          { type: "arc", radius: outerRadius, start: -52, end: 52 }
+        ]
+      };
+    }
+
+    function doubleCrescent() {
+      const center = { x: 45, y: 0 };
+      const innerRadius = 68;
+      const outerRadius = 132;
+      const innerHalf = 110 * Math.PI / 180;
+      const alignedProjection = innerRadius * Math.cos(innerHalf);
+      const outerHalf = Math.acos(alignedProjection / outerRadius);
+      const arc = (count, radius, halfAngle) => Array.from({ length: count }, (_, index) => {
+        const angle = -halfAngle + halfAngle * 2 * index / (count - 1);
+        return { x: center.x + radius * Math.cos(angle), y: radius * Math.sin(angle) };
+      });
+      return {
+        points: [...arc(4, innerRadius, innerHalf), ...arc(5, outerRadius, outerHalf)],
+        guides: [
+          { type: "circleArc", center, radius: innerRadius, halfAngle: innerHalf },
+          { type: "circleArc", center, radius: outerRadius, halfAngle: outerHalf }
+        ],
+        centers: [center]
+      };
+    }
+
+    function petalCluster() {
+      const petals = COUNT - 1;
+      const radius = TARGET / (2 * Math.sin(Math.PI / petals));
+      const center = { x: CLEARANCE + radius, y: 0 };
+      const points = [center];
+      for (let index = 0; index < petals; index += 1) {
+        const angle = Math.PI + Math.PI * 2 * index / petals;
+        points.push({
+          x: center.x + radius * Math.cos(angle),
+          y: center.y + radius * Math.sin(angle)
+        });
+      }
+      return {
+        points,
+        guides: [{ type: "fullCircle", center, radius }],
+        centers: [center]
+      };
+    }
+
+    function fit(points) {
+      const absolute = points.map(point => ({ x: ANCHOR.x + point.x, y: ANCHOR.y + point.y }));
+      const left = Math.min(...absolute.map(point => point.x));
+      const right = Math.max(...absolute.map(point => point.x));
+      const top = Math.min(...absolute.map(point => point.y));
+      const bottom = Math.max(...absolute.map(point => point.y));
+      const minX = DIAMETER / 2 + 12;
+      const maxX = WIDTH - DIAMETER / 2 - 12;
+      let dx = left < minX ? minX - left : 0;
+      if (right + dx > maxX) dx += maxX - right - dx;
+      let dy = top < MIN_Y ? MIN_Y - top : 0;
+      if (bottom + dy > MAX_Y) dy += MAX_Y - bottom - dy;
+      return { points: absolute.map(point => ({ x: point.x + dx, y: point.y + dy })), dx, dy };
+    }
+
+    function minimumGap(points) {
+      let minimum = Infinity;
+      for (let first = 0; first < points.length; first += 1) {
+        for (let second = first + 1; second < points.length; second += 1) {
+          minimum = Math.min(minimum, Math.hypot(points[first].x - points[second].x,
+                                                  points[first].y - points[second].y));
+        }
+      }
+      return minimum - DIAMETER;
+    }
+
+    function anchorGap(points) {
+      return Math.min(...points.map(point =>
+        Math.hypot(point.x - ANCHOR.x, point.y - ANCHOR.y)
+      )) - DIAMETER;
+    }
+
+    function svgPath(points, dx, dy) {
+      return points.map((point, index) => {
+        const x = ANCHOR.x + point.x + dx;
+        const y = ANCHOR.y + point.y + dy;
+        return `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+      }).join(" ");
+    }
+
+    function renderGuide(guide, dx, dy) {
+      if (guide.type === "path") {
+        return `<path class="guide" d="${svgPath(guide.points, dx, dy)}"/>`;
+      }
+      if (guide.type === "fullCircle") {
+        return `<circle class="guide" cx="${ANCHOR.x + guide.center.x + dx}" cy="${ANCHOR.y + guide.center.y + dy}" r="${guide.radius}"/>`;
+      }
+      if (guide.type === "circleArc") {
+        const points = Array.from({ length: 81 }, (_, index) => {
+          const angle = -guide.halfAngle + guide.halfAngle * 2 * index / 80;
+          return {
+            x: guide.center.x + guide.radius * Math.cos(angle),
+            y: guide.center.y + guide.radius * Math.sin(angle)
+          };
+        });
+        return `<path class="guide" d="${svgPath(points, dx, dy)}"/>`;
+      }
+      if (guide.type === "arc") {
+        const points = Array.from({ length: 81 }, (_, index) => {
+          const degrees = guide.start + (guide.end - guide.start) * index / 80;
+          const angle = degrees * Math.PI / 180;
+          return { x: guide.radius * Math.cos(angle), y: guide.radius * Math.sin(angle) };
+        });
+        return `<path class="guide" d="${svgPath(points, dx, dy)}"/>`;
+      }
+      if (guide.type === "ray") {
+        const angle = guide.angle * Math.PI / 180;
+        const points = [
+          { x: 0, y: 0 },
+          { x: guide.radius * Math.cos(angle), y: guide.radius * Math.sin(angle) }
+        ];
+        return `<path class="guide" d="${svgPath(points, dx, dy)}"/>`;
+      }
+      return "";
+    }
+
+    const layouts = [
+      ["双层月牙", doubleCrescent],
+      ["流动 S 弧", sCurve],
+      ["宽扇形", wideFan],
+      ["花瓣环簇", petalCluster]
+    ];
+
+    const root = document.querySelector("#layouts");
+    layouts.forEach(([title, factory]) => {
+      const layout = factory();
+      const fitted = fit(layout.points);
+      const gap = minimumGap(fitted.points);
+      const nearestAnchorGap = anchorGap(fitted.points);
+      const guides = (layout.guides || []).map(guide => renderGuide(guide, fitted.dx, fitted.dy)).join("");
+      const centers = (layout.centers || []).map(center =>
+        `<circle class="center-guide" cx="${ANCHOR.x + center.x + fitted.dx}" cy="${ANCHOR.y + center.y + fitted.dy}" r="3"/>`
+      ).join("");
+      const orbs = fitted.points.map((point, index) =>
+        `<g class="orb" transform="translate(${point.x} ${point.y})"><circle r="${DIAMETER / 2}"/><text>${index + 1}</text></g>`
+      ).join("");
+      root.insertAdjacentHTML("beforeend", `
+        <article>
+          <div class="meta"><h2>${title}</h2><span class="metric">按钮 ${gap.toFixed(1)}pt · 锚点 ${nearestAnchorGap.toFixed(1)}pt</span></div>
+          <div class="phone">
+            <div class="keyboard"></div>
+            <svg viewBox="0 0 ${WIDTH} ${HEIGHT}">
+              ${guides}${centers}
+              <g class="anchor" transform="translate(${ANCHOR.x} ${ANCHOR.y})">
+                <circle r="${DIAMETER / 2}"/><path d="M -8 -8 L 8 8 M 8 -8 L -8 8"/>
+              </g>
+              ${orbs}
+            </svg>
+          </div>
+        </article>
+      `);
+    });
+  </script>
+</body>
+</html>

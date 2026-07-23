@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400">
+  <rect width="1400" height="620" fill="#f7f4ee"/>
+  <style>
+    .title { font: 700 38px 'PingFang SC', sans-serif; fill: #151515; }
+    .label { font: 600 28px 'PingFang SC', sans-serif; fill: #151515; }
+    .note { font: 400 20px 'PingFang SC', sans-serif; fill: #817b72; }
+    .panel { fill: #fff; stroke: #ded8ce; stroke-width: 2; }
+  </style>
+  <text class="title" x="60" y="65">品牌母版与菜单图标调整</text>
+  <text class="note" x="60" y="104">品牌直接使用确认截图的透明像素；菜单与按钮大小使用最终 SVG 源文件。</text>
+
+  <rect class="panel" x="60" y="145" width="520" height="410" rx="34"/>
+  <image href="../../Resources/Icons/Source/Brand.png" x="125" y="185" width="390" height="330" preserveAspectRatio="xMidYMid meet"/>
+  <text class="label" x="190" y="530">品牌图标 · 截图原样</text>
+
+  <rect class="panel" x="625" y="145" width="335" height="410" rx="34"/>
+  <image href="../../Resources/Icons/Source/menu.svg" x="690" y="195" width="205" height="205"/>
+  <text class="label" x="680" y="455">全局环形菜单</text>
+  <text class="note" x="672" y="495">六颗环形气泡＋中心灰点</text>
+
+  <rect class="panel" x="1005" y="145" width="335" height="410" rx="34"/>
+  <image href="../../Resources/Icons/Source/size.svg" x="1070" y="195" width="205" height="205"/>
+  <text class="label" x="1100" y="455">按钮大小</text>
+  <text class="note" x="1060" y="495">原全局菜单的双层圆环</text>
+</svg>

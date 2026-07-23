@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WCLiquidGlass Shape Concepts</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eef8ff;
+      --muted: #9db2c4;
+      --line: rgba(161, 226, 255, 0.72);
+      --track: rgba(184, 233, 255, 0.13);
+      --panel: rgba(10, 29, 44, 0.92);
+      --good: #79efb4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 14% 8%, rgba(87, 191, 234, 0.22), transparent 38rem),
+        radial-gradient(circle at 88% 88%, rgba(44, 118, 170, 0.2), transparent 42rem),
+        #06121d;
+      font-family: "Avenir Next", "PingFang SC", sans-serif;
+    }
+
+    header {
+      width: min(1180px, calc(100% - 40px));
+      margin: 34px auto 24px;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 42px;
+      letter-spacing: -0.045em;
+    }
+
+    header p {
+      max-width: 520px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      text-align: right;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto 52px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    article {
+      padding: 18px;
+      border: 1px solid rgba(151, 210, 239, 0.18);
+      border-radius: 28px;
+      background: linear-gradient(150deg, rgba(18, 45, 67, 0.96), var(--panel));
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 4px 14px;
+    }
+
+    .meta h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .badge {
+      color: var(--good);
+      font-size: 12px;
+    }
+
+    .phone {
+      position: relative;
+      width: 390px;
+      height: 460px;
+      max-width: 100%;
+      margin: auto;
+      overflow: hidden;
+      border: 1px solid rgba(210, 239, 255, 0.24);
+      border-radius: 34px;
+      background:
+        linear-gradient(rgba(116, 183, 225, 0.34), rgba(149, 219, 229, 0.18)),
+        radial-gradient(circle at 72% 32%, #69a8d1 0 18%, transparent 46%),
+        linear-gradient(#79b6d7 0 61%, #73c9d4 61% 80%, #dceef0 80%);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    }
+
+    .phone::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(255, 255, 255, .045) 31px 32px),
+        repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, .045) 31px 32px);
+      pointer-events: none;
+    }
+
+    svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .track {
+      fill: none;
+      stroke: var(--track);
+      stroke-width: 13;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .guide {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.4;
+      stroke-dasharray: 5 6;
+      stroke-linecap: round;
+    }
+
+    .orb circle {
+      fill: rgba(222, 247, 255, 0.74);
+      stroke: rgba(15, 54, 78, 0.46);
+      stroke-width: 1.2;
+      filter: drop-shadow(0 6px 8px rgba(9, 37, 56, 0.22));
+    }
+
+    .orb text {
+      fill: #082034;
+      font-size: 13px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+
+    .anchor circle {
+      fill: rgba(228, 248, 255, 0.9);
+      stroke: rgba(18, 58, 83, 0.52);
+      stroke-width: 1.4;
+    }
+
+    .anchor path {
+      stroke: #0b2234;
+      stroke-width: 7;
+      stroke-linecap: round;
+    }
+
+    .center {
+      fill: #8ee2ff;
+      opacity: .72;
+    }
+
+    @media (max-width: 900px) {
+      header { align-items: start; flex-direction: column; }
+      header p { text-align: left; }
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Rounded Shapes</h1>
+    <p>仅用于确认几何。半透明粗线和虚线是轨迹辅助线，不会进入插件；圆形按钮和左侧折叠按钮按真机比例绘制。</p>
+  </header>
+  <main id="concepts"></main>
+
+  <script>
+    const WIDTH = 390;
+    const HEIGHT = 460;
+    const DIAMETER = 52;
+    const ANCHOR = { x: 38, y: 230 };
+
+    const polar = (center, radiusX, radiusY, degrees) => {
+      const angle = degrees * Math.PI / 180;
+      return {
+        x: center.x + radiusX * Math.cos(angle),
+        y: center.y + radiusY * Math.sin(angle)
+      };
+    };
+
+    const arcPoints = (count, center, radiusX, radiusY, start, end) =>
+      Array.from({ length: count }, (_, index) =>
+        polar(center, radiusX, radiusY,
+              start + (end - start) * index / Math.max(count - 1, 1))
+      );
+
+    const denseArc = (center, radiusX, radiusY, start, end) =>
+      arcPoints(81, center, radiusX, radiusY, start, end);
+
+    function crescentA() {
+      const center = { x: 0, y: 0 };
+      return {
+        title: "月牙 A · 标准双半环",
+        badge: "推荐",
+        points: [
+          ...arcPoints(4, center, 68, 68, -90, 90),
+          ...arcPoints(5, center, 132, 132, -90, 90)
+        ],
+        paths: [
+          denseArc(center, 68, 68, -90, 90),
+          denseArc(center, 132, 132, -90, 90)
+        ],
+        centers: [center]
+      };
+    }
+
+    function crescentB() {
+      const center = { x: 10, y: 0 };
+      return {
+        title: "月牙 B · 柔和双 C 环",
+        badge: "更紧凑",
+        points: [
+          ...arcPoints(4, center, 70, 70, -80, 80),
+          ...arcPoints(5, center, 134, 134, -80, 80)
+        ],
+        paths: [
+          denseArc(center, 70, 70, -80, 80),
+          denseArc(center, 134, 134, -80, 80)
+        ],
+        centers: [center]
+      };
+    }
+
+    function roundedBiarcS() {
+      const baseX = 30;
+      const radiusX = 120;
+      const radiusY = 70;
+      const upperCenter = { x: baseX + radiusX, y: -radiusY };
+      const lowerCenter = { x: baseX + radiusX, y: radiusY };
+      const upper = arcPoints(5, upperCenter, radiusX, radiusY, -90, -270);
+      const lower = arcPoints(5, lowerCenter, radiusX, radiusY, -90, 90);
+      return {
+        title: "S A · 相切圆角双弧",
+        badge: "推荐",
+        points: [...upper, ...lower.slice(1)],
+        paths: [
+          denseArc(upperCenter, radiusX, radiusY, -90, -270),
+          denseArc(lowerCenter, radiusX, radiusY, -90, 90)
+        ],
+        centers: []
+      };
+    }
+
+    function cubicPoint(t, p0, p1, p2, p3) {
+      const inverse = 1 - t;
+      return {
+        x: inverse ** 3 * p0.x + 3 * inverse ** 2 * t * p1.x +
+           3 * inverse * t ** 2 * p2.x + t ** 3 * p3.x,
+        y: inverse ** 3 * p0.y + 3 * inverse ** 2 * t * p1.y +
+           3 * inverse * t ** 2 * p2.y + t ** 3 * p3.y
+      };
+    }
+
+    function equalArcPoints(count, curve, samples = 500) {
+      const sampled = [];
+      let total = 0;
+      for (let index = 0; index <= samples; index += 1) {
+        const point = curve(index / samples);
+        if (sampled.length) {
+          const previous = sampled[sampled.length - 1];
+          total += Math.hypot(point.x - previous.x, point.y - previous.y);
+        }
+        sampled.push({ ...point, length: total });
+      }
+      return Array.from({ length: count }, (_, index) => {
+        const target = total * index / (count - 1);
+        let upper = sampled.findIndex(point => point.length >= target);
+        upper = Math.max(1, upper);
+        const before = sampled[upper - 1];
+        const after = sampled[upper];
+        const progress = (target - before.length) /
+          Math.max(after.length - before.length, 0.0001);
+        return {
+          x: before.x + (after.x - before.x) * progress,
+          y: before.y + (after.y - before.y) * progress
+        };
+      });
+    }
+
+    function flowingBezierS() {
+      const top = { x: 165, y: -132 };
+      const middle = { x: 132, y: 0 };
+      const bottom = { x: 98, y: 132 };
+      const upperControlA = { x: 20, y: -132 };
+      const upperControlB = { x: 20, y: -42 };
+      const lowerControlA = { x: 244, y: 42 };
+      const lowerControlB = { x: 244, y: 132 };
+      const curve = t => t <= 0.5
+        ? cubicPoint(t * 2, top, upperControlA, upperControlB, middle)
+        : cubicPoint((t - 0.5) * 2, middle, lowerControlA, lowerControlB, bottom);
+      return {
+        title: "S B · 连续流动曲线",
+        badge: "更舒展",
+        points: equalArcPoints(9, curve),
+        paths: [Array.from({ length: 161 }, (_, index) => curve(index / 160))],
+        centers: []
+      };
+    }
+
+    function pathData(points) {
+      return points.map((point, index) =>
+        `${index ? "L" : "M"} ${(ANCHOR.x + point.x).toFixed(2)} ${(ANCHOR.y + point.y).toFixed(2)}`
+      ).join(" ");
+    }
+
+    const concepts = [crescentA(), crescentB(), roundedBiarcS(), flowingBezierS()];
+    const root = document.querySelector("#concepts");
+    concepts.forEach(concept => {
+      const paths = concept.paths.map(path =>
+        `<path class="track" d="${pathData(path)}"/><path class="guide" d="${pathData(path)}"/>`
+      ).join("");
+      const centers = concept.centers.map(center =>
+        `<circle class="center" cx="${ANCHOR.x + center.x}" cy="${ANCHOR.y + center.y}" r="3"/>`
+      ).join("");
+      const orbs = concept.points.map((point, index) =>
+        `<g class="orb" transform="translate(${ANCHOR.x + point.x} ${ANCHOR.y + point.y})">
+           <circle r="${DIAMETER / 2}"/><text>${index + 1}</text>
+         </g>`
+      ).join("");
+      root.insertAdjacentHTML("beforeend", `
+        <article>
+          <div class="meta"><h2>${concept.title}</h2><span class="badge">${concept.badge}</span></div>
+          <div class="phone">
+            <svg viewBox="0 0 ${WIDTH} ${HEIGHT}">
+              ${paths}${centers}
+              <g class="anchor" transform="translate(${ANCHOR.x} ${ANCHOR.y})">
+                <circle r="${DIAMETER / 2}"/><path d="M -8 -8 L 8 8 M 8 -8 L -8 8"/>
+              </g>
+              ${orbs}
+            </svg>
+          </div>
+        </article>
+      `);
+    });
+  </script>
+</body>
+</html>

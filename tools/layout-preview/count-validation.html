@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WCLiquidGlass Count Validation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #eef8ff;
+      --muted: #9cb4c7;
+      --panel: rgba(10, 29, 44, 0.94);
+      --line: rgba(155, 224, 255, 0.64);
+      --track: rgba(179, 231, 255, 0.12);
+      --good: #78efb3;
+      --bad: #ff9b91;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 4%, rgba(75, 180, 224, 0.22), transparent 38rem),
+        radial-gradient(circle at 92% 90%, rgba(42, 112, 166, 0.22), transparent 42rem),
+        #06121d;
+      font-family: "Avenir Next", "PingFang SC", sans-serif;
+    }
+
+    header {
+      width: min(1380px, calc(100% - 40px));
+      margin: 30px auto 22px;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 40px;
+      letter-spacing: -0.045em;
+    }
+
+    header p {
+      max-width: 590px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      text-align: right;
+    }
+
+    .summary {
+      width: min(1380px, calc(100% - 40px));
+      margin: 0 auto 22px;
+      padding: 15px 18px;
+      border: 1px solid rgba(151, 210, 239, 0.18);
+      border-radius: 20px;
+      background: rgba(11, 31, 47, 0.82);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+    }
+
+    .chip {
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: var(--good);
+      background: rgba(121, 239, 180, 0.08);
+      border: 1px solid rgba(121, 239, 180, 0.2);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chip.fail {
+      color: var(--bad);
+      background: rgba(255, 155, 145, 0.08);
+      border-color: rgba(255, 155, 145, 0.22);
+    }
+
+    main {
+      width: min(1380px, calc(100% - 40px));
+      margin: 0 auto 48px;
+    }
+
+    section {
+      margin-top: 28px;
+    }
+
+    section h2 {
+      margin: 0 0 12px 4px;
+      font-size: 21px;
+      letter-spacing: -0.025em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    article {
+      padding: 13px;
+      border: 1px solid rgba(151, 210, 239, 0.18);
+      border-radius: 24px;
+      background: linear-gradient(150deg, rgba(18, 45, 67, 0.96), var(--panel));
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 2px 10px;
+    }
+
+    .meta h3 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+
+    .metric {
+      color: var(--good);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .metric.fail { color: var(--bad); }
+
+    .phone {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 390 / 544;
+      overflow: hidden;
+      border: 1px solid rgba(210, 239, 255, 0.22);
+      border-radius: 26px;
+      background:
+        linear-gradient(rgba(116, 183, 225, 0.34), rgba(149, 219, 229, 0.18)),
+        radial-gradient(circle at 72% 32%, #69a8d1 0 18%, transparent 46%),
+        linear-gradient(#79b6d7 0 61%, #73c9d4 61% 80%, #dceef0 80%);
+    }
+
+    svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .keyboard {
+      fill: rgba(231, 239, 243, 0.58);
+    }
+
+    .keyboard-line {
+      stroke: rgba(255, 255, 255, 0.7);
+      stroke-width: 1;
+      stroke-dasharray: 4 5;
+    }
+
+    .track {
+      fill: none;
+      stroke: var(--track);
+      stroke-width: 12;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .guide {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.35;
+      stroke-dasharray: 5 6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .orb circle {
+      fill: rgba(222, 247, 255, 0.74);
+      stroke: rgba(15, 54, 78, 0.46);
+      stroke-width: 1.2;
+      filter: drop-shadow(0 5px 7px rgba(9, 37, 56, 0.22));
+    }
+
+    .orb text {
+      fill: #082034;
+      font-size: 12px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+
+    .anchor circle {
+      fill: rgba(228, 248, 255, 0.9);
+      stroke: rgba(18, 58, 83, 0.52);
+      stroke-width: 1.4;
+    }
+
+    .anchor path {
+      stroke: #0b2234;
+      stroke-width: 7;
+      stroke-linecap: round;
+    }
+
+    @media (max-width: 980px) {
+      header { align-items: start; flex-direction: column; }
+      header p { text-align: left; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Count Matrix</h1>
+    <p>四种紧凑布局按当前页面选定的按钮数量展示，同时在小/中/大三种尺寸下进行完整几何回归；轨迹辅助线不会进入插件。</p>
+  </header>
+  <div class="summary" id="summary"></div>
+  <main id="matrix"></main>
+
+  <script>
+    const WIDTH = 390;
+    const HEIGHT = 544;
+    const KEYBOARD_Y = 515;
+    const ANCHOR = { x: 38, y: 278 };
+    const requestedCounts = new URLSearchParams(location.search).get("counts");
+    const COUNTS = requestedCounts
+      ? requestedCounts.split(",").map(Number).filter(count => count >= 1 && count <= 12)
+      : [7, 8, 9, 10, 11, 12];
+    const ALL_COUNTS = Array.from({ length: 6 }, (_, index) => index + 7);
+    const SIZE_MODES = [
+      { name: "小", anchorDiameter: 53 },
+      { name: "中", anchorDiameter: 60 },
+      { name: "大", anchorDiameter: 66 }
+    ];
+
+    function optionDiameter(count, anchorDiameter) {
+      if (count <= 8) return anchorDiameter;
+      const countMaximum = Math.max(44, 50 - (count - 9) * 2);
+      return Math.max(44, Math.min(countMaximum, anchorDiameter * 0.82));
+    }
+
+    function resolvedDiameter(layout, count, anchorDiameter) {
+      const preferred = optionDiameter(count, anchorDiameter);
+      if (count >= layout.minimumCompactCount) return preferred;
+      const usableHeight = KEYBOARD_Y - 32;
+      const maximumForDefaultGap = (usableHeight - 8 * (count - 1)) / count;
+      return Math.max(44, Math.min(preferred, Math.floor(maximumForDefaultGap)));
+    }
+
+    function polar(center, radius, degrees) {
+      const angle = degrees * Math.PI / 180;
+      return {
+        x: center.x + radius * Math.cos(angle),
+        y: center.y + radius * Math.sin(angle)
+      };
+    }
+
+    function arcPoints(count, center, radius, start, end) {
+      if (count === 1) return [polar(center, radius, 0)];
+      return Array.from({ length: count }, (_, index) =>
+        polar(center, radius, start + (end - start) * index / (count - 1))
+      );
+    }
+
+    function denseArc(center, radius, start, end) {
+      return arcPoints(81, center, radius, start, end);
+    }
+
+    function cubicPoint(t, p0, p1, p2, p3) {
+      const inverse = 1 - t;
+      return {
+        x: inverse ** 3 * p0.x + 3 * inverse ** 2 * t * p1.x +
+           3 * inverse * t ** 2 * p2.x + t ** 3 * p3.x,
+        y: inverse ** 3 * p0.y + 3 * inverse ** 2 * t * p1.y +
+           3 * inverse * t ** 2 * p2.y + t ** 3 * p3.y
+      };
+    }
+
+    function sampledCurve(curve, samples = 600) {
+      const result = [];
+      let total = 0;
+      for (let index = 0; index <= samples; index += 1) {
+        const point = curve(index / samples);
+        if (result.length) {
+          const previous = result[result.length - 1];
+          total += Math.hypot(point.x - previous.x, point.y - previous.y);
+        }
+        result.push({ ...point, length: total });
+      }
+      return result;
+    }
+
+    function equalArcPoints(count, sampled) {
+      if (count === 1) return [sampled[Math.floor(sampled.length / 2)]];
+      const total = sampled[sampled.length - 1].length;
+      return Array.from({ length: count }, (_, index) => {
+        const target = total * index / (count - 1);
+        let upper = sampled.findIndex(point => point.length >= target);
+        upper = Math.max(1, upper);
+        const before = sampled[upper - 1];
+        const after = sampled[upper];
+        const progress = (target - before.length) /
+          Math.max(after.length - before.length, 0.0001);
+        return {
+          x: before.x + (after.x - before.x) * progress,
+          y: before.y + (after.y - before.y) * progress
+        };
+      });
+    }
+
+    function minimumDistance(points) {
+      let minimum = Infinity;
+      for (let first = 0; first < points.length; first += 1) {
+        for (let second = first + 1; second < points.length; second += 1) {
+          minimum = Math.min(minimum, Math.hypot(points[first].x - points[second].x,
+                                                 points[first].y - points[second].y));
+        }
+      }
+      return minimum;
+    }
+
+    function translateShape(shape, dx, dy) {
+      return {
+        ...shape,
+        points: shape.points.map(point => ({ x: point.x + dx, y: point.y + dy })),
+        paths: shape.paths.map(path =>
+          path.map(point => ({ x: point.x + dx, y: point.y + dy }))
+        )
+      };
+    }
+
+    function alignToAnchor(shape, desiredDistance) {
+      const minimumX = Math.min(...shape.points.map(point => point.x));
+      let low = -minimumX + 0.1;
+      let high = low + 300;
+      for (let iteration = 0; iteration < 50; iteration += 1) {
+        const middle = (low + high) * 0.5;
+        const distance = Math.min(...shape.points.map(point =>
+          Math.hypot(point.x + middle, point.y)
+        ));
+        if (distance < desiredDistance) low = middle;
+        else high = middle;
+      }
+      return translateShape(shape, (low + high) * 0.5, 0);
+    }
+
+    function fit(shape, diameter) {
+      const absolute = shape.points.map(point => ({
+        x: ANCHOR.x + point.x,
+        y: ANCHOR.y + point.y
+      }));
+      const minimumX = diameter / 2 + 12;
+      const maximumX = WIDTH - diameter / 2 - 12;
+      const minimumY = diameter / 2 + 16;
+      const maximumY = KEYBOARD_Y - diameter / 2 - 16;
+      const left = Math.min(...absolute.map(point => point.x));
+      const right = Math.max(...absolute.map(point => point.x));
+      const top = Math.min(...absolute.map(point => point.y));
+      const bottom = Math.max(...absolute.map(point => point.y));
+      let dx = left < minimumX ? minimumX - left : 0;
+      if (right + dx > maximumX) dx += maximumX - right - dx;
+      let dy = top < minimumY ? minimumY - top : 0;
+      if (bottom + dy > maximumY) dy += maximumY - bottom - dy;
+      return translateShape(shape, dx, dy);
+    }
+
+    function defaultNonCompact(count, diameter, anchorDiameter) {
+      const minimumY = diameter / 2 + 16 - ANCHOR.y;
+      const maximumY = KEYBOARD_Y - diameter / 2 - 16 - ANCHOR.y;
+      const availableHeight = maximumY - minimumY;
+      const desiredGap = Math.max(diameter + 10,
+        Math.round(diameter * (count > 4 ? 1.16 : 1.28)));
+      const gap = count > 1 ? Math.min(desiredGap, availableHeight / (count - 1)) : 0;
+      const totalHeight = diameter + gap * (count - 1);
+      let startY = -totalHeight / 2 + diameter / 2;
+      startY = Math.max(minimumY, Math.min(startY, maximumY - gap * (count - 1)));
+      const middle = (count - 1) * 0.5;
+      const divisor = Math.max(middle, 1);
+      const anchorClearance = anchorDiameter / 2 + diameter / 2 + 10;
+      const maximumX = WIDTH - diameter / 2 - 12 - ANCHOR.x;
+      const maximumCurveDepth = Math.max(0, maximumX - anchorClearance);
+      const preferredCurveDepth = Math.round(diameter * (count > 6 ? 1.55 : 1.35));
+      const curveDepth = Math.min(preferredCurveDepth, maximumCurveDepth);
+      const points = Array.from({ length: count }, (_, index) => {
+        const normalizedDistance = Math.abs(index - middle) / divisor;
+        return {
+          x: anchorClearance + curveDepth * Math.cos(normalizedDistance * Math.PI / 2),
+          y: startY + gap * index
+        };
+      });
+      return {
+        points,
+        paths: [points]
+      };
+    }
+
+    function crescent(count, diameter, anchorDiameter) {
+      const clearance = anchorDiameter / 2 + diameter / 2 + 16;
+      const target = diameter + 10;
+      const innerCount = Math.floor(count / 2) - 1;
+      const outerCount = count - innerCount;
+      const radialGapForSpan = span => {
+        const innerRadius = target /
+          (2 * Math.sin(span / (2 * (innerCount - 1))));
+        const outerRadius = target /
+          (2 * Math.sin(span / (2 * (outerCount - 1))));
+        return { innerRadius, outerRadius, gap: outerRadius - innerRadius };
+      };
+      let low = 90 * Math.PI / 180;
+      let high = 170 * Math.PI / 180;
+      for (let iteration = 0; iteration < 50; iteration += 1) {
+        const middle = (low + high) * 0.5;
+        if (radialGapForSpan(middle).gap > target) low = middle;
+        else high = middle;
+      }
+      const solvedSpan = (low + high) * 0.5;
+      const span = Math.min(solvedSpan, 150 * Math.PI / 180);
+      const radii = radialGapForSpan(span);
+      const center = { x: clearance - radii.innerRadius, y: 0 };
+      const halfAngle = span * 90 / Math.PI;
+      return alignToAnchor({
+        points: [
+          ...arcPoints(innerCount, center, radii.innerRadius, -halfAngle, halfAngle),
+          ...arcPoints(outerCount, center, radii.outerRadius, -halfAngle, halfAngle)
+        ],
+        paths: [
+          denseArc(center, radii.innerRadius, -halfAngle, halfAngle),
+          denseArc(center, radii.outerRadius, -halfAngle, halfAngle)
+        ]
+      }, clearance);
+    }
+
+    function flowingS(count, diameter, anchorDiameter) {
+      const reference = t => {
+        const top = { x: 165, y: -132 };
+        const middle = { x: 132, y: 0 };
+        const bottom = { x: 98, y: 132 };
+        return t <= 0.5
+          ? cubicPoint(t * 2, top, { x: 20, y: -132 }, { x: 20, y: -42 }, middle)
+          : cubicPoint((t - 0.5) * 2, middle, { x: 244, y: 42 }, { x: 244, y: 132 }, bottom);
+      };
+      const referenceSampled = sampledCurve(reference);
+      const referencePoints = equalArcPoints(count, referenceSampled);
+      const referenceMinimumDistance = count > 1
+        ? minimumDistance(referencePoints)
+        : 1;
+      const scale = (diameter + 10) / referenceMinimumDistance;
+      const curve = t => {
+        const point = reference(t);
+        return { x: point.x * scale, y: point.y * scale };
+      };
+      const sampled = sampledCurve(curve);
+      const shape = {
+        points: equalArcPoints(count, sampled),
+        paths: [sampled.filter((_, index) => index % 5 === 0)]
+      };
+      const desiredDistance = anchorDiameter / 2 + diameter / 2 + 16;
+      return alignToAnchor(shape, desiredDistance);
+    }
+
+    function ringHalfAngle(count, radius, target) {
+      if (count <= 1) return 0;
+      const step = 2 * Math.asin(Math.min(0.98, target / (2 * radius)));
+      return step * (count - 1) * 90 / Math.PI;
+    }
+
+    function fanRing(count, radius, halfAngle) {
+      return arcPoints(count, { x: 0, y: 0 }, radius, -halfAngle, halfAngle);
+    }
+
+    function wideFan(count, diameter, anchorDiameter) {
+      const clearance = anchorDiameter / 2 + diameter / 2 + 16;
+      if (count === 1) return { points: [{ x: clearance, y: 0 }], paths: [] };
+      const target = diameter + 9;
+      const radialStep = target;
+      const rings = [];
+      if (count <= 3) {
+        rings.push({ count, radius: clearance });
+      } else if (count <= 6) {
+        rings.push({ count: 1, radius: clearance });
+        rings.push({ count: count - 1, radius: clearance + radialStep });
+      } else {
+        const remaining = count - 1;
+        const middleCount = Math.max(2, Math.round(remaining * 0.36));
+        rings.push({ count: 1, radius: clearance });
+        rings.push({ count: middleCount, radius: clearance + radialStep });
+        rings.push({ count: remaining - middleCount, radius: clearance + radialStep * 2 });
+      }
+      const points = [];
+      const paths = [];
+      rings.forEach(ring => {
+        const halfAngle = ringHalfAngle(ring.count, ring.radius, target);
+        points.push(...fanRing(ring.count, ring.radius, halfAngle));
+        if (ring.count > 1) {
+          paths.push(denseArc({ x: 0, y: 0 }, ring.radius, -halfAngle, halfAngle));
+        }
+      });
+      return { points, paths };
+    }
+
+    function petal(count, diameter, anchorDiameter) {
+      const clearance = anchorDiameter / 2 + diameter / 2 + 16;
+      if (count === 1) return { points: [{ x: clearance, y: 0 }], paths: [] };
+      if (count === 2) {
+        return {
+          points: [{ x: clearance, y: 0 }, { x: clearance + diameter + 10, y: 0 }],
+          paths: []
+        };
+      }
+      const target = diameter + 10;
+      if (count <= 8) {
+        const radius = target / (2 * Math.sin(Math.PI / count));
+        const center = { x: clearance + radius, y: 0 };
+        const points = Array.from({ length: count }, (_, index) =>
+          polar(center, radius, -90 + 360 * index / count)
+        );
+        return {
+          points,
+          paths: [denseArc(center, radius, 0, 360)]
+        };
+      }
+      const petalCount = count - 1;
+      const radius = target / (2 * Math.sin(Math.PI / petalCount));
+      const center = { x: clearance + radius, y: 0 };
+      const points = [center];
+      for (let index = 0; index < petalCount; index += 1) {
+        const angle = 180 + 360 * index / petalCount;
+        points.push(polar(center, radius, angle));
+      }
+      return {
+        points,
+        paths: [denseArc(center, radius, 0, 360)]
+      };
+    }
+
+    const LAYOUTS = [
+      { name: "双层月牙 B", minimumCompactCount: 8, factory: crescent },
+      { name: "流动 S 弧 B", minimumCompactCount: 7, factory: flowingS },
+      { name: "宽扇形", minimumCompactCount: 7, factory: wideFan },
+      { name: "花瓣环簇", minimumCompactCount: 7, factory: petal }
+    ];
+
+    function resolvedLayout(layout, count, diameter, anchorDiameter) {
+      if (count < layout.minimumCompactCount) {
+        return defaultNonCompact(count, diameter, anchorDiameter);
+      }
+      return layout.factory(count, diameter, anchorDiameter);
+    }
+
+    function validate(layout, count, diameter, anchorDiameter) {
+      const fitted = fit(layout, diameter);
+      const minimumGap = count > 1 ? minimumDistance(fitted.points) - diameter : Infinity;
+      const nearestAnchorGap = Math.min(...fitted.points.map(point =>
+        Math.hypot(point.x, point.y)
+      )) - (anchorDiameter + diameter) / 2;
+      const absolute = fitted.points.map(point => ({
+        x: ANCHOR.x + point.x,
+        y: ANCHOR.y + point.y
+      }));
+      const inBounds = absolute.every(point =>
+        point.x - diameter / 2 >= 12 &&
+        point.x + diameter / 2 <= WIDTH - 12 &&
+        point.y - diameter / 2 >= 16 &&
+        point.y + diameter / 2 <= KEYBOARD_Y - 16
+      );
+      return {
+        ...fitted,
+        minimumGap,
+        nearestAnchorGap,
+        inBounds,
+        pass: minimumGap >= 8 && nearestAnchorGap >= 10 && inBounds
+      };
+    }
+
+    function pathData(points) {
+      return points.map((point, index) =>
+        `${index ? "L" : "M"} ${(ANCHOR.x + point.x).toFixed(2)} ${(ANCHOR.y + point.y).toFixed(2)}`
+      ).join(" ");
+    }
+
+    const report = [];
+    SIZE_MODES.forEach(size => {
+      ALL_COUNTS.forEach(count => {
+        LAYOUTS.forEach(layout => {
+          const diameter = resolvedDiameter(layout, count, size.anchorDiameter);
+          const result = validate(resolvedLayout(layout, count, diameter, size.anchorDiameter),
+                                  count, diameter, size.anchorDiameter);
+          report.push({
+            size: size.name,
+            count,
+            layout: layout.name,
+            minimumGap: result.minimumGap,
+            nearestAnchorGap: result.nearestAnchorGap,
+            inBounds: result.inBounds,
+            compact: count >= layout.minimumCompactCount,
+            pass: result.pass
+          });
+        });
+      });
+    });
+    window.layoutValidationReport = report;
+
+    const summary = document.querySelector("#summary");
+    COUNTS.forEach(count => {
+      const entries = report.filter(entry => entry.count === count);
+      const passed = entries.every(entry => entry.pass);
+      summary.insertAdjacentHTML("beforeend",
+        `<span class="chip ${passed ? "" : "fail"}">${count} 个 · ${passed ? "通过" : "需调整"}</span>`
+      );
+    });
+
+    const root = document.querySelector("#matrix");
+    const defaultSize = SIZE_MODES[1];
+    COUNTS.forEach(count => {
+      const section = document.createElement("section");
+      section.innerHTML = `<h2>${count} 个按钮 · 默认尺寸</h2><div class="grid"></div>`;
+      const grid = section.querySelector(".grid");
+      LAYOUTS.forEach(layout => {
+        const diameter = resolvedDiameter(layout, count, defaultSize.anchorDiameter);
+        const usesCompactLayout = count >= layout.minimumCompactCount;
+        const displayName = usesCompactLayout
+          ? layout.name
+          : `默认弧形 · ${layout.name} ${layout.minimumCompactCount} 个起`;
+        const result = validate(resolvedLayout(layout, count, diameter, defaultSize.anchorDiameter),
+                                count, diameter, defaultSize.anchorDiameter);
+        const paths = result.paths.map(path =>
+          `<path class="track" d="${pathData(path)}"/><path class="guide" d="${pathData(path)}"/>`
+        ).join("");
+        const orbs = result.points.map((point, index) =>
+          `<g class="orb" transform="translate(${ANCHOR.x + point.x} ${ANCHOR.y + point.y})">
+             <circle r="${diameter / 2}"/><text>${index + 1}</text>
+           </g>`
+        ).join("");
+        grid.insertAdjacentHTML("beforeend", `
+          <article>
+            <div class="meta">
+              <h3>${displayName}</h3>
+              <span class="metric ${result.pass ? "" : "fail"}">间距 ${result.minimumGap.toFixed(1)}pt</span>
+            </div>
+            <div class="phone">
+              <svg viewBox="0 0 ${WIDTH} ${HEIGHT}">
+                <rect class="keyboard" x="0" y="${KEYBOARD_Y}" width="${WIDTH}" height="${HEIGHT - KEYBOARD_Y}"/>
+                <line class="keyboard-line" x1="0" y1="${KEYBOARD_Y}" x2="${WIDTH}" y2="${KEYBOARD_Y}"/>
+                ${paths}
+                <g class="anchor" transform="translate(${ANCHOR.x} ${ANCHOR.y})">
+                  <circle r="${defaultSize.anchorDiameter / 2}"/>
+                  <path d="M -8 -8 L 8 8 M 8 -8 L -8 8"/>
+                </g>
+                ${orbs}
+              </svg>
+            </div>
+          </article>
+        `);
+      });
+      root.appendChild(section);
+    });
+  </script>
+</body>
+</html>

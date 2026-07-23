@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1240" viewBox="0 0 1800 1240">
+  <rect width="1800" height="1240" fill="#f6f4ef"/>
+  <style>
+    .title { font-family: 'PingFang SC', Arial, sans-serif; fill: #111111; font-weight: 700; }
+    .body { font-family: 'PingFang SC', Arial, sans-serif; fill: #67635c; font-weight: 400; }
+    .label { font-family: 'PingFang SC', Arial, sans-serif; fill: #26231f; font-weight: 600; }
+    .caption { font-family: 'PingFang SC', Arial, sans-serif; fill: #817b72; font-weight: 400; }
+    .panel { fill: #ffffff; stroke: #e3ded4; stroke-width: 2; }
+    .rule { stroke: #e8e2d7; stroke-width: 2; }
+    .black { fill: #050505; }
+    .gray { fill: #b8b6b1; }
+  </style>
+
+  <defs>
+    <!-- Selected final brand mark: traced from the approved reference proportions. -->
+    <g id="brand-final">
+      <!-- quiet gray underside, only exposed from the lower-right edge -->
+      <path class="gray" d="M80 120 C94 128 105 127 117 121 C130 115 142 118 153 125 C162 130 171 130 178 124 C177 135 169 142 158 144 C146 145 137 138 128 134 C118 130 109 133 99 138 C88 143 77 140 70 133 Z"/>
+      <!-- three short, independent tentacles: only the outer pair splay slightly -->
+      <rect class="black" x="67" y="135" width="27" height="60" rx="13.5" transform="rotate(-4 80.5 165)"/>
+      <rect class="black" x="102" y="134" width="27" height="61" rx="13.5"/>
+      <rect class="gray" x="137" y="135" width="27" height="60" rx="13.5" transform="rotate(4 150.5 165)"/>
+      <!-- broad low dome; the lower edge keeps the deliberately soft, uneven rhythm -->
+      <path class="black" d="M17 105 C16 88 22 70 35 56 C50 39 70 29 94 27 C119 25 143 32 160 48 C176 62 184 82 184 102 C184 114 178 122 169 125 C160 128 153 125 145 120 C137 115 128 115 119 120 C109 126 100 129 89 126 C79 123 72 116 62 116 C52 116 45 122 36 124 C26 127 18 121 17 105 Z"/>
+      <!-- rounded gray window and a clean black bite at its outer edge -->
+      <path class="gray" d="M137 83 C151 79 167 84 174 95 C180 105 177 116 168 121 C157 127 141 124 133 114 C125 104 127 89 137 83 Z"/>
+      <circle class="black" cx="173" cy="104" r="7"/>
+    </g>
+
+    <!-- A: rounded black foreground with a neutral-gray rear physical layer. -->
+    <g id="a-menu"><circle class="gray" cx="54" cy="54" r="30"/><circle class="black" cx="48" cy="48" r="30"/><circle class="gray" cx="48" cy="48" r="13"/></g>
+    <g id="a-grid"><g class="gray"><rect x="28" y="28" width="23" height="23" rx="8"/><rect x="61" y="28" width="23" height="23" rx="8"/><rect x="28" y="61" width="23" height="23" rx="8"/><rect x="61" y="61" width="23" height="23" rx="8"/></g><g class="black"><rect x="21" y="21" width="23" height="23" rx="8"/><rect x="54" y="21" width="23" height="23" rx="8"/><rect x="21" y="54" width="23" height="23" rx="8"/><rect x="54" y="54" width="23" height="23" rx="8"/></g></g>
+    <g id="a-shield"><path class="gray" d="M54 17 L82 28 V51 C80 70 65 81 54 86 C42 81 28 70 26 51 V28 Z"/><path class="black" d="M47 14 L75 25 V48 C73 67 58 78 47 83 C35 78 21 67 19 48 V25 Z"/><rect class="gray" x="42" y="40" width="11" height="25" rx="5.5"/></g>
+    <g id="a-pulse"><rect class="gray" x="22" y="27" width="67" height="47" rx="16"/><rect class="black" x="13" y="20" width="67" height="47" rx="16"/><path d="M24 44 H35 L42 32 L53 57 L63 39 H73" fill="none" stroke="#b8b6b1" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="a-log"><rect class="gray" x="32" y="16" width="44" height="65" rx="11"/><rect class="black" x="23" y="21" width="44" height="65" rx="11"/><rect class="gray" x="34" y="38" width="23" height="7" rx="3.5"/><rect class="gray" x="34" y="52" width="16" height="7" rx="3.5"/><circle class="gray" cx="63" cy="65" r="15"/><circle class="black" cx="63" cy="65" r="9"/></g>
+    <g id="a-restore"><path d="M24 53 A29 29 0 1 0 38 25" fill="none" stroke="#b8b6b1" stroke-width="13" stroke-linecap="round"/><path d="M18 47 A29 29 0 1 0 32 19" fill="none" stroke="#050505" stroke-width="13" stroke-linecap="round"/><path class="black" d="M17 20 L42 20 L28 43 Z"/></g>
+    <!-- B: chosen only for size and action management. -->
+    <g id="b-size"><rect class="gray" x="31" y="31" width="47" height="47" rx="23"/><rect class="black" x="21" y="21" width="47" height="47" rx="23"/><circle class="gray" cx="44" cy="44" r="13"/></g>
+    <g id="b-actions"><rect class="black" x="19" y="22" width="18" height="18" rx="9"/><rect class="gray" x="47" y="26" width="37" height="11" rx="5.5"/><rect class="black" x="19" y="45" width="18" height="18" rx="9"/><rect class="gray" x="47" y="49" width="46" height="11" rx="5.5"/><rect class="black" x="19" y="68" width="18" height="18" rx="9"/><rect class="gray" x="47" y="72" width="30" height="11" rx="5.5"/></g>
+  </defs>
+
+  <text class="title" x="90" y="98" font-size="48">WCLiquidGlass 图标终稿方向</text>
+  <text class="body" x="90" y="146" font-size="25">仅设计预览。品牌图标已按你提供的终版重新描绘；设置项已按 A / B 的确认结果组合。</text>
+
+  <rect class="panel" x="90" y="190" width="1620" height="405" rx="38"/>
+  <g transform="translate(195 215) scale(2.15)"><use href="#brand-final"/></g>
+  <text class="title" x="660" y="300" font-size="40">最终品牌图标</text>
+  <text class="body" x="660" y="352" font-size="26">宽低圆顶保留自然波纹；灰色窗口更大、更靠右下；右缘为黑色缺口。</text>
+  <text class="body" x="660" y="394" font-size="26">灰色下衬只在右下露出；三根触须独立、等距、整体居中。</text>
+  <text class="body" x="660" y="436" font-size="26">中间触须垂直，左右触须仅轻微外八；左与中为黑色，右为灰色。</text>
+  <text class="caption" x="660" y="496" font-size="22">透明底，不加入圆形底板、描边、渐变、高光、表情或额外装饰。</text>
+
+  <rect class="panel" x="90" y="650" width="1620" height="500" rx="38"/>
+  <text class="title" x="140" y="720" font-size="32">设置页图标分配（已选择）</text>
+  <text class="body" x="140" y="760" font-size="21">默认采用 A「软实体层叠」；仅“按钮大小”和“按钮与动作”采用 B「墨石小物」。</text>
+  <line class="rule" x1="140" y1="790" x2="1660" y2="790"/>
+
+  <g transform="translate(180 835) scale(1.1)"><use href="#a-menu"/></g><text class="label" x="310" y="900" font-size="25">全局环形菜单</text><text class="caption" x="310" y="932" font-size="19">A · 软实体层叠</text>
+  <g transform="translate(610 835) scale(1.1)"><use href="#b-size"/></g><text class="label" x="740" y="900" font-size="25">按钮大小</text><text class="caption" x="740" y="932" font-size="19">B · 墨石小物</text>
+  <g transform="translate(1040 835) scale(1.1)"><use href="#a-grid"/></g><text class="label" x="1170" y="900" font-size="25">紧凑布局</text><text class="caption" x="1170" y="932" font-size="19">A · 软实体层叠</text>
+
+  <g transform="translate(180 1000) scale(1.1)"><use href="#b-actions"/></g><text class="label" x="310" y="1065" font-size="25">按钮与动作</text><text class="caption" x="310" y="1097" font-size="19">B · 墨石小物</text>
+  <g transform="translate(610 1000) scale(1.1)"><use href="#a-shield"/></g><text class="label" x="740" y="1065" font-size="25">兼容性修复</text><text class="caption" x="740" y="1097" font-size="19">A · 软实体层叠</text>
+  <g transform="translate(1040 1000) scale(1.1)"><use href="#a-pulse"/></g><text class="label" x="1170" y="1065" font-size="25">崩溃采集</text><text class="caption" x="1170" y="1097" font-size="19">A · 软实体层叠</text>
+</svg>
