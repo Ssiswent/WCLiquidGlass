@@ -2,6 +2,8 @@
 
 extern unsigned char WCLiquidGlassIconBrand[];
 extern unsigned int WCLiquidGlassIconBrand_len;
+extern unsigned char WCLiquidGlassIconBrandDark[];
+extern unsigned int WCLiquidGlassIconBrandDark_len;
 extern unsigned char WCLiquidGlassIconMenu[];
 extern unsigned int WCLiquidGlassIconMenu_len;
 extern unsigned char WCLiquidGlassIconSize[];

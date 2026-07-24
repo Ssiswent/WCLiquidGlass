@@ -633,6 +633,9 @@ static NSData *WCLiquidGlassEmbeddedIconData(NSString *fileName) {
     if ([fileName isEqualToString:@"brand.png"]) {
         bytes = WCLiquidGlassIconBrand;
         length = WCLiquidGlassIconBrand_len;
+    } else if ([fileName isEqualToString:@"brand-dark.png"]) {
+        bytes = WCLiquidGlassIconBrandDark;
+        length = WCLiquidGlassIconBrandDark_len;
     } else if ([fileName isEqualToString:@"menu.png"]) {
         bytes = WCLiquidGlassIconMenu;
         length = WCLiquidGlassIconMenu_len;
@@ -748,7 +751,8 @@ static UIImage *WCLiquidGlassImageWithMaximumSide(UIImage *image, CGFloat maximu
 
 UIImage *WCLiquidGlassBrandIconImage(CGFloat size, BOOL includesBackground) {
     (void)includesBackground;
-    return WCLiquidGlassImageWithMaximumSide(WCLiquidGlassPluginIconAsset(@"brand.png"), size);
+    BOOL dark = UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    return WCLiquidGlassImageWithMaximumSide(WCLiquidGlassPluginIconAsset(dark ? @"brand-dark.png" : @"brand.png"), size);
 }
 
 static void WCLiquidGlassFillActionBrandPath(UIBezierPath *path, UIColor *color) {
@@ -771,8 +775,11 @@ static UIImage *WCLiquidGlassActionBrandImage(CGFloat side) {
         CGContextScaleCTM(context, scale, scale);
         CGContextTranslateCTM(context, 182.0, 191.0);
         CGContextScaleCTM(context, 1.378, 1.378);
-        UIColor *black = [UIColor colorWithWhite:0.02 alpha:1.0];
-        UIColor *gray = [UIColor colorWithRed:0.725 green:0.718 blue:0.698 alpha:1.0];
+        BOOL dark = UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+        UIColor *black = dark ? [UIColor colorWithRed:0.949 green:0.949 blue:0.969 alpha:1.0]
+                             : [UIColor colorWithWhite:0.02 alpha:1.0];
+        UIColor *gray = dark ? [UIColor colorWithRed:0.557 green:0.557 blue:0.576 alpha:1.0]
+                            : [UIColor colorWithRed:0.725 green:0.718 blue:0.698 alpha:1.0];
 
         UIBezierPath *underside = [UIBezierPath bezierPath];
         [underside moveToPoint:CGPointMake(232.0, 298.0)];
@@ -1580,6 +1587,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
     self.iconView.image = image;
     [self setNeedsLayout];
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] &&
+        self.actionIdentifier.length > 0) {
+        self.imageStyle = self.traitCollection.userInterfaceStyle;
+        self.iconView.image = WCLiquidGlassImageForAction(self.actionIdentifier, self.diameter);
+    }
 }
 
 - (void)layoutSubviews {

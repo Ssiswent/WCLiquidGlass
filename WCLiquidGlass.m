@@ -639,6 +639,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
     if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        self.tableView.tableHeaderView = [self wc_makeHeaderView];
         [self.tableView reloadData];
     }
 }

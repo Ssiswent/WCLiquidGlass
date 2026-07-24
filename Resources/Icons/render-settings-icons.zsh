@@ -3,6 +3,7 @@ set -euo pipefail
 
 project_dir=${0:A:h:h:h}
 renderer="$(brew --prefix librsvg)/bin/rsvg-convert"
+python="${PYTHON3:-/usr/local/bin/python3}"
 rendered="$project_dir/Resources/Icons/Rendered"
 icons=(menu size compact-layout actions compatibility crash-capture crash-logs restore)
 
@@ -18,10 +19,13 @@ for icon in $icons; do
   fi
   "$renderer" --width 400 --height 400 --output "$rendered/$icon-dark.png" "$project_dir/Resources/Icons/Source/dark/$icon.svg"
 done
+"$python" "$project_dir/Resources/Icons/render-brand-dark.py"
+cp "$project_dir/Resources/Icons/Source/dark/Brand.png" "$rendered/brand-dark.png"
 
 {
   print '/* Generated from Resources/Icons/Rendered. Do not edit by hand. */'
   xxd -i -n WCLiquidGlassIconBrand "$rendered/brand.png"
+  xxd -i -n WCLiquidGlassIconBrandDark "$rendered/brand-dark.png"
   xxd -i -n WCLiquidGlassIconMenu "$rendered/menu.png"
   xxd -i -n WCLiquidGlassIconSize "$rendered/size.png"
   xxd -i -n WCLiquidGlassIconCompactLayout "$rendered/compact-layout.png"
