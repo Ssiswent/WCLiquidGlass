@@ -19,6 +19,12 @@
 - 诊断日志保存在微信沙盒 `Documents/WCLiquidGlass/Diagnostics/Crashes`，不主动记录聊天内容。
 - 通过微信的 `WCPluginsMgr` 注册到插件列表，并传入设置控制器的类名字符串。
 
+## WCGlass iOS 27 兼容修复
+
+该修复针对 WCGlass 在 iOS 27 上的特定兼容性闪退：启用“液态分组”并选择“横向胶囊分组”或“全屏分组”后，如果聊天页键盘已弹出且输入框非空，返回对话列表时，iOS 27 的 `UIIntelligenceSupport` 可能在转场期间继续访问对话列表里已经失效的 `UITableView` section，最终触发 `UITableViewRowData` 的无效 section 断言并导致微信闪退。
+
+WCLiquidGlass 的兼容开关会在确认处于该风险场景时，为越界 section 返回自洽的空结果，避免无效索引继续进入 UIKit 内部断言路径。该保护不修改 WCGlass 的可见 UI，不延迟导航返回，不强制收起键盘；开关切换后立即生效。
+
 ## 构建
 
 ```sh
