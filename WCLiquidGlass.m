@@ -181,6 +181,13 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
     [self wc_reloadItems];
 }
 
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self.tableView reloadData];
+    }
+}
+
 - (void)tableView:(UITableView *)tableView
   willDisplayCell:(UITableViewCell *)cell
 forRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -473,6 +480,13 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
     [self wc_reloadLogs];
 }
 
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self.tableView reloadData];
+    }
+}
+
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
@@ -620,6 +634,13 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                                            selector:@selector(wc_preferencesChanged:)
                                            name:WCLiquidGlassPreferencesDidChangeNotification
                                            object:nil];
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self.tableView reloadData];
+    }
 }
 
 - (void)tableView:(UITableView *)tableView

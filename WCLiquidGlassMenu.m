@@ -657,6 +657,30 @@ static NSData *WCLiquidGlassEmbeddedIconData(NSString *fileName) {
     } else if ([fileName isEqualToString:@"restore.png"]) {
         bytes = WCLiquidGlassIconRestore;
         length = WCLiquidGlassIconRestore_len;
+    } else if ([fileName isEqualToString:@"menu-dark.png"]) {
+        bytes = WCLiquidGlassIconMenuDark;
+        length = WCLiquidGlassIconMenuDark_len;
+    } else if ([fileName isEqualToString:@"size-dark.png"]) {
+        bytes = WCLiquidGlassIconSizeDark;
+        length = WCLiquidGlassIconSizeDark_len;
+    } else if ([fileName isEqualToString:@"compact-layout-dark.png"]) {
+        bytes = WCLiquidGlassIconCompactLayoutDark;
+        length = WCLiquidGlassIconCompactLayoutDark_len;
+    } else if ([fileName isEqualToString:@"actions-dark.png"]) {
+        bytes = WCLiquidGlassIconActionsDark;
+        length = WCLiquidGlassIconActionsDark_len;
+    } else if ([fileName isEqualToString:@"compatibility-dark.png"]) {
+        bytes = WCLiquidGlassIconCompatibilityDark;
+        length = WCLiquidGlassIconCompatibilityDark_len;
+    } else if ([fileName isEqualToString:@"crash-capture-dark.png"]) {
+        bytes = WCLiquidGlassIconCrashCaptureDark;
+        length = WCLiquidGlassIconCrashCaptureDark_len;
+    } else if ([fileName isEqualToString:@"crash-logs-dark.png"]) {
+        bytes = WCLiquidGlassIconCrashLogsDark;
+        length = WCLiquidGlassIconCrashLogsDark_len;
+    } else if ([fileName isEqualToString:@"restore-dark.png"]) {
+        bytes = WCLiquidGlassIconRestoreDark;
+        length = WCLiquidGlassIconRestoreDark_len;
     }
     return bytes ? [NSData dataWithBytesNoCopy:(void *)bytes length:length freeWhenDone:NO] : nil;
 }
@@ -701,7 +725,14 @@ static UIImage *WCLiquidGlassPluginIconAsset(NSString *fileName) {
 
 UIImage *WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKind kind, CGFloat size) {
     (void)size;
-    return WCLiquidGlassPluginIconAsset(WCLiquidGlassSettingsIconFileName(kind));
+    NSString *fileName = WCLiquidGlassSettingsIconFileName(kind);
+    if (UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+        NSString *darkFileName = [fileName stringByReplacingOccurrencesOfString:@".png" withString:@"-dark.png"];
+        if (WCLiquidGlassEmbeddedIconData(darkFileName)) {
+            fileName = darkFileName;
+        }
+    }
+    return WCLiquidGlassPluginIconAsset(fileName);
 }
 
 static UIImage *WCLiquidGlassImageWithMaximumSide(UIImage *image, CGFloat maximumSide) {
