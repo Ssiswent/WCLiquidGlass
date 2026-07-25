@@ -1,0 +1,63 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "可选：填写后创建或更新此 tag 的 GitHub Release；留空则仅构建并上传 artifact"
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build arm64 package
+    runs-on: macos-14
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Theos and iPhoneOS SDK link
+        shell: bash
+        run: |
+          set -euo pipefail
+          export THEOS="$RUNNER_TEMP/theos"
+          git clone --depth=1 --recursive https://github.com/theos/theos.git "$THEOS"
+          sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-platform-version)"
+          ln -s "$sdk_path" "$THEOS/sdks/iPhoneOS${sdk_version}.sdk"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          echo "$THEOS/bin" >> "$GITHUB_PATH"
+          xcodebuild -version
+
+      - name: Build rootless arm64 deb
+        shell: bash
+        run: make clean package FINALPACKAGE=1
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WCLiquidGlass-${{ github.ref_name }}-arm64
+          path: packages/*.deb
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' || inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${INPUT_RELEASE_TAG:-${GITHUB_REF_NAME}}"
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            gh release upload "$release_tag" packages/*.deb --clobber
+          else
+            gh release create "$release_tag" packages/*.deb --target "$GITHUB_SHA" --generate-notes
+          fi
