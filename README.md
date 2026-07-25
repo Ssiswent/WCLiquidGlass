@@ -19,6 +19,25 @@
 - 诊断日志保存在微信沙盒 `Documents/WCLiquidGlass/Diagnostics/Crashes`，不主动记录聊天内容。
 - 通过微信的 `WCPluginsMgr` 注册到插件列表，并传入设置控制器的类名字符串。
 
+## 架构
+
+`%ctor` 在微信进程启动时初始化，通过 `WCPluginsMgr` 注册设置控制器，并启动 `WCLiquidGlassManager` 单例；该单例管理不抢焦点的透明 `WCLiquidGlassWindow`，以及承载环形菜单和聊天工具栏的 `WCLiquidGlassHostController` / `WCLiquidGlassHostView`。配置由 `WCLiquidGlassPreferences` 提供，崩溃诊断由 `WCLiquidGlassCrashLogger` 负责，插件还对多个微信类进行 hook 以接入输入框、对话列表等界面。
+
+```mermaid
+graph TD
+  A["%ctor (Tweak.xm)"] --> B["WCPluginsMgr 注册"]
+  A --> C["WCLiquidGlassManager (单例)"]
+  A --> D["WCLiquidGlassCrashLogger"]
+  A --> H["微信类 Hooks"]
+  C --> E["WCLiquidGlassWindow"]
+  C --> F["WCLiquidGlassHostController"]
+  F --> G["WCLiquidGlassHostView (环形菜单 + 聊天工具栏)"]
+  C --> I["WCLiquidGlassPreferences"]
+  B --> J["WCLiquidGlass 设置控制器"]
+  H --> K["BaseMsgContentViewController / MMInputToolView / MMTextView"]
+  H --> L["UITableView / NewMainFrameViewController (iOS 27 兼容修复)"]
+```
+
 ## WCGlass iOS 27 兼容修复
 
 该修复针对 WCGlass 在 iOS 27 上的特定兼容性闪退。
