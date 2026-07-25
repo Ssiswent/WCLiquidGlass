@@ -633,6 +633,9 @@ static NSData *WCLiquidGlassEmbeddedIconData(NSString *fileName) {
     if ([fileName isEqualToString:@"brand.png"]) {
         bytes = WCLiquidGlassIconBrand;
         length = WCLiquidGlassIconBrand_len;
+    } else if ([fileName isEqualToString:@"brand-dark.png"]) {
+        bytes = WCLiquidGlassIconBrandDark;
+        length = WCLiquidGlassIconBrandDark_len;
     } else if ([fileName isEqualToString:@"menu.png"]) {
         bytes = WCLiquidGlassIconMenu;
         length = WCLiquidGlassIconMenu_len;
@@ -657,6 +660,30 @@ static NSData *WCLiquidGlassEmbeddedIconData(NSString *fileName) {
     } else if ([fileName isEqualToString:@"restore.png"]) {
         bytes = WCLiquidGlassIconRestore;
         length = WCLiquidGlassIconRestore_len;
+    } else if ([fileName isEqualToString:@"menu-dark.png"]) {
+        bytes = WCLiquidGlassIconMenuDark;
+        length = WCLiquidGlassIconMenuDark_len;
+    } else if ([fileName isEqualToString:@"size-dark.png"]) {
+        bytes = WCLiquidGlassIconSizeDark;
+        length = WCLiquidGlassIconSizeDark_len;
+    } else if ([fileName isEqualToString:@"compact-layout-dark.png"]) {
+        bytes = WCLiquidGlassIconCompactLayoutDark;
+        length = WCLiquidGlassIconCompactLayoutDark_len;
+    } else if ([fileName isEqualToString:@"actions-dark.png"]) {
+        bytes = WCLiquidGlassIconActionsDark;
+        length = WCLiquidGlassIconActionsDark_len;
+    } else if ([fileName isEqualToString:@"compatibility-dark.png"]) {
+        bytes = WCLiquidGlassIconCompatibilityDark;
+        length = WCLiquidGlassIconCompatibilityDark_len;
+    } else if ([fileName isEqualToString:@"crash-capture-dark.png"]) {
+        bytes = WCLiquidGlassIconCrashCaptureDark;
+        length = WCLiquidGlassIconCrashCaptureDark_len;
+    } else if ([fileName isEqualToString:@"crash-logs-dark.png"]) {
+        bytes = WCLiquidGlassIconCrashLogsDark;
+        length = WCLiquidGlassIconCrashLogsDark_len;
+    } else if ([fileName isEqualToString:@"restore-dark.png"]) {
+        bytes = WCLiquidGlassIconRestoreDark;
+        length = WCLiquidGlassIconRestoreDark_len;
     }
     return bytes ? [NSData dataWithBytesNoCopy:(void *)bytes length:length freeWhenDone:NO] : nil;
 }
@@ -701,7 +728,11 @@ static UIImage *WCLiquidGlassPluginIconAsset(NSString *fileName) {
 
 UIImage *WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKind kind, CGFloat size) {
     (void)size;
-    return WCLiquidGlassPluginIconAsset(WCLiquidGlassSettingsIconFileName(kind));
+    NSString *fileName = WCLiquidGlassSettingsIconFileName(kind);
+    if (UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+        fileName = [fileName stringByReplacingOccurrencesOfString:@".png" withString:@"-dark.png"];
+    }
+    return WCLiquidGlassPluginIconAsset(fileName);
 }
 
 static UIImage *WCLiquidGlassImageWithMaximumSide(UIImage *image, CGFloat maximumSide) {
@@ -717,7 +748,8 @@ static UIImage *WCLiquidGlassImageWithMaximumSide(UIImage *image, CGFloat maximu
 
 UIImage *WCLiquidGlassBrandIconImage(CGFloat size, BOOL includesBackground) {
     (void)includesBackground;
-    return WCLiquidGlassImageWithMaximumSide(WCLiquidGlassPluginIconAsset(@"brand.png"), size);
+    BOOL dark = UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    return WCLiquidGlassImageWithMaximumSide(WCLiquidGlassPluginIconAsset(dark ? @"brand-dark.png" : @"brand.png"), size);
 }
 
 static void WCLiquidGlassFillActionBrandPath(UIBezierPath *path, UIColor *color) {
@@ -740,8 +772,11 @@ static UIImage *WCLiquidGlassActionBrandImage(CGFloat side) {
         CGContextScaleCTM(context, scale, scale);
         CGContextTranslateCTM(context, 182.0, 191.0);
         CGContextScaleCTM(context, 1.378, 1.378);
-        UIColor *black = [UIColor colorWithWhite:0.02 alpha:1.0];
-        UIColor *gray = [UIColor colorWithRed:0.725 green:0.718 blue:0.698 alpha:1.0];
+        BOOL dark = UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+        UIColor *black = dark ? [UIColor colorWithRed:0.949 green:0.949 blue:0.969 alpha:1.0]
+                             : [UIColor colorWithWhite:0.02 alpha:1.0];
+        UIColor *gray = dark ? [UIColor colorWithRed:0.557 green:0.557 blue:0.576 alpha:1.0]
+                            : [UIColor colorWithRed:0.725 green:0.718 blue:0.698 alpha:1.0];
 
         UIBezierPath *underside = [UIBezierPath bezierPath];
         [underside moveToPoint:CGPointMake(232.0, 298.0)];
@@ -1657,6 +1692,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     [self setNeedsLayout];
 }
 
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] &&
+        self.actionIdentifier.length > 0) {
+        self.imageStyle = self.traitCollection.userInterfaceStyle;
+        self.iconView.image = WCLiquidGlassImageForAction(self.actionIdentifier, self.diameter);
+    }
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
     self.layer.cornerRadius = CGRectGetHeight(self.bounds) * 0.5;
@@ -1776,6 +1820,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.accessibilityValue = nil;
     self.iconView.tintColor = UIColor.labelColor;
     self.iconView.image = WCLiquidGlassImageForAction(actionIdentifier, 36.0);
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] &&
+        self.actionIdentifier.length > 0) {
+        self.iconView.image = WCLiquidGlassImageForAction(self.actionIdentifier, 36.0);
+    }
 }
 
 - (void)layoutSubviews {

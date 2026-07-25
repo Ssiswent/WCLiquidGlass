@@ -29,7 +29,7 @@ tags: [ios, uikit, static-icon, png, svg, liquid-glass, settings-ui]
 3. 几何元素使用连续圆角、圆端和饱满比例；避免尖锐、过细、机械的线条。
 4. 一个图标只保留 2 至 4 个有语义的结构，优先用前后层错位表达层次。
 5. 图标背景保持透明；卡片、菜单玻璃和圆形按钮背景由宿主界面负责，图标本身不再绘制蓝色圆形或方形底板。
-6. 所有图标必须在 28–32pt 下可辨识；如未来需要深色模式专用色值，必须新增独立深色 PNG 母版，不能对现有 PNG 施加 tint 或临时重绘。
+6. 所有图标必须在 28–32pt 下可辨识；深色模式使用 `Source/dark` 的独立 PNG 母版：`#f2f2f7` 前层与 `#8e8e93` 后层。不能对现有 PNG 施加 tint 或临时重绘。
 
 ## Brand Glyph
 
@@ -41,7 +41,7 @@ tags: [ios, uikit, static-icon, png, svg, liquid-glass, settings-ui]
 4. 下方只有三根短圆角触须：左黑、中央黑、右灰；三根视觉中心等间距且整体居中。中间触须垂直，左右触须只做很小幅度的外八。
 5. 不加入脸部、文字、彩色、发光、边框、渐变或额外触须。
 
-这个图标同时用于设置页品牌卡和“WCLiquidGlass 设置”动作入口，确保用户在环形菜单与设置页获得同一识别符号。
+这个图标同时用于设置页品牌卡和“WCLiquidGlass 设置”动作入口，确保用户在环形菜单与设置页获得同一识别符号。深色模式使用暖白 `#f2f2f7` 前层与灰色 `#8e8e93` 后层，保留同一轮廓与透明背景。
 
 ## Settings Icon Family
 
@@ -70,7 +70,7 @@ tags: [ios, uikit, static-icon, png, svg, liquid-glass, settings-ui]
 | `Resources/Icons/Rendered` | 由母版渲染的 400×400 透明 PNG，用于逐像素预览与打包前核验 |
 | `layout/Library/Application Support/WCLiquidGlass/Icons` | 随 rootless `.deb` 安装、供安装内容核验的 PNG；文件名必须与 `Rendered` 完全一致 |
 
-品牌母版为 `Source/Brand.png`，来自用户确认的截图原始像素；不得重新凭描述改绘、在线下载或替换为运行时代码图形。
+品牌浅色母版为 `Source/Brand.png`，来自用户确认的截图原始像素；不得重新凭描述改绘、在线下载或替换为运行时代码图形。`Source/dark/Brand.png` 仅从该母版换色生成，不改变任何像素几何。
 
 `Source/BrandAction.svg` 是品牌在“按钮与动作”列表与环形菜单中的专用矢量母版：在 1024×1024 透明画布内保留约 660px 的图形主体。运行时代码使用同一组路径，在当前屏幕 scale 与实际目标尺寸上直接栅格化；它采用与微信主题 SVG 相同的按需矢量输出路径，避免截图 PNG 缩放造成的边缘锯齿与光学偏大问题。
 
