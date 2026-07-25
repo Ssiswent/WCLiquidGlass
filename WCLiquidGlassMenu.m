@@ -13,6 +13,8 @@ static const NSUInteger WCLiquidGlassDoubleCrescentMinimumCount = 8;
 NSString *const WCLiquidGlassManualTextEditNotification = @"WCLiquidGlassManualTextEditNotification";
 static BOOL WCLiquidGlassManualTextEditMonitoringEnabled = NO;
 static BOOL WCLiquidGlassDoutuConfiguredCached = NO;
+static char WCLiquidGlassDoutuCachedButtonKey;
+static char WCLiquidGlassDoutuLastVisibilityKey;
 
 static void WCLiquidGlassAppendArcOffsets(NSMutableArray<NSValue *> *offsets,
                                            NSUInteger count,
@@ -1037,6 +1039,72 @@ static id WCLiquidGlassActionTarget(NSArray<NSString *> *selectorNames) {
         : nil;
 }
 
+static NSArray<id> *WCLiquidGlassActionTargetCandidates(UIViewController *visibleController,
+                                                          id tabController) {
+    NSMutableArray *targets = [NSMutableArray arrayWithObjects:visibleController ?: NSNull.null,
+                                                           visibleController.navigationController ?: NSNull.null,
+                                                           tabController ?: NSNull.null,
+                                                           nil];
+    for (NSString *propertyName in @[@"hostViewController", @"parentViewController", @"toolView",
+                                      @"messageToolBar", @"m_toolView", @"inputToolView",
+                                      @"m_inputController"]) {
+        id target = WCLiquidGlassObjectFromSelector(visibleController, propertyName);
+        if (target) {
+            [targets addObject:target];
+        }
+    }
+    return targets.copy;
+}
+
+static void WCLiquidGlassFindActionTargetsInView(UIView *view,
+                                                  NSDictionary<NSString *, NSArray<NSString *> *> *selectorNames,
+                                                  NSMutableDictionary<NSString *, id> *targets) {
+    if (!view || targets.count == selectorNames.count) {
+        return;
+    }
+    for (NSString *actionIdentifier in selectorNames) {
+        if (!targets[actionIdentifier] &&
+            WCLiquidGlassTargetSupportsSelectors(view, selectorNames[actionIdentifier])) {
+            targets[actionIdentifier] = view;
+        }
+    }
+    if (targets.count == selectorNames.count) {
+        return;
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassFindActionTargetsInView(subview, selectorNames, targets);
+        if (targets.count == selectorNames.count) {
+            return;
+        }
+    }
+}
+
+static NSDictionary<NSString *, id> *WCLiquidGlassActionTargetsForSelectors(
+    UIViewController *visibleController,
+    id tabController,
+    NSDictionary<NSString *, NSArray<NSString *> *> *selectorNames) {
+    if (selectorNames.count == 0) {
+        return @{};
+    }
+    NSMutableDictionary<NSString *, id> *targets = [NSMutableDictionary dictionary];
+    for (id candidate in WCLiquidGlassActionTargetCandidates(visibleController, tabController)) {
+        if (candidate == NSNull.null) {
+            continue;
+        }
+        for (NSString *actionIdentifier in selectorNames) {
+            if (!targets[actionIdentifier] &&
+                WCLiquidGlassTargetSupportsSelectors(candidate, selectorNames[actionIdentifier])) {
+                targets[actionIdentifier] = candidate;
+            }
+        }
+        if (targets.count == selectorNames.count) {
+            return targets.copy;
+        }
+    }
+    WCLiquidGlassFindActionTargetsInView(visibleController.viewIfLoaded, selectorNames, targets);
+    return targets.copy;
+}
+
 static BOOL WCLiquidGlassInvokeActionSelectors(NSArray<NSString *> *selectorNames) {
     id target = WCLiquidGlassActionTarget(selectorNames);
     return target ? WCLiquidGlassInvokeSelectorOnTarget(target, selectorNames) : NO;
@@ -1280,14 +1348,43 @@ void WCLiquidGlassRefreshDoutuConfiguration(void) {
 static char WCLiquidGlassDoutuOriginalHiddenKey;
 
 void WCLiquidGlassUpdateDoutuButtonVisibility(id inputToolView) {
-    UIControl *button = WCLiquidGlassControlFromObjectSelectors(inputToolView,
-                                                                WCLiquidGlassDoutuButtonPropertyNames());
+    UIControl *button = objc_getAssociatedObject(inputToolView, &WCLiquidGlassDoutuCachedButtonKey);
+    if (button && ![button isDescendantOfView:inputToolView]) {
+        button = nil;
+        objc_setAssociatedObject(inputToolView,
+                                 &WCLiquidGlassDoutuCachedButtonKey,
+                                 nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(inputToolView,
+                                 &WCLiquidGlassDoutuLastVisibilityKey,
+                                 nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (!button && !WCLiquidGlassDoutuConfiguredCached) {
+        return;
+    }
+    if (!button) {
+        button = WCLiquidGlassControlFromObjectSelectors(inputToolView,
+                                                          WCLiquidGlassDoutuButtonPropertyNames());
+        if (button) {
+            objc_setAssociatedObject(inputToolView,
+                                     &WCLiquidGlassDoutuCachedButtonKey,
+                                     button,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
     if (!button) {
         return;
     }
     NSNumber *originalHidden = objc_getAssociatedObject(button,
                                                          &WCLiquidGlassDoutuOriginalHiddenKey);
     BOOL shouldHide = WCLiquidGlassDoutuConfiguredCached && WCLiquidGlassDoutuAssistantEnabled();
+    NSNumber *lastShouldHide = objc_getAssociatedObject(inputToolView,
+                                                         &WCLiquidGlassDoutuLastVisibilityKey);
+    if (lastShouldHide && lastShouldHide.boolValue == shouldHide &&
+        (!shouldHide || button.hidden)) {
+        return;
+    }
     if (shouldHide) {
         if (!originalHidden) {
             objc_setAssociatedObject(button,
@@ -1305,6 +1402,10 @@ void WCLiquidGlassUpdateDoutuButtonVisibility(id inputToolView) {
                                  nil,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
+    objc_setAssociatedObject(inputToolView,
+                             &WCLiquidGlassDoutuLastVisibilityKey,
+                             @(shouldHide),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static NSArray<NSString *> *WCLiquidGlassSelectorsForAction(NSString *actionIdentifier) {
@@ -1356,18 +1457,6 @@ static BOOL WCLiquidGlassOpenControllerNamed(NSArray<NSString *> *classNames) {
     return NO;
 }
 
-static BOOL WCLiquidGlassCanOpenControllerNamed(NSArray<NSString *> *classNames) {
-    if (!WCLiquidGlassNavigationController()) {
-        return NO;
-    }
-    for (NSString *className in classNames) {
-        if (NSClassFromString(className)) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
 static BOOL WCLiquidGlassCanSelectTab(id tabController, NSInteger index) {
     NSArray *sources = WCLiquidGlassPrivateTabSources(tabController);
     NSUInteger tabCount = sources.count;
@@ -1379,42 +1468,79 @@ static BOOL WCLiquidGlassCanSelectTab(id tabController, NSInteger index) {
         [tabController respondsToSelector:NSSelectorFromString(@"setSelectedIndex:")];
 }
 
-static BOOL WCLiquidGlassCanPerformAction(NSString *actionIdentifier) {
-    if ([actionIdentifier hasPrefix:@"tab."]) {
-        id tabController = WCLiquidGlassCurrentTabController();
-        NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
-        return WCLiquidGlassCanSelectTab(tabController, index);
+static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
+    NSArray<NSDictionary<NSString *, id> *> *items) {
+    UIViewController *visibleController = WCLiquidGlassVisibleController();
+    UINavigationController *navigationController = [visibleController isKindOfClass:UINavigationController.class]
+        ? (UINavigationController *)visibleController
+        : visibleController.navigationController;
+    id tabController = WCLiquidGlassCurrentTabController();
+    NSMutableSet<NSString *> *availableActions = [NSMutableSet set];
+    NSMutableDictionary<NSString *, NSArray<NSString *> *> *selectorNames = [NSMutableDictionary dictionary];
+    BOOL needsDoutuAssistant = NO;
+    BOOL hasChannelsAction = NO;
+    BOOL hasFilesAction = NO;
+
+    for (NSDictionary<NSString *, id> *item in items) {
+        NSString *actionIdentifier = item[@"action"];
+        if (![actionIdentifier isKindOfClass:NSString.class]) {
+            continue;
+        }
+        if ([actionIdentifier hasPrefix:@"tab."]) {
+            NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
+            if (WCLiquidGlassCanSelectTab(tabController, index)) {
+                [availableActions addObject:actionIdentifier];
+            }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionSettings]) {
+            if (navigationController) {
+                [availableActions addObject:actionIdentifier];
+            }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins]) {
+            if (navigationController && NSClassFromString(@"WCPluginsViewController")) {
+                [availableActions addObject:actionIdentifier];
+            }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionMoments]) {
+            if (navigationController && NSClassFromString(@"WCTimeLineViewController")) {
+                [availableActions addObject:actionIdentifier];
+            }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
+            if (WCLiquidGlassVoiceTranscriptionControl()) {
+                [availableActions addObject:actionIdentifier];
+            }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]) {
+            needsDoutuAssistant = YES;
+        } else {
+            hasChannelsAction |= [actionIdentifier isEqualToString:WCLiquidGlassActionChannels];
+            hasFilesAction |= [actionIdentifier isEqualToString:WCLiquidGlassActionFiles];
+            NSArray<NSString *> *actionSelectors = WCLiquidGlassSelectorsForAction(actionIdentifier);
+            if (actionSelectors.count > 0) {
+                selectorNames[actionIdentifier] = actionSelectors;
+            }
+        }
     }
 
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionSettings]) {
-        return WCLiquidGlassNavigationController() != nil;
-    }
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins]) {
-        return WCLiquidGlassCanOpenControllerNamed(@[@"WCPluginsViewController"]);
-    }
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionMoments]) {
-        return WCLiquidGlassCanOpenControllerNamed(@[@"WCTimeLineViewController"]);
-    }
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
-        return WCLiquidGlassVoiceTranscriptionControl() != nil;
-    }
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]) {
-        return WCLiquidGlassDoutuAssistantEnabled() &&
-            WCLiquidGlassCurrentChatInputHasText() &&
-            WCLiquidGlassActionTarget(@[@"doutuAction"]) != nil;
+    if (needsDoutuAssistant && WCLiquidGlassDoutuAssistantEnabled() &&
+        WCLiquidGlassCurrentChatInputHasText()) {
+        selectorNames[WCLiquidGlassActionDoutuAssistant] = @[@"doutuAction"];
     }
 
-    NSArray<NSString *> *selectorNames = WCLiquidGlassSelectorsForAction(actionIdentifier);
-    if (WCLiquidGlassActionTarget(selectorNames)) {
-        return YES;
+    NSDictionary<NSString *, id> *actionTargets = WCLiquidGlassActionTargetsForSelectors(visibleController,
+                                                                                            tabController,
+                                                                                            selectorNames);
+    for (NSString *actionIdentifier in actionTargets) {
+        [availableActions addObject:actionIdentifier];
     }
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionChannels]) {
-        return WCLiquidGlassCanOpenControllerNamed(@[@"WCFinderTimelineTabViewController"]);
+    if (!actionTargets[WCLiquidGlassActionChannels] &&
+        hasChannelsAction &&
+        navigationController && NSClassFromString(@"WCFinderTimelineTabViewController")) {
+        [availableActions addObject:WCLiquidGlassActionChannels];
     }
-    if ([actionIdentifier isEqualToString:WCLiquidGlassActionFiles]) {
-        return WCLiquidGlassCanOpenControllerNamed(@[@"LMFileBrowserViewController"]);
+    if (!actionTargets[WCLiquidGlassActionFiles] &&
+        hasFilesAction &&
+        navigationController && NSClassFromString(@"LMFileBrowserViewController")) {
+        [availableActions addObject:WCLiquidGlassActionFiles];
     }
-    return NO;
+    return availableActions.copy;
 }
 
 static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
@@ -1499,6 +1625,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, strong) UIImageView *iconView;
 @property(nonatomic, assign) CGFloat diameter;
 @property(nonatomic, assign) UIUserInterfaceStyle imageStyle;
+@property(nonatomic, assign) BOOL showsCloseIcon;
 
 - (instancetype)initWithDiameter:(CGFloat)diameter;
 - (void)prepareForDiameter:(CGFloat)diameter;
@@ -1548,6 +1675,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)configureWithActionIdentifier:(NSString *)actionIdentifier {
     self.actionIdentifier = actionIdentifier;
+    self.showsCloseIcon = NO;
     self.imageStyle = UITraitCollection.currentTraitCollection.userInterfaceStyle;
     self.accessibilityLabel = WCLiquidGlassActionTitle(actionIdentifier);
 
@@ -1561,6 +1689,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)setCloseAppearance {
     self.actionIdentifier = nil;
+    self.showsCloseIcon = YES;
     self.accessibilityLabel = @"关闭";
     self.iconView.tintColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traitCollection) {
         if (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
@@ -1574,6 +1703,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)setAnchorAppearance {
     self.actionIdentifier = nil;
+    self.showsCloseIcon = NO;
     self.accessibilityLabel = @"WCLiquidGlass 菜单";
     self.iconView.tintColor = UIColor.labelColor;
     UIImage *image = WCLiquidGlassImageNamedFromCandidates(@[@"icons_filled_more"]);
@@ -1591,10 +1721,16 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] &&
-        self.actionIdentifier.length > 0) {
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        self.effect = WCLiquidGlassMakeEffect();
         self.imageStyle = self.traitCollection.userInterfaceStyle;
-        self.iconView.image = WCLiquidGlassImageForAction(self.actionIdentifier, self.diameter);
+        if (self.actionIdentifier.length > 0) {
+            self.iconView.image = WCLiquidGlassImageForAction(self.actionIdentifier, self.diameter);
+        } else if (self.showsCloseIcon) {
+            [self setCloseAppearance];
+        } else {
+            [self setAnchorAppearance];
+        }
     }
 }
 
@@ -1661,16 +1797,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                                            iconBaseScale / extraAcross);
     iconTransform = CGAffineTransformRotate(iconTransform, -angle);
 
-    [UIView animateWithDuration:0.075
-                          delay:0
-                        options:UIViewAnimationOptionAllowUserInteraction |
-                                UIViewAnimationOptionBeginFromCurrentState |
-                                UIViewAnimationOptionCurveEaseOut
-                     animations:^{
+    [UIView performWithoutAnimation:^{
         self.transform = transform;
         self.iconView.transform = iconTransform;
         self.layer.zPosition = 30.0;
-    } completion:nil];
+    }];
 }
 
 - (void)setToggleActiveAppearance:(BOOL)active {
@@ -1695,11 +1826,16 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, assign) BOOL anchorIdleHidden;
 @property(nonatomic, assign) NSUInteger idleHideGeneration;
 @property(nonatomic, assign) NSUInteger contentRefreshGeneration;
+@property(nonatomic, assign) NSUInteger menuTransitionGeneration;
 @property(nonatomic, assign) CGPoint panStartCenter;
 @property(nonatomic, assign) NSInteger highlightedIndex;
 @property(nonatomic, assign) BOOL voiceTranscriptionActive;
 @property(nonatomic, weak) UIView *observedChatInputView;
 @property(nonatomic, assign) BOOL observedChatInputHadText;
+@property(nonatomic, weak) UIView *manualChatInputView;
+@property(nonatomic, assign) BOOL manualChatInputHasText;
+@property(nonatomic, assign) BOOL manualChatInputStartedFromEmpty;
+@property(nonatomic, assign) NSUInteger manualInputGeneration;
 @property(nonatomic, assign) CGFloat keyboardTop;
 @property(nonatomic, assign) CGFloat resolvedOptionDiameter;
 @property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
@@ -1718,6 +1854,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (WCLiquidGlassOrbView *)wc_newOptionOrbForItem:(NSDictionary<NSString *, id> *)item
                                         diameter:(CGFloat)diameter;
 - (void)wc_refreshOpenMenuAnimated;
+- (BOOL)wc_shouldRetryDoutuRefreshForInputHasText:(BOOL)inputHasText;
+- (BOOL)wc_hasManualChatInput;
 - (void)wc_updateVoiceOrbToggleAppearance;
 - (void)wc_emitSelectionFeedback;
 - (CGFloat)wc_optionDiameterForCount:(NSUInteger)count;
@@ -1740,6 +1878,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     _highlightedIndex = NSNotFound;
     _keyboardTop = CGFLOAT_MAX;
     _selectionFeedbackGenerator = [[UISelectionFeedbackGenerator alloc] init];
+    WCLiquidGlassManualTextEditMonitoringEnabled = YES;
 
     _dismissControl = [[UIControl alloc] initWithFrame:self.bounds];
     _dismissControl.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -1782,15 +1921,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (void)dealloc {
-    if (self.voiceTranscriptionActive) {
-        WCLiquidGlassManualTextEditMonitoringEnabled = NO;
-    }
+    WCLiquidGlassManualTextEditMonitoringEnabled = NO;
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
 - (void)setVoiceTranscriptionActive:(BOOL)voiceTranscriptionActive {
     _voiceTranscriptionActive = voiceTranscriptionActive;
-    WCLiquidGlassManualTextEditMonitoringEnabled = voiceTranscriptionActive;
     self.observedChatInputView = WCLiquidGlassCurrentChatInputView();
     self.observedChatInputHadText = WCLiquidGlassCurrentChatInputHasText();
 }
@@ -1849,11 +1985,17 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     NSString *currentTabAction = tabController
         ? [NSString stringWithFormat:@"tab.%ld", (long)WCLiquidGlassCurrentTabIndex(tabController)]
         : nil;
-    for (NSDictionary<NSString *, id> *item in WCLiquidGlassPreferences.buttonItems) {
+    NSArray<NSDictionary<NSString *, id> *> *buttonItems = WCLiquidGlassPreferences.buttonItems;
+    NSSet<NSString *> *availableActions = WCLiquidGlassAvailableActionIdentifiers(buttonItems);
+    BOOL manualChatInputHidesVoiceAction = [self wc_hasManualChatInput];
+    for (NSDictionary<NSString *, id> *item in buttonItems) {
         NSString *actionIdentifier = item[@"action"];
-        BOOL voiceActionStaysAvailable = self.voiceTranscriptionActive &&
-            [actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput];
-        BOOL canPerform = voiceActionStaysAvailable || WCLiquidGlassCanPerformAction(actionIdentifier);
+        BOOL voiceAction = [actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput];
+        BOOL voiceActionStaysAvailable = voiceAction && !manualChatInputHidesVoiceAction &&
+            self.voiceTranscriptionActive;
+        BOOL canPerform = voiceAction && manualChatInputHidesVoiceAction
+            ? NO
+            : (voiceActionStaysAvailable || [availableActions containsObject:actionIdentifier]);
         if (![actionIdentifier isEqualToString:currentTabAction] &&
             canPerform) {
             [visibleItems addObject:item];
@@ -2074,7 +2216,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         [self wc_updateVoiceOrbToggleAppearance];
     }
 
-    if (!self.menuOpen) {
+    if (!self.menuOpen || !WCLiquidGlassDoutuAssistantEnabled() ||
+        ![self wc_shouldRetryDoutuRefreshForInputHasText:inputHasText]) {
         return;
     }
 
@@ -2088,26 +2231,78 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             return;
         }
         [self wc_refreshOpenMenuAnimated];
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.28 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self || generation != self.contentRefreshGeneration ||
-            !self.menuOpen) {
+        if (![self wc_shouldRetryDoutuRefreshForInputHasText:inputHasText]) {
             return;
         }
-        [self wc_refreshOpenMenuAnimated];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.22 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self || generation != self.contentRefreshGeneration ||
+                !self.menuOpen) {
+                return;
+            }
+            [self wc_refreshOpenMenuAnimated];
+        });
     });
 }
 
+- (BOOL)wc_shouldRetryDoutuRefreshForInputHasText:(BOOL)inputHasText {
+    BOOL hasDoutuAction = [WCLiquidGlassPreferences.buttonItems indexOfObjectPassingTest:
+        ^BOOL(NSDictionary<NSString *, id> *item, NSUInteger index, BOOL *stop) {
+            return [item[@"action"] isEqualToString:WCLiquidGlassActionDoutuAssistant];
+        }] != NSNotFound;
+    if (!hasDoutuAction) {
+        return NO;
+    }
+    BOOL doutuIsVisible = [self.visibleItems indexOfObjectPassingTest:
+        ^BOOL(NSDictionary<NSString *, id> *item, NSUInteger index, BOOL *stop) {
+            return [item[@"action"] isEqualToString:WCLiquidGlassActionDoutuAssistant];
+        }] != NSNotFound;
+    return doutuIsVisible != inputHasText;
+}
+
 - (void)wc_manualTextEdit:(NSNotification *)notification {
-    if (!self.voiceTranscriptionActive ||
-        ![notification.object isKindOfClass:UIView.class] ||
+    if (![notification.object isKindOfClass:UIView.class] ||
         ![self wc_isCurrentChatInputView:notification.object]) {
         return;
     }
-    self.voiceTranscriptionActive = NO;
-    [self wc_updateVoiceOrbToggleAppearance];
+    UIView *inputView = notification.object;
+    BOOL wasVoiceTranscriptionActive = self.voiceTranscriptionActive;
+    BOOL inputWasEmpty = !WCLiquidGlassCurrentChatInputHasText();
+    self.manualChatInputView = inputView;
+    if (wasVoiceTranscriptionActive) {
+        self.manualChatInputStartedFromEmpty = NO;
+    } else if (inputWasEmpty) {
+        self.manualChatInputStartedFromEmpty = YES;
+    }
+    NSUInteger generation = ++self.manualInputGeneration;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || generation != self.manualInputGeneration ||
+            ![self wc_isCurrentChatInputView:inputView]) {
+            return;
+        }
+        BOOL inputHasText = WCLiquidGlassCurrentChatInputHasText();
+        if (!inputHasText) {
+            self.manualChatInputStartedFromEmpty = NO;
+        }
+        self.manualChatInputHasText = !wasVoiceTranscriptionActive && inputHasText &&
+            self.manualChatInputStartedFromEmpty;
+        if (wasVoiceTranscriptionActive && self.voiceTranscriptionActive) {
+            self.voiceTranscriptionActive = NO;
+            [self wc_updateVoiceOrbToggleAppearance];
+        }
+        if (self.menuOpen) {
+            [self wc_refreshOpenMenuAnimated];
+        }
+    });
+}
+
+- (BOOL)wc_hasManualChatInput {
+    return self.manualChatInputHasText &&
+        self.manualChatInputView == WCLiquidGlassCurrentChatInputView() &&
+        WCLiquidGlassCurrentChatInputHasText();
 }
 
 - (void)wc_updateVoiceOrbToggleAppearance {
@@ -2583,6 +2778,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_resetMenuImmediately {
     [self wc_cancelIdleHide];
     self.contentRefreshGeneration += 1;
+    self.menuTransitionGeneration += 1;
     self.menuOpen = NO;
     self.dismissControl.hidden = YES;
     self.highlightedIndex = NSNotFound;
@@ -2608,6 +2804,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
     self.menuOpen = NO;
     self.contentRefreshGeneration += 1;
+    NSUInteger transitionGeneration = ++self.menuTransitionGeneration;
     self.dismissControl.hidden = YES;
     NSString *actionIdentifier = nil;
     if (index >= 0 && index < (NSInteger)self.optionOrbs.count) {
@@ -2628,7 +2825,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             orb.alpha = 0.0;
             orb.transform = CGAffineTransformMakeScale(0.72, 0.72);
         } completion:^(BOOL finished) {
-            orb.hidden = YES;
+            if (finished && transitionGeneration == self.menuTransitionGeneration && !self.menuOpen) {
+                orb.hidden = YES;
+            }
         }];
     }];
     [self wc_scheduleIdleHide];

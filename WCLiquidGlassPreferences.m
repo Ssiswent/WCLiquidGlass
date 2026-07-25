@@ -234,7 +234,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [NSUserDefaults.standardUserDefaults setBool:anchorOnLeft forKey:WCLiquidGlassAnchorOnLeftKey];
     [NSUserDefaults.standardUserDefaults setDouble:MIN(0.9, MAX(0.1, yFraction))
                                             forKey:WCLiquidGlassAnchorYKey];
-    WCLiquidGlassNotifyPreferencesChanged();
 }
 
 + (BOOL)fullCrashReportsEnabled {

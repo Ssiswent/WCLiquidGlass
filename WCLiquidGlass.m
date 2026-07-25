@@ -76,6 +76,48 @@ static UIVisualEffect *WCLiquidGlassSettingsEffect(void) {
 
 static UIFont *WCLiquidGlassFont(CGFloat size, UIFontWeight weight);
 
+static UIFontTextStyle WCLiquidGlassTextStyleForSize(CGFloat size) {
+    if (size >= 20.0) {
+        return UIFontTextStyleTitle2;
+    }
+    if (size >= 16.0) {
+        return UIFontTextStyleBody;
+    }
+    if (size >= 14.0) {
+        return UIFontTextStyleSubheadline;
+    }
+    if (size >= 12.0) {
+        return UIFontTextStyleFootnote;
+    }
+    return UIFontTextStyleCaption2;
+}
+
+static BOOL WCLiquidGlassHasDifferentContentSizeCategory(UITraitCollection *current,
+                                                          UITraitCollection *previous) {
+    return ![current.preferredContentSizeCategory isEqualToString:previous.preferredContentSizeCategory];
+}
+
+static CGFloat WCLiquidGlassSectionHeaderHeight(void) {
+    return MAX(38.0, ceil(WCLiquidGlassFont(13.0, UIFontWeightSemibold).lineHeight + 8.0));
+}
+
+static CGFloat WCLiquidGlassFooterHeight(NSString *text, CGFloat minimumHeight) {
+    UIFont *font = WCLiquidGlassFont(13.0, UIFontWeightRegular);
+    CGFloat width = MAX(1.0, UIScreen.mainScreen.bounds.size.width - 40.0);
+    CGRect textBounds = [text boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX)
+                                           options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+                                        attributes:@{NSFontAttributeName: font}
+                                           context:nil];
+    return MAX(minimumHeight, ceil(textBounds.size.height + 6.0));
+}
+
+static CGFloat WCLiquidGlassHeaderHeight(void) {
+    CGFloat textHeight = WCLiquidGlassFont(22.0, UIFontWeightSemibold).lineHeight + 4.0 +
+        WCLiquidGlassFont(14.0, UIFontWeightRegular).lineHeight * 2.0 + 10.0 +
+        MAX(24.0, WCLiquidGlassFont(11.5, UIFontWeightSemibold).lineHeight + 8.0);
+    return MAX(164.0, ceil(50.0 + textHeight));
+}
+
 static void WCLiquidGlassConfigureTableBackground(UITableViewController *controller) {
     UIColor *backgroundColor = WCLiquidGlassBackdropBaseColor();
     controller.view.backgroundColor = backgroundColor;
@@ -111,22 +153,29 @@ static void WCLiquidGlassStyleCardCell(UITableViewCell *cell,
 
 static UIFont *WCLiquidGlassFont(CGFloat size, UIFontWeight weight) {
     NSString *fontName = weight >= UIFontWeightSemibold ? @"PingFangSC-Semibold" : @"PingFangSC-Regular";
-    return [UIFont fontWithName:fontName size:size] ?: [UIFont systemFontOfSize:size weight:weight];
+    UIFont *font = [UIFont fontWithName:fontName size:size] ?: [UIFont systemFontOfSize:size weight:weight];
+    return [[UIFontMetrics metricsForTextStyle:WCLiquidGlassTextStyleForSize(size)] scaledFontForFont:font];
 }
 
 static UILabel *WCLiquidGlassSectionLabel(NSString *text, UIColor *color) {
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 4.0, 300.0, 30.0)];
+    UIFont *font = WCLiquidGlassFont(13.0, UIFontWeightSemibold);
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 4.0, 300.0,
+                                                                ceil(font.lineHeight + 4.0))];
     label.text = text;
-    label.font = WCLiquidGlassFont(13.0, UIFontWeightSemibold);
+    label.font = font;
+    label.adjustsFontForContentSizeCategory = YES;
     label.textColor = color;
     return label;
 }
 
 static UILabel *WCLiquidGlassFooterLabel(NSString *text) {
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 2.0, UIScreen.mainScreen.bounds.size.width - 40.0, 48.0)];
+    UIFont *font = WCLiquidGlassFont(13.0, UIFontWeightRegular);
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 2.0, UIScreen.mainScreen.bounds.size.width - 40.0,
+                                                                WCLiquidGlassFooterHeight(text, 48.0) - 4.0)];
     label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     label.text = text;
-    label.font = WCLiquidGlassFont(13.0, UIFontWeightRegular);
+    label.font = font;
+    label.adjustsFontForContentSizeCategory = YES;
     label.textColor = UIColor.secondaryLabelColor;
     label.numberOfLines = 0;
     return label;
@@ -142,8 +191,10 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
     content.secondaryText = secondaryText;
     content.image = image;
     content.textProperties.font = WCLiquidGlassFont(17.0, UIFontWeightRegular);
+    content.textProperties.adjustsFontForContentSizeCategory = YES;
     content.textProperties.color = titleColor ?: UIColor.labelColor;
     content.secondaryTextProperties.font = WCLiquidGlassFont(15.0, UIFontWeightRegular);
+    content.secondaryTextProperties.adjustsFontForContentSizeCategory = YES;
     content.secondaryTextProperties.color = UIColor.secondaryLabelColor;
     content.imageProperties.maximumSize = CGSizeMake(28.0, 28.0);
     content.imageProperties.reservedLayoutSize = CGSizeMake(28.0, 28.0);
@@ -173,7 +224,8 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"按钮与动作";
-    self.tableView.rowHeight = 66.0;
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 66.0;
     WCLiquidGlassConfigureTableBackground(self);
     self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.allowsSelectionDuringEditing = YES;
@@ -183,7 +235,8 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] ||
+        WCLiquidGlassHasDifferentContentSizeCategory(self.traitCollection, previousTraitCollection)) {
         [self.tableView reloadData];
     }
 }
@@ -294,7 +347,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return 38.0;
+    return WCLiquidGlassSectionHeaderHeight();
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
@@ -308,7 +361,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return section == 0 || section == 2 ? 54.0 : CGFLOAT_MIN;
+    if (section == 0) {
+        return WCLiquidGlassFooterHeight(@"点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。", 54.0);
+    }
+    if (section == 2) {
+        return WCLiquidGlassFooterHeight(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。", 54.0);
+    }
+    return CGFLOAT_MIN;
 }
 
 - (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -467,7 +526,8 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
     [super viewDidLoad];
     self.title = @"崩溃日志";
     WCLiquidGlassConfigureTableBackground(self);
-    self.tableView.rowHeight = 76.0;
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 76.0;
     self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
                                                                                style:UIBarButtonItemStylePlain
@@ -482,7 +542,8 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] ||
+        WCLiquidGlassHasDifferentContentSizeCategory(self.traitCollection, previousTraitCollection)) {
         [self.tableView reloadData];
     }
 }
@@ -504,7 +565,7 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return 38.0;
+    return WCLiquidGlassSectionHeaderHeight();
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
@@ -512,7 +573,7 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return 72.0;
+    return WCLiquidGlassFooterHeight(@"最多保留 20 份。点击日志可调用 iOS 系统分享；内容包含崩溃堆栈、系统与已加载插件信息，不记录聊天文字。", 72.0);
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -581,6 +642,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         empty.textAlignment = NSTextAlignmentCenter;
         empty.textColor = UIColor.secondaryLabelColor;
         empty.font = WCLiquidGlassFont(15.0, UIFontWeightRegular);
+        empty.adjustsFontForContentSizeCategory = YES;
         self.tableView.backgroundView = empty;
     } else {
         self.tableView.backgroundView = [[WCLiquidGlassBackdropView alloc] init];
@@ -626,7 +688,8 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
     [super viewDidLoad];
     self.title = @"WCLiquidGlass";
     WCLiquidGlassConfigureTableBackground(self);
-    self.tableView.rowHeight = 66.0;
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 66.0;
     self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.tableHeaderView = [self wc_makeHeaderView];
     [WCLiquidGlassPreferences registerDefaults];
@@ -638,7 +701,8 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] ||
+        WCLiquidGlassHasDifferentContentSizeCategory(self.traitCollection, previousTraitCollection)) {
         self.tableView.tableHeaderView = [self wc_makeHeaderView];
         [self.tableView reloadData];
     }
@@ -658,7 +722,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
     CGFloat width = CGRectGetWidth(self.tableView.bounds);
     if (fabs(CGRectGetWidth(header.frame) - width) > 0.5) {
-        header.frame = CGRectMake(0.0, 0.0, width, 164.0);
+        header.frame = CGRectMake(0.0, 0.0, width, WCLiquidGlassHeaderHeight());
         self.tableView.tableHeaderView = header;
     }
 }
@@ -669,7 +733,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (UIView *)wc_makeHeaderView {
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 320.0, 164.0)];
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 320.0, WCLiquidGlassHeaderHeight())];
     UIVisualEffectView *card = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassSettingsEffect()];
     card.translatesAutoresizingMaskIntoConstraints = NO;
     card.layer.cornerRadius = 28.0;
@@ -684,6 +748,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     title.translatesAutoresizingMaskIntoConstraints = NO;
     title.text = @"WCLiquidGlass";
     title.font = WCLiquidGlassFont(22.0, UIFontWeightSemibold);
+    title.adjustsFontForContentSizeCategory = YES;
     title.textColor = UIColor.labelColor;
 
     UILabel *subtitle = [[UILabel alloc] init];
@@ -691,6 +756,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     subtitle.text = @"为微信打造的模块化交互增强";
     subtitle.textColor = UIColor.secondaryLabelColor;
     subtitle.font = WCLiquidGlassFont(14.0, UIFontWeightRegular);
+    subtitle.adjustsFontForContentSizeCategory = YES;
+    subtitle.numberOfLines = 2;
 
     UIView *versionBadge = [[UIView alloc] init];
     versionBadge.translatesAutoresizingMaskIntoConstraints = NO;
@@ -706,6 +773,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     displayVersion = [[displayVersion stringByReplacingOccurrencesOfString:@"~" withString:@" "] uppercaseString];
     version.text = [NSString stringWithFormat:@"Version %@", displayVersion];
     version.font = WCLiquidGlassFont(11.5, UIFontWeightSemibold);
+    version.adjustsFontForContentSizeCategory = YES;
     version.textColor = UIColor.secondaryLabelColor;
     version.textAlignment = NSTextAlignmentCenter;
 
@@ -732,7 +800,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [subtitle.trailingAnchor constraintLessThanOrEqualToAnchor:card.contentView.trailingAnchor constant:-20.0],
         [versionBadge.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
         [versionBadge.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:10.0],
-        [versionBadge.heightAnchor constraintEqualToConstant:24.0],
+        [versionBadge.heightAnchor constraintEqualToConstant:MAX(24.0, ceil(version.font.lineHeight + 8.0))],
         [version.leadingAnchor constraintEqualToAnchor:versionBadge.leadingAnchor constant:10.0],
         [version.trailingAnchor constraintEqualToAnchor:versionBadge.trailingAnchor constant:-10.0],
         [version.centerYAnchor constraintEqualToAnchor:versionBadge.centerYAnchor]
@@ -761,7 +829,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return 38.0;
+    return WCLiquidGlassSectionHeaderHeight();
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
@@ -782,15 +850,17 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return 72.0;
+        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
-        return 54.0;
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。", 54.0);
     }
     if (section == 2) {
-        return 64.0;
+        return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
     }
-    return section == 3 ? 92.0 : CGFLOAT_MIN;
+    return section == 3
+        ? WCLiquidGlassFooterHeight(@"基础诊断始终开启且不记录聊天内容。完整采集可获得原生线程与二进制镜像信息，重启微信后生效；系统强杀、Jetsam 与看门狗终止可能无法捕获。", 92.0)
+        : CGFLOAT_MIN;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {

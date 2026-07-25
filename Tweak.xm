@@ -416,6 +416,11 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
     %orig;
 }
 
+- (void)paste:(id)sender {
+    WCLiquidGlassReportManualTextEdit(self);
+    %orig;
+}
+
 %end
 
 %ctor {
