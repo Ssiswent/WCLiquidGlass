@@ -18,6 +18,37 @@
 - 诊断日志保存在微信沙盒 `Documents/WCLiquidGlass/Diagnostics/Crashes`，不主动记录聊天内容。
 - 通过微信的 `WCPluginsMgr` 注册到插件列表，并传入设置控制器的类名字符串。
 
+## 架构
+
+`%ctor` 在微信进程启动时初始化，通过 `WCPluginsMgr` 注册设置控制器，并启动 `WCLiquidGlassManager` 单例；该单例管理不抢焦点的透明 `WCLiquidGlassWindow`，以及承载环形菜单的 `WCLiquidGlassHostController` / `WCLiquidGlassHostView`。配置由 `WCLiquidGlassPreferences` 提供，崩溃诊断由 `WCLiquidGlassCrashLogger` 负责，插件还对多个微信类进行 hook 以接入页面生命周期和对话列表界面。
+
+```mermaid
+graph TD
+  A["%ctor (Tweak.xm)"] --> B["WCPluginsMgr 注册"]
+  A --> C["WCLiquidGlassManager (单例)"]
+  A --> D["WCLiquidGlassCrashLogger"]
+  A --> H["微信类 Hooks"]
+  C --> E["WCLiquidGlassWindow"]
+  C --> F["WCLiquidGlassHostController"]
+  F --> G["WCLiquidGlassHostView (环形菜单)"]
+  C --> I["WCLiquidGlassPreferences"]
+  B --> J["WCLiquidGlass 设置控制器"]
+  H --> K["BaseMsgContentViewController (页面生命周期)"]
+  H --> L["UITableView / NewMainFrameViewController (iOS 27 兼容修复)"]
+```
+
+## WCGlass iOS 27 兼容修复
+
+该修复针对 WCGlass 在 iOS 27 上的特定兼容性闪退。
+
+WCGlass 的“横向胶囊分组”和“全屏分组”并非仅改变主页视觉样式：它们会接管对话列表的分组状态、section header、会话筛选、横向切换和全屏展示。也就是说，微信主页的同一个对话列表会在原始列表、分组筛选后的列表及切换中的展示状态之间重建或重排。
+
+当聊天页处于“键盘已弹出且输入框非空”的状态并返回对话列表时，iOS 27 的 `UIIntelligenceSupport` 会在页面转场中继续遍历或恢复此前记录的列表语义节点。该节点可能来自 WCGlass 分组切换前或切换中的列表结构，并保留了 section `2` 的访问路径；但此时真实对话列表已经恢复为仅有 section `0` 和 `1` 的结构。
+
+因此，`UIIntelligenceSupport` 会继续向真实列表请求 section `2` 的行数和几何位置，最终在 `UITableViewRowData` 中触发无效 section 断言并导致微信闪退。普通“液态分组”未进入横向或全屏的列表切换路径，因此不具备这一触发条件；相同配置在 iOS 26 上也未观察到该问题。
+
+WCLiquidGlass 的兼容开关仅在这个风险窗口内，对目标对话列表的越界 section 返回自洽的“零行、零面积”结果，使过期的语义遍历安全结束，不再进入 UIKit 的断言路径。该保护不修改 WCGlass 的可见 UI、数据源或 section 数量，不延迟导航返回，也不强制收起键盘；开关切换后立即生效。
+
 ## 构建
 
 ```sh
