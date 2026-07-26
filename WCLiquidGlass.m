@@ -1297,6 +1297,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     brandIcon.translatesAutoresizingMaskIntoConstraints = NO;
     brandIcon.contentMode = UIViewContentModeScaleAspectFit;
 
+    UIView *brandDetails = [[UIView alloc] init];
+    brandDetails.translatesAutoresizingMaskIntoConstraints = NO;
+
     UILabel *title = [[UILabel alloc] init];
     title.translatesAutoresizingMaskIntoConstraints = NO;
     title.text = @"WCLiquidGlass";
@@ -1332,9 +1335,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
     [header addSubview:card];
     [card.contentView addSubview:brandIcon];
-    [card.contentView addSubview:title];
-    [card.contentView addSubview:subtitle];
-    [card.contentView addSubview:versionBadge];
+    [card.contentView addSubview:brandDetails];
+    [brandDetails addSubview:title];
+    [brandDetails addSubview:subtitle];
+    [brandDetails addSubview:versionBadge];
     [versionBadge addSubview:version];
     [NSLayoutConstraint activateConstraints:@[
         [card.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:20.0],
@@ -1345,15 +1349,19 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [brandIcon.centerYAnchor constraintEqualToAnchor:card.contentView.centerYAnchor],
         [brandIcon.widthAnchor constraintEqualToConstant:58.0],
         [brandIcon.heightAnchor constraintEqualToConstant:58.0],
-        [title.leadingAnchor constraintEqualToAnchor:brandIcon.trailingAnchor constant:15.0],
-        [title.topAnchor constraintEqualToAnchor:brandIcon.topAnchor constant:0.0],
-        [title.trailingAnchor constraintLessThanOrEqualToAnchor:card.contentView.trailingAnchor constant:-20.0],
+        [brandDetails.leadingAnchor constraintEqualToAnchor:brandIcon.trailingAnchor constant:15.0],
+        [brandDetails.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor constant:-20.0],
+        [brandDetails.centerYAnchor constraintEqualToAnchor:card.contentView.centerYAnchor],
+        [title.leadingAnchor constraintEqualToAnchor:brandDetails.leadingAnchor],
+        [title.topAnchor constraintEqualToAnchor:brandDetails.topAnchor],
+        [title.trailingAnchor constraintEqualToAnchor:brandDetails.trailingAnchor],
         [subtitle.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
         [subtitle.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:4.0],
-        [subtitle.trailingAnchor constraintLessThanOrEqualToAnchor:card.contentView.trailingAnchor constant:-20.0],
+        [subtitle.trailingAnchor constraintEqualToAnchor:brandDetails.trailingAnchor],
         [versionBadge.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
         [versionBadge.topAnchor constraintEqualToAnchor:subtitle.bottomAnchor constant:10.0],
         [versionBadge.heightAnchor constraintEqualToConstant:MAX(24.0, ceil(version.font.lineHeight + 8.0))],
+        [versionBadge.bottomAnchor constraintEqualToAnchor:brandDetails.bottomAnchor],
         [version.leadingAnchor constraintEqualToAnchor:versionBadge.leadingAnchor constant:10.0],
         [version.trailingAnchor constraintEqualToAnchor:versionBadge.trailingAnchor constant:-10.0],
         [version.centerYAnchor constraintEqualToAnchor:versionBadge.centerYAnchor]
