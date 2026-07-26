@@ -13,6 +13,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassSettingsIconKind) {
     WCLiquidGlassSettingsIconKindMenu,
     WCLiquidGlassSettingsIconKindSize,
     WCLiquidGlassSettingsIconKindCompactLayout,
+    WCLiquidGlassSettingsIconKindGlassAppearance,
     WCLiquidGlassSettingsIconKindActions,
     WCLiquidGlassSettingsIconKindCompatibility,
     WCLiquidGlassSettingsIconKindCrashCapture,
@@ -20,6 +21,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassSettingsIconKind) {
     WCLiquidGlassSettingsIconKindRestore
 };
 UIImage *WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKind kind, CGFloat size);
+UIView *WCLiquidGlassCreateStaticMenuPreview(void);
+void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview);
 UIView * _Nullable WCLiquidGlassCurrentChatInputView(void);
 BOOL WCLiquidGlassCurrentChatInputHasText(void);
 BOOL WCLiquidGlassShouldReportManualTextEdit(void);

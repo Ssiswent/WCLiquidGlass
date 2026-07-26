@@ -187,9 +187,21 @@ static UIVisualEffect *WCLiquidGlassMakeEffect(void) {
     Class glassClass = NSClassFromString(@"UIGlassEffect");
     SEL factorySelector = NSSelectorFromString(@"effectWithStyle:");
     if (glassClass != Nil && [glassClass respondsToSelector:factorySelector]) {
+        WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
         UIVisualEffect *effect = ((id (*)(id, SEL, NSInteger))objc_msgSend)(glassClass,
                                                                            factorySelector,
-                                                                           0);
+                                                                           appearance == WCLiquidGlassGlassAppearanceClear ? 1 : 0);
+        if (appearance == WCLiquidGlassGlassAppearanceTinted) {
+            SEL tintColorSelector = NSSelectorFromString(@"setTintColor:");
+            if ([effect respondsToSelector:tintColorSelector]) {
+                UIColor *tintColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+                    return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+                        ? [UIColor colorWithWhite:1.0 alpha:0.23]
+                        : [UIColor colorWithWhite:1.0 alpha:0.16];
+                }];
+                ((void (*)(id, SEL, id))objc_msgSend)(effect, tintColorSelector, tintColor);
+            }
+        }
         SEL interactiveSelector = NSSelectorFromString(@"setInteractive:");
         if ([effect respondsToSelector:interactiveSelector]) {
             ((void (*)(id, SEL, BOOL))objc_msgSend)(effect, interactiveSelector, NO);
@@ -615,6 +627,8 @@ static NSString *WCLiquidGlassSettingsIconFileName(WCLiquidGlassSettingsIconKind
             return @"size.png";
         case WCLiquidGlassSettingsIconKindCompactLayout:
             return @"compact-layout.png";
+        case WCLiquidGlassSettingsIconKindGlassAppearance:
+            return @"glass-appearance.png";
         case WCLiquidGlassSettingsIconKindActions:
             return @"actions.png";
         case WCLiquidGlassSettingsIconKindCompatibility:
@@ -647,6 +661,9 @@ static NSData *WCLiquidGlassEmbeddedIconData(NSString *fileName) {
     } else if ([fileName isEqualToString:@"compact-layout.png"]) {
         bytes = WCLiquidGlassIconCompactLayout;
         length = WCLiquidGlassIconCompactLayout_len;
+    } else if ([fileName isEqualToString:@"glass-appearance.png"]) {
+        bytes = WCLiquidGlassIconGlassAppearance;
+        length = WCLiquidGlassIconGlassAppearance_len;
     } else if ([fileName isEqualToString:@"actions.png"]) {
         bytes = WCLiquidGlassIconActions;
         length = WCLiquidGlassIconActions_len;
@@ -671,6 +688,9 @@ static NSData *WCLiquidGlassEmbeddedIconData(NSString *fileName) {
     } else if ([fileName isEqualToString:@"compact-layout-dark.png"]) {
         bytes = WCLiquidGlassIconCompactLayoutDark;
         length = WCLiquidGlassIconCompactLayoutDark_len;
+    } else if ([fileName isEqualToString:@"glass-appearance-dark.png"]) {
+        bytes = WCLiquidGlassIconGlassAppearanceDark;
+        length = WCLiquidGlassIconGlassAppearanceDark_len;
     } else if ([fileName isEqualToString:@"actions-dark.png"]) {
         bytes = WCLiquidGlassIconActionsDark;
         length = WCLiquidGlassIconActionsDark_len;
@@ -862,6 +882,25 @@ static UIImage *WCLiquidGlassActionBrandImage(CGFloat side) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
 }
 
+static UIImage *WCLiquidGlassWCGlassSettingsImage(CGFloat buttonDiameter) {
+    Class settingsClass = NSClassFromString(@"WCLGSettingsViewController");
+    NSBundle *bundle = settingsClass ? [NSBundle bundleForClass:settingsClass] : nil;
+    if (!bundle) {
+        return nil;
+    }
+
+    UIImage *image = [UIImage imageNamed:@"WeChatLiquidGlassLogo"
+                                 inBundle:bundle
+            compatibleWithTraitCollection:UITraitCollection.currentTraitCollection];
+    if (!image) {
+        NSString *path = [bundle pathForResource:@"WeChatLiquidGlassLogo" ofType:@"png"];
+        image = path ? [UIImage imageWithContentsOfFile:path] : nil;
+    }
+    return image
+        ? WCLiquidGlassImageWithMaximumSide(image, floor(buttonDiameter * 0.42))
+        : nil;
+}
+
 UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonDiameter) {
     static NSCache<NSString *, UIImage *> *imageCache;
     static dispatch_once_t onceToken;
@@ -882,6 +921,9 @@ UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonD
     UIImage *image = [actionIdentifier isEqualToString:WCLiquidGlassActionSettings]
         ? WCLiquidGlassActionBrandImage(floor(buttonDiameter * 0.48))
         : nil;
+    if (!image && [actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
+        image = WCLiquidGlassWCGlassSettingsImage(buttonDiameter);
+    }
     if (!image && [actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]) {
         image = WCLiquidGlassDoutuAssistantImage();
     }
@@ -1495,6 +1537,10 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
             if (navigationController) {
                 [availableActions addObject:actionIdentifier];
             }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
+            if (navigationController && NSClassFromString(@"WCLGSettingsViewController")) {
+                [availableActions addObject:actionIdentifier];
+            }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins]) {
             if (navigationController && NSClassFromString(@"WCPluginsViewController")) {
                 [availableActions addObject:actionIdentifier];
@@ -1567,6 +1613,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             return;
         }
         WCLiquidGlassShowActionError(@"当前页面无法打开 WCLiquidGlass 设置。");
+        return;
+    }
+
+    if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
+        if (WCLiquidGlassOpenControllerNamed(@[@"WCLGSettingsViewController"])) {
+            return;
+        }
+        WCLiquidGlassShowActionError(@"没有找到 WCGlass 设置页面，请确认 WCGlass 已启用。");
         return;
     }
 
@@ -1840,7 +1894,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, assign) CGFloat resolvedOptionDiameter;
 @property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
 @property(nonatomic, weak) WCLiquidGlassOrbView *pressedOrb;
+@property(nonatomic, assign) BOOL observesInputNotifications;
 
+- (instancetype)initWithFrame:(CGRect)frame observesInputNotifications:(BOOL)observesInputNotifications;
 - (void)reload;
 - (void)openMenu;
 - (void)closeMenuSelectingIndex:(NSInteger)index;
@@ -1859,6 +1915,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_updateVoiceOrbToggleAppearance;
 - (void)wc_emitSelectionFeedback;
 - (CGFloat)wc_optionDiameterForCount:(NSUInteger)count;
+- (void)wc_layoutOptionOrbsAnimated:(BOOL)animated;
+- (void)wc_updateAnchorVisual;
 - (void)wc_beginPressOnOrb:(WCLiquidGlassOrbView *)orb towardPoint:(CGPoint)point;
 - (void)wc_updatePressTowardPoint:(CGPoint)point;
 - (void)wc_endPressAnimated:(BOOL)animated;
@@ -1868,6 +1926,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @implementation WCLiquidGlassHostView
 
 - (instancetype)initWithFrame:(CGRect)frame {
+    return [self initWithFrame:frame observesInputNotifications:YES];
+}
+
+- (instancetype)initWithFrame:(CGRect)frame observesInputNotifications:(BOOL)observesInputNotifications {
     self = [super initWithFrame:frame];
     if (!self) {
         return nil;
@@ -1878,7 +1940,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     _highlightedIndex = NSNotFound;
     _keyboardTop = CGFLOAT_MAX;
     _selectionFeedbackGenerator = [[UISelectionFeedbackGenerator alloc] init];
-    WCLiquidGlassManualTextEditMonitoringEnabled = YES;
+    _observesInputNotifications = observesInputNotifications;
+    if (observesInputNotifications) {
+        WCLiquidGlassManualTextEditMonitoringEnabled = YES;
+    }
 
     _dismissControl = [[UIControl alloc] initWithFrame:self.bounds];
     _dismissControl.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -1894,35 +1959,39 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     _glassContainer.contentView.clipsToBounds = NO;
     [self addSubview:_glassContainer];
 
-    NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
-    [notificationCenter addObserver:self
-                           selector:@selector(wc_chatInputContentDidChange:)
-                               name:UITextViewTextDidChangeNotification
-                             object:nil];
-    [notificationCenter addObserver:self
-                           selector:@selector(wc_chatInputContentDidChange:)
-                               name:UITextFieldTextDidChangeNotification
-                             object:nil];
-    [notificationCenter addObserver:self
-                           selector:@selector(wc_manualTextEdit:)
-                               name:WCLiquidGlassManualTextEditNotification
-                             object:nil];
-    [notificationCenter addObserver:self
-                           selector:@selector(wc_keyboardWillChangeFrame:)
-                               name:UIKeyboardWillChangeFrameNotification
-                             object:nil];
-    [notificationCenter addObserver:self
-                           selector:@selector(wc_keyboardWillHide:)
-                               name:UIKeyboardWillHideNotification
-                             object:nil];
+    if (observesInputNotifications) {
+        NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_chatInputContentDidChange:)
+                                   name:UITextViewTextDidChangeNotification
+                                 object:nil];
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_chatInputContentDidChange:)
+                                   name:UITextFieldTextDidChangeNotification
+                                 object:nil];
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_manualTextEdit:)
+                                   name:WCLiquidGlassManualTextEditNotification
+                                 object:nil];
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_keyboardWillChangeFrame:)
+                                   name:UIKeyboardWillChangeFrameNotification
+                                 object:nil];
+        [notificationCenter addObserver:self
+                               selector:@selector(wc_keyboardWillHide:)
+                                   name:UIKeyboardWillHideNotification
+                                 object:nil];
+    }
 
     [self reload];
     return self;
 }
 
 - (void)dealloc {
-    WCLiquidGlassManualTextEditMonitoringEnabled = NO;
-    [NSNotificationCenter.defaultCenter removeObserver:self];
+    if (self.observesInputNotifications) {
+        WCLiquidGlassManualTextEditMonitoringEnabled = NO;
+        [NSNotificationCenter.defaultCenter removeObserver:self];
+    }
 }
 
 - (void)setVoiceTranscriptionActive:(BOOL)voiceTranscriptionActive {
@@ -2055,6 +2124,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         if (reusableIndex != NSNotFound) {
             orb = remainingOrbs[reusableIndex];
             [remainingOrbs removeObjectAtIndex:reusableIndex];
+            orb.effect = WCLiquidGlassMakeEffect();
             if (orb.imageStyle != imageStyle) {
                 [orb configureWithActionIdentifier:actionIdentifier];
             }
@@ -2092,6 +2162,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         longPress.delegate = self;
         [self.anchorOrb addGestureRecognizer:longPress];
     }
+    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
     [self wc_updateAnchorVisual];
     [self setNeedsLayout];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -3043,6 +3114,87 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 @end
+
+@interface WCLiquidGlassStaticMenuPreviewView : WCLiquidGlassHostView
+
+- (void)refreshAppearance;
+
+@end
+
+
+@implementation WCLiquidGlassStaticMenuPreviewView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame observesInputNotifications:NO];
+    if (!self) {
+        return nil;
+    }
+    self.userInteractionEnabled = NO;
+    self.isAccessibilityElement = NO;
+    self.dismissControl.hidden = YES;
+    self.anchorOrb.userInteractionEnabled = NO;
+    self.anchorOrb.isAccessibilityElement = NO;
+    for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
+        orb.userInteractionEnabled = NO;
+        orb.isAccessibilityElement = NO;
+    }
+    return self;
+}
+
+- (NSArray<NSDictionary<NSString *, id> *> *)wc_currentVisibleItems {
+    return @[
+        @{@"slot": @"preview.camera", @"action": WCLiquidGlassActionCamera},
+        @{@"slot": @"preview.album", @"action": WCLiquidGlassActionAlbum},
+        @{@"slot": @"preview.voice", @"action": WCLiquidGlassActionVoiceInput},
+        @{@"slot": @"preview.search", @"action": WCLiquidGlassActionSearchRecords},
+        @{@"slot": @"preview.doutu", @"action": WCLiquidGlassActionDoutuAssistant}
+    ];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    [self wc_applyPreviewLayout];
+}
+
+- (void)wc_applyPreviewLayout {
+    if (!self.anchorOrb || CGRectIsEmpty(self.bounds)) {
+        return;
+    }
+    self.anchorOnLeft = YES;
+    self.anchorIdleHidden = NO;
+    CGFloat diameter = self.anchorOrb.diameter;
+    self.anchorOrb.center = CGPointMake(diameter * 0.5 + 12.0,
+                                        CGRectGetHeight(self.bounds) * 0.58);
+    self.menuOpen = YES;
+    [self wc_updateAnchorVisual];
+    for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
+        orb.hidden = NO;
+        orb.alpha = 1.0;
+        orb.transform = CGAffineTransformIdentity;
+    }
+    [self wc_layoutOptionOrbsAnimated:NO];
+}
+
+- (void)refreshAppearance {
+    [self reload];
+    [self wc_applyPreviewLayout];
+}
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    return nil;
+}
+
+@end
+
+UIView *WCLiquidGlassCreateStaticMenuPreview(void) {
+    return [[WCLiquidGlassStaticMenuPreviewView alloc] initWithFrame:CGRectZero];
+}
+
+void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
+    if ([preview isKindOfClass:WCLiquidGlassStaticMenuPreviewView.class]) {
+        [(WCLiquidGlassStaticMenuPreviewView *)preview refreshAppearance];
+    }
+}
 
 @interface WCLiquidGlassHostController : UIViewController
 

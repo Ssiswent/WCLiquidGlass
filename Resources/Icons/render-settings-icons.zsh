@@ -5,7 +5,7 @@ project_dir=${0:A:h:h:h}
 renderer="$(brew --prefix librsvg)/bin/rsvg-convert"
 python="${PYTHON3:-/usr/local/bin/python3}"
 rendered="$project_dir/Resources/Icons/Rendered"
-icons=(menu size compact-layout actions compatibility crash-capture crash-logs restore)
+icons=(menu size compact-layout glass-appearance actions compatibility crash-capture crash-logs restore)
 
 mode=${1:-dark}
 if [[ "$mode" != "dark" && "$mode" != "all" ]]; then
@@ -29,6 +29,7 @@ cp "$project_dir/Resources/Icons/Source/dark/Brand.png" "$rendered/brand-dark.pn
   xxd -i -n WCLiquidGlassIconMenu "$rendered/menu.png"
   xxd -i -n WCLiquidGlassIconSize "$rendered/size.png"
   xxd -i -n WCLiquidGlassIconCompactLayout "$rendered/compact-layout.png"
+  xxd -i -n WCLiquidGlassIconGlassAppearance "$rendered/glass-appearance.png"
   xxd -i -n WCLiquidGlassIconActions "$rendered/actions.png"
   xxd -i -n WCLiquidGlassIconCompatibility "$rendered/compatibility.png"
   xxd -i -n WCLiquidGlassIconCrashCapture "$rendered/crash-capture.png"
@@ -37,6 +38,7 @@ cp "$project_dir/Resources/Icons/Source/dark/Brand.png" "$rendered/brand-dark.pn
   xxd -i -n WCLiquidGlassIconMenuDark "$rendered/menu-dark.png"
   xxd -i -n WCLiquidGlassIconSizeDark "$rendered/size-dark.png"
   xxd -i -n WCLiquidGlassIconCompactLayoutDark "$rendered/compact-layout-dark.png"
+  xxd -i -n WCLiquidGlassIconGlassAppearanceDark "$rendered/glass-appearance-dark.png"
   xxd -i -n WCLiquidGlassIconActionsDark "$rendered/actions-dark.png"
   xxd -i -n WCLiquidGlassIconCompatibilityDark "$rendered/compatibility-dark.png"
   xxd -i -n WCLiquidGlassIconCrashCaptureDark "$rendered/crash-capture-dark.png"

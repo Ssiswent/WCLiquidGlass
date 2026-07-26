@@ -7,6 +7,7 @@ static const NSUInteger WCLiquidGlassMaximumButtonCount = 12;
 
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
+#import <math.h>
 
 #ifndef WCLIQUIDGLASS_VERSION
 #define WCLIQUIDGLASS_VERSION "Unknown"
@@ -62,11 +63,30 @@ static UIColor *WCLiquidGlassBackdropBaseColor(void) {
 
 @end
 
+static UIVisualEffect *WCLiquidGlassGlassEffect(WCLiquidGlassGlassAppearance appearance);
+
 static UIVisualEffect *WCLiquidGlassSettingsEffect(void) {
+    return WCLiquidGlassGlassEffect(WCLiquidGlassPreferences.glassAppearance);
+}
+
+static UIVisualEffect *WCLiquidGlassGlassEffect(WCLiquidGlassGlassAppearance appearance) {
     Class glassClass = NSClassFromString(@"UIGlassEffect");
-    SEL selector = NSSelectorFromString(@"effectWithStyle:");
-    if (glassClass && [glassClass respondsToSelector:selector]) {
-        UIVisualEffect *effect = ((id (*)(id, SEL, NSInteger))objc_msgSend)(glassClass, selector, 0);
+    SEL factorySelector = NSSelectorFromString(@"effectWithStyle:");
+    if (glassClass && [glassClass respondsToSelector:factorySelector]) {
+        UIVisualEffect *effect = ((id (*)(id, SEL, NSInteger))objc_msgSend)(glassClass,
+                                                                           factorySelector,
+                                                                           appearance == WCLiquidGlassGlassAppearanceClear ? 1 : 0);
+        if (appearance == WCLiquidGlassGlassAppearanceTinted) {
+            SEL tintColorSelector = NSSelectorFromString(@"setTintColor:");
+            if ([effect respondsToSelector:tintColorSelector]) {
+                UIColor *tintColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+                    return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+                        ? [UIColor colorWithWhite:1.0 alpha:0.23]
+                        : [UIColor colorWithWhite:1.0 alpha:0.16];
+                }];
+                ((void (*)(id, SEL, id))objc_msgSend)(effect, tintColorSelector, tintColor);
+            }
+        }
         if (effect) {
             return effect;
         }
@@ -125,6 +145,23 @@ static void WCLiquidGlassConfigureTableBackground(UITableViewController *control
     controller.tableView.backgroundView = [[WCLiquidGlassBackdropView alloc] init];
 }
 
+static UIColor *WCLiquidGlassSettingsCardColor(void) {
+    WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        BOOL dark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
+        if (appearance == WCLiquidGlassGlassAppearanceClear) {
+            return dark ? [UIColor colorWithWhite:1.0 alpha:0.10]
+                        : [UIColor colorWithWhite:1.0 alpha:0.68];
+        }
+        if (appearance == WCLiquidGlassGlassAppearanceTinted) {
+            return dark ? [UIColor colorWithRed:0.72 green:0.82 blue:1.0 alpha:0.20]
+                        : [UIColor colorWithRed:0.95 green:0.97 blue:1.0 alpha:0.92];
+        }
+        return dark ? [UIColor colorWithWhite:0.14 alpha:0.94]
+                    : [UIColor colorWithWhite:1.0 alpha:0.84];
+    }];
+}
+
 static void WCLiquidGlassStyleCardCell(UITableViewCell *cell,
                                        NSIndexPath *indexPath,
                                        UITableView *tableView) {
@@ -139,11 +176,7 @@ static void WCLiquidGlassStyleCardCell(UITableViewCell *cell,
         corners |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
     cell.backgroundConfiguration = nil;
-    cell.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
-        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
-            ? [UIColor colorWithWhite:0.14 alpha:0.94]
-            : [UIColor colorWithWhite:1.0 alpha:0.84];
-    }];
+    cell.backgroundColor = WCLiquidGlassSettingsCardColor();
     cell.contentView.backgroundColor = UIColor.clearColor;
     cell.layer.cornerRadius = (first || last) ? 24.0 : 0.0;
     cell.layer.cornerCurve = kCACornerCurveContinuous;
@@ -205,6 +238,523 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
     cell.accessoryType = UITableViewCellAccessoryNone;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 }
+
+static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance appearance) {
+    switch (appearance) {
+        case WCLiquidGlassGlassAppearanceBalanced:
+            return @"平衡";
+        case WCLiquidGlassGlassAppearanceTinted:
+            return @"色调";
+        default:
+            return @"通透";
+    }
+}
+
+@interface WCLiquidGlassGlassPreviewView : UIView
+
+@property(nonatomic, strong) UIView *menuPreview;
+
+- (void)setAppearance:(WCLiquidGlassGlassAppearance)appearance;
+
+@end
+
+
+@implementation WCLiquidGlassGlassPreviewView
+
+- (instancetype)init {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) {
+        return nil;
+    }
+
+    self.layer.cornerRadius = 28.0;
+    self.layer.cornerCurve = kCACornerCurveContinuous;
+    self.clipsToBounds = YES;
+    self.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithRed:0.07 green:0.10 blue:0.14 alpha:1.0]
+            : [UIColor colorWithRed:0.74 green:0.88 blue:0.97 alpha:1.0];
+    }];
+
+    UIView *sky = [[UIView alloc] init];
+    sky.translatesAutoresizingMaskIntoConstraints = NO;
+    sky.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithRed:0.12 green:0.22 blue:0.31 alpha:0.92]
+            : [UIColor colorWithRed:0.44 green:0.75 blue:0.96 alpha:0.88];
+    }];
+
+    UIView *building = [[UIView alloc] init];
+    building.translatesAutoresizingMaskIntoConstraints = NO;
+    building.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithRed:0.37 green:0.43 blue:0.49 alpha:0.86]
+            : [UIColor colorWithRed:0.94 green:0.90 blue:0.80 alpha:0.94];
+    }];
+    building.layer.cornerRadius = 22.0;
+    building.layer.cornerCurve = kCACornerCurveContinuous;
+    building.transform = CGAffineTransformMakeRotation(-0.08);
+
+    UIView *foliage = [[UIView alloc] init];
+    foliage.translatesAutoresizingMaskIntoConstraints = NO;
+    foliage.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithRed:0.10 green:0.26 blue:0.18 alpha:0.94]
+            : [UIColor colorWithRed:0.19 green:0.47 blue:0.31 alpha:0.86];
+    }];
+    foliage.layer.cornerRadius = 80.0;
+    foliage.layer.cornerCurve = kCACornerCurveContinuous;
+
+    UILabel *title = [[UILabel alloc] init];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    title.text = @"玻璃，呈现更多内容";
+    title.font = WCLiquidGlassFont(22.0, UIFontWeightSemibold);
+    title.adjustsFontForContentSizeCategory = YES;
+    title.textColor = UIColor.whiteColor;
+
+    UILabel *subtitle = [[UILabel alloc] init];
+    subtitle.translatesAutoresizingMaskIntoConstraints = NO;
+    subtitle.text = @"层次、色彩与光线会自然透过控件。";
+    subtitle.font = WCLiquidGlassFont(14.0, UIFontWeightRegular);
+    subtitle.adjustsFontForContentSizeCategory = YES;
+    subtitle.numberOfLines = 2;
+    subtitle.textColor = [UIColor.whiteColor colorWithAlphaComponent:0.86];
+
+    _menuPreview = WCLiquidGlassCreateStaticMenuPreview();
+    _menuPreview.translatesAutoresizingMaskIntoConstraints = NO;
+
+    [self addSubview:sky];
+    [self addSubview:building];
+    [self addSubview:foliage];
+    [self addSubview:title];
+    [self addSubview:subtitle];
+    [self addSubview:_menuPreview];
+    [NSLayoutConstraint activateConstraints:@[
+        [sky.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [sky.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [sky.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [sky.heightAnchor constraintEqualToAnchor:self.heightAnchor multiplier:0.58],
+        [building.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:24.0],
+        [building.topAnchor constraintEqualToAnchor:self.topAnchor constant:24.0],
+        [building.widthAnchor constraintEqualToAnchor:self.widthAnchor multiplier:0.62],
+        [building.heightAnchor constraintEqualToAnchor:self.heightAnchor multiplier:0.48],
+        [foliage.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:-42.0],
+        [foliage.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:54.0],
+        [foliage.widthAnchor constraintEqualToAnchor:self.widthAnchor multiplier:0.70],
+        [foliage.heightAnchor constraintEqualToAnchor:self.heightAnchor multiplier:0.40],
+        [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:22.0],
+        [title.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-22.0],
+        [title.topAnchor constraintEqualToAnchor:self.topAnchor constant:26.0],
+        [subtitle.leadingAnchor constraintEqualToAnchor:title.leadingAnchor],
+        [subtitle.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-22.0],
+        [subtitle.topAnchor constraintEqualToAnchor:title.bottomAnchor constant:5.0],
+        [_menuPreview.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [_menuPreview.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [_menuPreview.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [_menuPreview.bottomAnchor constraintEqualToAnchor:self.bottomAnchor]
+    ]];
+    return self;
+}
+
+- (void)setAppearance:(WCLiquidGlassGlassAppearance)appearance {
+    (void)appearance;
+    WCLiquidGlassRefreshStaticMenuPreview(self.menuPreview);
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self setAppearance:WCLiquidGlassPreferences.glassAppearance];
+    }
+}
+
+@end
+
+@interface WCLiquidGlassGlassEndpointIcon : UIView
+
+@property(nonatomic, assign) BOOL filled;
+@property(nonatomic, strong) CAShapeLayer *rectangleLayer;
+@property(nonatomic, strong) CAShapeLayer *ellipseLayer;
+
+- (instancetype)initWithFilled:(BOOL)filled;
+
+@end
+
+
+@implementation WCLiquidGlassGlassEndpointIcon
+
+- (instancetype)initWithFilled:(BOOL)filled {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) {
+        return nil;
+    }
+    _filled = filled;
+    self.opaque = NO;
+    _rectangleLayer = [CAShapeLayer layer];
+    _ellipseLayer = [CAShapeLayer layer];
+    [self.layer addSublayer:_rectangleLayer];
+    [self.layer addSublayer:_ellipseLayer];
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    UIColor *color = UIColor.secondaryLabelColor;
+    CGRect rectangle = CGRectMake(1.5, 2.0, CGRectGetWidth(self.bounds) - 11.0, CGRectGetHeight(self.bounds) - 10.0);
+    CGRect ellipse = CGRectMake(CGRectGetWidth(self.bounds) - 20.0,
+                                CGRectGetHeight(self.bounds) - 17.0,
+                                18.5,
+                                14.5);
+    self.rectangleLayer.path = [UIBezierPath bezierPathWithRoundedRect:rectangle cornerRadius:4.5].CGPath;
+    self.ellipseLayer.path = [UIBezierPath bezierPathWithOvalInRect:ellipse].CGPath;
+    if (self.filled) {
+        self.rectangleLayer.fillColor = [color colorWithAlphaComponent:0.82].CGColor;
+        self.rectangleLayer.strokeColor = UIColor.clearColor.CGColor;
+        self.ellipseLayer.fillColor = color.CGColor;
+        self.ellipseLayer.strokeColor = [UIColor colorWithWhite:1.0 alpha:0.86].CGColor;
+        self.ellipseLayer.lineWidth = 2.4;
+    } else {
+        self.rectangleLayer.fillColor = UIColor.clearColor.CGColor;
+        self.rectangleLayer.strokeColor = color.CGColor;
+        self.rectangleLayer.lineWidth = 2.4;
+        self.ellipseLayer.fillColor = UIColor.clearColor.CGColor;
+        self.ellipseLayer.strokeColor = color.CGColor;
+        self.ellipseLayer.lineWidth = 2.4;
+    }
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self setNeedsLayout];
+    }
+}
+
+@end
+
+@interface WCLiquidGlassGlassAppearanceControl : UIView
+
+@property(nonatomic, strong) UISlider *slider;
+@property(nonatomic, copy) NSArray<UIButton *> *stageButtons;
+@property(nonatomic, copy) NSArray<NSLayoutConstraint *> *stageCenterConstraints;
+@property(nonatomic, copy) NSArray<UIView *> *markers;
+@property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
+@property(nonatomic, copy) void (^appearanceChanged)(WCLiquidGlassGlassAppearance appearance);
+
+- (void)setAppearance:(WCLiquidGlassGlassAppearance)appearance animated:(BOOL)animated;
+
+@end
+
+
+@implementation WCLiquidGlassGlassAppearanceControl
+
+- (instancetype)init {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) {
+        return nil;
+    }
+
+    self.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithWhite:1.0 alpha:0.10]
+            : [UIColor colorWithWhite:1.0 alpha:0.76];
+    }];
+    self.layer.cornerRadius = 28.0;
+    self.layer.cornerCurve = kCACornerCurveContinuous;
+    _selectionFeedbackGenerator = [[UISelectionFeedbackGenerator alloc] init];
+    [_selectionFeedbackGenerator prepare];
+
+    WCLiquidGlassGlassEndpointIcon *clearIcon = [[WCLiquidGlassGlassEndpointIcon alloc] initWithFilled:NO];
+    clearIcon.translatesAutoresizingMaskIntoConstraints = NO;
+
+    WCLiquidGlassGlassEndpointIcon *tintedIcon = [[WCLiquidGlassGlassEndpointIcon alloc] initWithFilled:YES];
+    tintedIcon.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _slider = [[UISlider alloc] init];
+    _slider.translatesAutoresizingMaskIntoConstraints = NO;
+    _slider.minimumValue = WCLiquidGlassGlassAppearanceClear;
+    _slider.maximumValue = WCLiquidGlassGlassAppearanceTinted;
+    _slider.continuous = YES;
+    SEL sliderStyleSelector = NSSelectorFromString(@"setSliderStyle:");
+    if ([_slider respondsToSelector:sliderStyleSelector]) {
+        ((void (*)(id, SEL, NSInteger))objc_msgSend)(_slider, sliderStyleSelector, 0);
+    }
+    _slider.accessibilityLabel = @"玻璃效果";
+    _slider.accessibilityHint = @"向左更通透，向右增加色调和可读性";
+    [_slider addTarget:self action:@selector(wc_sliderChanged:) forControlEvents:UIControlEventValueChanged];
+    UITapGestureRecognizer *sliderTap = [[UITapGestureRecognizer alloc] initWithTarget:self
+                                                                                 action:@selector(wc_sliderTapped:)];
+    sliderTap.cancelsTouchesInView = NO;
+    [_slider addGestureRecognizer:sliderTap];
+    [self addSubview:_slider];
+
+    NSArray<NSString *> *titles = @[@"透明", @"平衡", @"色调"];
+    NSMutableArray<UIButton *> *stageButtons = [NSMutableArray arrayWithCapacity:titles.count];
+    NSMutableArray<NSLayoutConstraint *> *stageCenterConstraints = [NSMutableArray arrayWithCapacity:titles.count];
+    NSMutableArray<UIView *> *markers = [NSMutableArray arrayWithCapacity:titles.count];
+    for (NSInteger index = WCLiquidGlassGlassAppearanceClear;
+         index <= WCLiquidGlassGlassAppearanceTinted;
+         index += 1) {
+        UIButton *stageButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        stageButton.translatesAutoresizingMaskIntoConstraints = NO;
+        stageButton.tag = index;
+        stageButton.accessibilityLabel = titles[(NSUInteger)index];
+        stageButton.accessibilityHint = @"切换到此玻璃效果";
+        [stageButton addTarget:self action:@selector(wc_stageTapped:) forControlEvents:UIControlEventTouchUpInside];
+
+        UIView *marker = [[UIView alloc] init];
+        marker.translatesAutoresizingMaskIntoConstraints = NO;
+        marker.layer.cornerRadius = 2.0;
+
+        UILabel *label = [[UILabel alloc] init];
+        label.translatesAutoresizingMaskIntoConstraints = NO;
+        label.text = titles[(NSUInteger)index];
+        label.font = WCLiquidGlassFont(12.0, UIFontWeightMedium);
+        label.adjustsFontForContentSizeCategory = YES;
+        label.textColor = UIColor.secondaryLabelColor;
+        label.textAlignment = NSTextAlignmentCenter;
+        label.userInteractionEnabled = NO;
+
+        [stageButton addSubview:marker];
+        [stageButton addSubview:label];
+        [self addSubview:stageButton];
+        [NSLayoutConstraint activateConstraints:@[
+            [marker.widthAnchor constraintEqualToConstant:4.0],
+            [marker.heightAnchor constraintEqualToConstant:4.0],
+            [marker.centerXAnchor constraintEqualToAnchor:stageButton.centerXAnchor],
+            [marker.topAnchor constraintEqualToAnchor:stageButton.topAnchor],
+            [label.leadingAnchor constraintEqualToAnchor:stageButton.leadingAnchor],
+            [label.trailingAnchor constraintEqualToAnchor:stageButton.trailingAnchor],
+            [label.topAnchor constraintEqualToAnchor:marker.bottomAnchor constant:8.0],
+            [label.bottomAnchor constraintEqualToAnchor:stageButton.bottomAnchor]
+        ]];
+        NSLayoutConstraint *centerConstraint = [stageButton.centerXAnchor constraintEqualToAnchor:_slider.leadingAnchor];
+        [stageCenterConstraints addObject:centerConstraint];
+        [stageButtons addObject:stageButton];
+        [markers addObject:marker];
+        [NSLayoutConstraint activateConstraints:@[
+            [stageButton.widthAnchor constraintEqualToConstant:72.0],
+            [stageButton.topAnchor constraintEqualToAnchor:_slider.bottomAnchor constant:7.0],
+            centerConstraint
+        ]];
+    }
+    _stageButtons = stageButtons.copy;
+    _stageCenterConstraints = stageCenterConstraints.copy;
+    _markers = markers.copy;
+
+    [self addSubview:clearIcon];
+    [self addSubview:tintedIcon];
+    [NSLayoutConstraint activateConstraints:@[
+        [clearIcon.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:22.0],
+        [clearIcon.widthAnchor constraintEqualToConstant:34.0],
+        [clearIcon.heightAnchor constraintEqualToConstant:28.0],
+        [clearIcon.centerYAnchor constraintEqualToAnchor:_slider.centerYAnchor],
+        [_slider.leadingAnchor constraintEqualToAnchor:clearIcon.trailingAnchor constant:15.0],
+        [_slider.trailingAnchor constraintEqualToAnchor:tintedIcon.leadingAnchor constant:-15.0],
+        [_slider.topAnchor constraintEqualToAnchor:self.topAnchor constant:23.0],
+        [tintedIcon.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-22.0],
+        [tintedIcon.widthAnchor constraintEqualToConstant:34.0],
+        [tintedIcon.heightAnchor constraintEqualToConstant:28.0],
+        [tintedIcon.centerYAnchor constraintEqualToAnchor:_slider.centerYAnchor],
+        [self.bottomAnchor constraintEqualToAnchor:_slider.bottomAnchor constant:49.0]
+    ]];
+    [self setAppearance:WCLiquidGlassPreferences.glassAppearance animated:NO];
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGRect sliderBounds = self.slider.bounds;
+    CGRect trackRect = [self.slider trackRectForBounds:sliderBounds];
+    [self.stageCenterConstraints enumerateObjectsUsingBlock:^(NSLayoutConstraint *constraint, NSUInteger index, BOOL *stop) {
+        (void)stop;
+        constraint.constant = [self wc_thumbCenterXForAppearance:(WCLiquidGlassGlassAppearance)index
+                                                        trackRect:trackRect];
+    }];
+}
+
+- (CGFloat)wc_thumbCenterXForAppearance:(WCLiquidGlassGlassAppearance)appearance
+                               trackRect:(CGRect)trackRect {
+    CGRect thumbRect = [self.slider thumbRectForBounds:self.slider.bounds
+                                              trackRect:trackRect
+                                                  value:appearance];
+    return CGRectGetMidX(thumbRect);
+}
+
+- (void)wc_sliderChanged:(UISlider *)slider {
+    WCLiquidGlassGlassAppearance appearance = (WCLiquidGlassGlassAppearance)lroundf(slider.value);
+    [self wc_selectAppearance:appearance animated:YES];
+}
+
+- (void)wc_sliderTapped:(UITapGestureRecognizer *)gestureRecognizer {
+    CGPoint location = [gestureRecognizer locationInView:self.slider];
+    CGRect sliderBounds = self.slider.bounds;
+    CGRect trackRect = [self.slider trackRectForBounds:sliderBounds];
+    WCLiquidGlassGlassAppearance closestAppearance = WCLiquidGlassGlassAppearanceClear;
+    CGFloat closestDistance = CGFLOAT_MAX;
+    for (NSInteger index = WCLiquidGlassGlassAppearanceClear;
+         index <= WCLiquidGlassGlassAppearanceTinted;
+         index += 1) {
+        CGFloat distance = fabs(location.x - [self wc_thumbCenterXForAppearance:(WCLiquidGlassGlassAppearance)index
+                                                                        trackRect:trackRect]);
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestAppearance = (WCLiquidGlassGlassAppearance)index;
+        }
+    }
+    [self wc_selectAppearance:closestAppearance animated:YES];
+}
+
+- (void)wc_stageTapped:(UIButton *)stageButton {
+    [self wc_selectAppearance:(WCLiquidGlassGlassAppearance)stageButton.tag animated:YES];
+}
+
+- (void)wc_selectAppearance:(WCLiquidGlassGlassAppearance)appearance animated:(BOOL)animated {
+    [self setAppearance:appearance animated:animated];
+    if (WCLiquidGlassPreferences.glassAppearance == appearance) {
+        return;
+    }
+    [self.selectionFeedbackGenerator selectionChanged];
+    [self.selectionFeedbackGenerator prepare];
+    if (self.appearanceChanged) {
+        self.appearanceChanged(appearance);
+    }
+}
+
+- (void)setAppearance:(WCLiquidGlassGlassAppearance)appearance animated:(BOOL)animated {
+    [self.slider setValue:appearance animated:animated];
+    self.slider.accessibilityValue = WCLiquidGlassGlassAppearanceTitle(appearance);
+    [self.markers enumerateObjectsUsingBlock:^(UIView *marker, NSUInteger index, BOOL *stop) {
+        (void)stop;
+        marker.backgroundColor = index == (NSUInteger)appearance
+            ? UIColor.labelColor
+            : [UIColor.secondaryLabelColor colorWithAlphaComponent:0.38];
+    }];
+    [self.stageButtons enumerateObjectsUsingBlock:^(UIButton *stageButton, NSUInteger index, BOOL *stop) {
+        (void)stop;
+        stageButton.accessibilityTraits = index == (NSUInteger)appearance
+            ? UIAccessibilityTraitButton | UIAccessibilityTraitSelected
+            : UIAccessibilityTraitButton;
+    }];
+}
+
+@end
+
+@interface WCLiquidGlassGlassAppearanceController : UIViewController
+
+@property(nonatomic, strong) WCLiquidGlassGlassPreviewView *previewView;
+@property(nonatomic, strong) WCLiquidGlassGlassAppearanceControl *appearanceControl;
+@property(nonatomic, strong) UILabel *detailLabel;
+
+@end
+
+
+@implementation WCLiquidGlassGlassAppearanceController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"玻璃效果";
+    self.view.backgroundColor = WCLiquidGlassBackdropBaseColor();
+
+    WCLiquidGlassBackdropView *backdrop = [[WCLiquidGlassBackdropView alloc] init];
+    backdrop.translatesAutoresizingMaskIntoConstraints = NO;
+    UIScrollView *scrollView = [[UIScrollView alloc] init];
+    scrollView.translatesAutoresizingMaskIntoConstraints = NO;
+    scrollView.alwaysBounceVertical = YES;
+    UIView *contentView = [[UIView alloc] init];
+    contentView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UILabel *intro = [[UILabel alloc] init];
+    intro.translatesAutoresizingMaskIntoConstraints = NO;
+    intro.text = @"调节悬浮入口与环形菜单的玻璃层次";
+    intro.font = WCLiquidGlassFont(16.0, UIFontWeightRegular);
+    intro.adjustsFontForContentSizeCategory = YES;
+    intro.numberOfLines = 0;
+    intro.textColor = UIColor.secondaryLabelColor;
+
+    _previewView = [[WCLiquidGlassGlassPreviewView alloc] init];
+    _previewView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _appearanceControl = [[WCLiquidGlassGlassAppearanceControl alloc] init];
+    _appearanceControl.translatesAutoresizingMaskIntoConstraints = NO;
+    _appearanceControl.appearanceChanged = ^(WCLiquidGlassGlassAppearance appearance) {
+        [WCLiquidGlassPreferences setGlassAppearance:appearance];
+    };
+
+    _detailLabel = [[UILabel alloc] init];
+    _detailLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailLabel.font = WCLiquidGlassFont(14.0, UIFontWeightRegular);
+    _detailLabel.adjustsFontForContentSizeCategory = YES;
+    _detailLabel.numberOfLines = 0;
+    _detailLabel.textColor = UIColor.secondaryLabelColor;
+
+    [self.view addSubview:backdrop];
+    [self.view addSubview:scrollView];
+    [scrollView addSubview:contentView];
+    [contentView addSubview:intro];
+    [contentView addSubview:_previewView];
+    [contentView addSubview:_appearanceControl];
+    [contentView addSubview:_detailLabel];
+    [NSLayoutConstraint activateConstraints:@[
+        [backdrop.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [backdrop.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [backdrop.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [backdrop.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [scrollView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [scrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [contentView.leadingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.leadingAnchor],
+        [contentView.trailingAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.trailingAnchor],
+        [contentView.topAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.topAnchor],
+        [contentView.bottomAnchor constraintEqualToAnchor:scrollView.contentLayoutGuide.bottomAnchor],
+        [contentView.widthAnchor constraintEqualToAnchor:scrollView.frameLayoutGuide.widthAnchor],
+        [intro.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:24.0],
+        [intro.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-24.0],
+        [intro.topAnchor constraintEqualToAnchor:contentView.topAnchor constant:18.0],
+        [_previewView.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:20.0],
+        [_previewView.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-20.0],
+        [_previewView.topAnchor constraintEqualToAnchor:intro.bottomAnchor constant:18.0],
+        [_previewView.heightAnchor constraintEqualToConstant:270.0],
+        [_appearanceControl.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:20.0],
+        [_appearanceControl.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-20.0],
+        [_appearanceControl.topAnchor constraintEqualToAnchor:_previewView.bottomAnchor constant:28.0],
+        [_detailLabel.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:28.0],
+        [_detailLabel.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-28.0],
+        [_detailLabel.topAnchor constraintEqualToAnchor:_appearanceControl.bottomAnchor constant:16.0],
+        [_detailLabel.bottomAnchor constraintEqualToAnchor:contentView.bottomAnchor constant:-32.0]
+    ]];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(wc_preferencesChanged:)
+                                               name:WCLiquidGlassPreferencesDidChangeNotification
+                                             object:nil];
+    [self wc_updateAppearance];
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] ||
+        WCLiquidGlassHasDifferentContentSizeCategory(self.traitCollection, previousTraitCollection)) {
+        [self wc_updateAppearance];
+    }
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)wc_preferencesChanged:(NSNotification *)notification {
+    [self wc_updateAppearance];
+}
+
+- (void)wc_updateAppearance {
+    WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
+    [self.previewView setAppearance:appearance];
+    [self.appearanceControl setAppearance:appearance animated:NO];
+    self.detailLabel.text = @"“透明”更通透，“色调”可增加不透明度，提升内容和控制项对比度。";
+}
+
+@end
 
 @interface WCLiquidGlassButtonEditorController : UITableViewController
 
@@ -274,7 +824,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)wc_rebuildAvailableActions {
     NSSet<NSString *> *currentActions = [self wc_currentActionIdentifiers];
     NSArray<NSString *> *navigationActions = @[
-        WCLiquidGlassActionSettings, WCLiquidGlassActionPlugins,
+        WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
+        WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
     ];
     NSArray<NSString *> *chatActions = @[
@@ -300,7 +851,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSInteger)wc_availableSectionForAction:(NSString *)actionIdentifier {
     NSArray<NSString *> *navigationActions = @[
-        WCLiquidGlassActionSettings, WCLiquidGlassActionPlugins,
+        WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
+        WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
     ];
     return [navigationActions containsObject:actionIdentifier] ? 1 : 2;
@@ -818,7 +1370,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) {
-        return 3;
+        return 4;
     }
     return section == 3 ? 2 : 1;
 }
@@ -882,9 +1434,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassConfigureCell(cell, @"按钮大小", [self wc_sizeModeTitle],
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 0) {
+    } else if (indexPath.section == 0 && indexPath.row == 2) {
         WCLiquidGlassConfigureCell(cell, @"紧凑布局", [self wc_compactLayoutStyleTitle],
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 0) {
+        WCLiquidGlassConfigureCell(cell, @"玻璃效果", [self wc_glassAppearanceTitle],
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 1) {
         NSString *count = [NSString stringWithFormat:@"%lu 个槽位", (unsigned long)WCLiquidGlassPreferences.buttonItems.count];
@@ -926,6 +1482,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self wc_presentSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 0 && indexPath.row == 2) {
         [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
+    } else if (indexPath.section == 0 && indexPath.row == 3) {
+        [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
@@ -976,6 +1534,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         default:
             return @"双层月牙";
     }
+}
+
+- (NSString *)wc_glassAppearanceTitle {
+    return WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance);
 }
 
 - (void)wc_presentSizePickerFromView:(UIView *)sourceView {
@@ -1031,6 +1593,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (void)wc_preferencesChanged:(NSNotification *)notification {
+    self.tableView.tableHeaderView = [self wc_makeHeaderView];
     [self.tableView reloadData];
 }
 

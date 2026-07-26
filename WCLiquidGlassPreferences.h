@@ -7,6 +7,7 @@ extern NSNotificationName const WCLiquidGlassPreferencesDidChangeNotification;
 extern NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification;
 
 extern NSString *const WCLiquidGlassActionSettings;
+extern NSString *const WCLiquidGlassActionWCGlassSettings;
 extern NSString *const WCLiquidGlassActionPlugins;
 extern NSString *const WCLiquidGlassActionDoutuAssistant;
 extern NSString *const WCLiquidGlassActionMoments;
@@ -36,6 +37,12 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassCompactLayoutStyle) {
     WCLiquidGlassCompactLayoutStylePetalCluster
 };
 
+typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
+    WCLiquidGlassGlassAppearanceClear = 0,
+    WCLiquidGlassGlassAppearanceBalanced,
+    WCLiquidGlassGlassAppearanceTinted
+};
+
 @interface WCLiquidGlassPreferences : NSObject
 
 + (void)registerDefaults;
@@ -45,6 +52,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassCompactLayoutStyle) {
 + (void)setSizeMode:(NSInteger)sizeMode;
 + (WCLiquidGlassCompactLayoutStyle)compactLayoutStyle;
 + (void)setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)style;
++ (WCLiquidGlassGlassAppearance)glassAppearance;
++ (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (BOOL)anchorOnLeft;
 + (CGFloat)anchorYFraction;
 + (void)setAnchorOnLeft:(BOOL)anchorOnLeft yFraction:(CGFloat)yFraction;

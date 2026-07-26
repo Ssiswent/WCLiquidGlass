@@ -4,6 +4,7 @@ NSNotificationName const WCLiquidGlassPreferencesDidChangeNotification = @"WCLiq
 NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification = @"WCLiquidGlass.WCGlassCompatibilityChanged";
 
 NSString *const WCLiquidGlassActionSettings = @"wcliquidglass_settings";
+NSString *const WCLiquidGlassActionWCGlassSettings = @"wcglass_settings";
 NSString *const WCLiquidGlassActionPlugins = @"plugins";
 NSString *const WCLiquidGlassActionDoutuAssistant = @"doutu_assistant";
 NSString *const WCLiquidGlassActionMoments = @"moments";
@@ -29,6 +30,7 @@ NSString *const WCLiquidGlassActionFullInput = @"full_input";
 static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
 static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
+static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
 static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
@@ -99,6 +101,7 @@ NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void
     dispatch_once(&onceToken, ^{
         catalog = @[
             @{@"identifier": WCLiquidGlassActionSettings, @"title": @"WCLiquidGlass", @"symbol": @"circle.grid.cross.fill"},
+            @{@"identifier": WCLiquidGlassActionWCGlassSettings, @"title": @"WCGlass", @"symbol": @"drop.fill"},
             @{@"identifier": WCLiquidGlassActionPlugins, @"title": @"插件列表", @"symbol": @"shippingbox.fill"},
             @{@"identifier": WCLiquidGlassActionDoutuAssistant, @"title": @"斗图助手", @"symbol": @"face.smiling"},
             @{@"identifier": WCLiquidGlassActionMoments, @"title": @"朋友圈", @"symbol": @"circle.hexagongrid.fill"},
@@ -180,6 +183,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassEnabledKey: @NO,
         WCLiquidGlassSizeModeKey: @1,
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
+        WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
         WCLiquidGlassFullCrashReportsEnabledKey: @NO,
@@ -218,6 +222,23 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     NSInteger clampedStyle = MIN(WCLiquidGlassCompactLayoutStylePetalCluster,
                                  MAX(WCLiquidGlassCompactLayoutStyleDoubleCrescent, style));
     [NSUserDefaults.standardUserDefaults setInteger:clampedStyle forKey:WCLiquidGlassCompactLayoutStyleKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassGlassAppearance)glassAppearance {
+    NSInteger appearance = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassGlassAppearanceKey];
+    return MIN(WCLiquidGlassGlassAppearanceTinted,
+               MAX(WCLiquidGlassGlassAppearanceClear, appearance));
+}
+
++ (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance {
+    NSInteger clampedAppearance = MIN(WCLiquidGlassGlassAppearanceTinted,
+                                      MAX(WCLiquidGlassGlassAppearanceClear, appearance));
+    if ([self glassAppearance] == clampedAppearance) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedAppearance
+                                            forKey:WCLiquidGlassGlassAppearanceKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -295,6 +316,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassSizeModeKey];
     [defaults removeObjectForKey:WCLiquidGlassCompactLayoutStyleKey];
+    [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorOnLeftKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorYKey];
     [defaults removeObjectForKey:WCLiquidGlassFullCrashReportsEnabledKey];
