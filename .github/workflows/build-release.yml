@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "可选：填写后创建或更新此 tag 的 GitHub Release；留空则仅构建并上传 artifact"
+        description: "可选：填写 vX.Y.Z 后创建或更新 GitHub Release；必须与 control 中版本一致"
+        required: false
+        type: string
+      release_notes:
+        description: "可选：本次中文变更说明；留空时读取 CHANGELOG.md 对应版本"
         required: false
         type: string
   push:
@@ -39,7 +43,7 @@ jobs:
 
       - name: Build rootless arm64 deb
         shell: bash
-        run: make clean package FINALPACKAGE=1
+        run: make clean package FINALPACKAGE=1 WCLIQUIDGLASS_AUTO_BUMP=0
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -53,12 +57,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
         shell: bash
         run: |
           set -euo pipefail
           release_tag="${INPUT_RELEASE_TAG:-${GITHUB_REF_NAME}}"
+          package_version="$(sed -n 's/^Version:[[:space:]]*//p' control)"
+          expected_tag="v${package_version}"
+          if [ "$release_tag" != "$expected_tag" ]; then
+            echo "Release tag must be $expected_tag to match control version $package_version" >&2
+            exit 64
+          fi
+
+          release_notes_file="$(mktemp)"
+          trap 'rm -f "$release_notes_file"' EXIT
+          if [ -n "${INPUT_RELEASE_NOTES:-}" ]; then
+            printf '%s\n' "$INPUT_RELEASE_NOTES" > "$release_notes_file"
+          else
+            scripts/release-notes.sh "$package_version" > "$release_notes_file"
+          fi
+          if ! grep -q '[^[:space:]]' "$release_notes_file"; then
+            echo "Release notes are required. Add CHANGELOG.md entry for $package_version or provide release_notes." >&2
+            exit 65
+          fi
+
+          release_title="WCLiquidGlass $package_version"
           if gh release view "$release_tag" >/dev/null 2>&1; then
             gh release upload "$release_tag" packages/*.deb --clobber
+            gh release edit "$release_tag" --title "$release_title" --notes-file "$release_notes_file"
           else
-            gh release create "$release_tag" packages/*.deb --target "$GITHUB_SHA" --generate-notes
+            gh release create "$release_tag" packages/*.deb --target "$GITHUB_SHA" --title "$release_title" --notes-file "$release_notes_file"
           fi

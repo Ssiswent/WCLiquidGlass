@@ -31,6 +31,7 @@ static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
 static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
+static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
 static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
@@ -184,6 +185,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassSizeModeKey: @1,
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
+        WCLiquidGlassChatTimeGlassEnabledKey: @YES,
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
         WCLiquidGlassFullCrashReportsEnabledKey: @NO,
@@ -239,6 +241,15 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     }
     [NSUserDefaults.standardUserDefaults setInteger:clampedAppearance
                                             forKey:WCLiquidGlassGlassAppearanceKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)chatTimeGlassEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassChatTimeGlassEnabledKey];
+}
+
++ (void)setChatTimeGlassEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatTimeGlassEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -317,6 +328,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassSizeModeKey];
     [defaults removeObjectForKey:WCLiquidGlassCompactLayoutStyleKey];
     [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
+    [defaults removeObjectForKey:WCLiquidGlassChatTimeGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorOnLeftKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorYKey];
     [defaults removeObjectForKey:WCLiquidGlassFullCrashReportsEnabledKey];

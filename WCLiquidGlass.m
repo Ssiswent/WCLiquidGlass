@@ -307,7 +307,7 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
 
     UILabel *title = [[UILabel alloc] init];
     title.translatesAutoresizingMaskIntoConstraints = NO;
-    title.text = @"玻璃，呈现更多内容";
+    title.text = @"液态，呈现更多内容";
     title.font = WCLiquidGlassFont(22.0, UIFontWeightSemibold);
     title.adjustsFontForContentSizeCategory = YES;
     title.textColor = UIColor.whiteColor;
@@ -479,7 +479,7 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
     if ([_slider respondsToSelector:sliderStyleSelector]) {
         ((void (*)(id, SEL, NSInteger))objc_msgSend)(_slider, sliderStyleSelector, 0);
     }
-    _slider.accessibilityLabel = @"玻璃效果";
+    _slider.accessibilityLabel = @"液态效果";
     _slider.accessibilityHint = @"向左更通透，向右增加色调和可读性";
     [_slider addTarget:self action:@selector(wc_sliderChanged:) forControlEvents:UIControlEventValueChanged];
     UITapGestureRecognizer *sliderTap = [[UITapGestureRecognizer alloc] initWithTarget:self
@@ -499,7 +499,7 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
         stageButton.translatesAutoresizingMaskIntoConstraints = NO;
         stageButton.tag = index;
         stageButton.accessibilityLabel = titles[(NSUInteger)index];
-        stageButton.accessibilityHint = @"切换到此玻璃效果";
+        stageButton.accessibilityHint = @"切换到此液态效果";
         [stageButton addTarget:self action:@selector(wc_stageTapped:) forControlEvents:UIControlEventTouchUpInside];
 
         UIView *marker = [[UIView alloc] init];
@@ -653,7 +653,7 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"玻璃效果";
+    self.title = @"液态效果";
     self.view.backgroundColor = WCLiquidGlassBackdropBaseColor();
 
     WCLiquidGlassBackdropView *backdrop = [[WCLiquidGlassBackdropView alloc] init];
@@ -666,7 +666,7 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
 
     UILabel *intro = [[UILabel alloc] init];
     intro.translatesAutoresizingMaskIntoConstraints = NO;
-    intro.text = @"调节悬浮入口与环形菜单的玻璃层次";
+    intro.text = @"调节悬浮入口与环形菜单的液态层次";
     intro.font = WCLiquidGlassFont(16.0, UIFontWeightRegular);
     intro.adjustsFontForContentSizeCategory = YES;
     intro.numberOfLines = 0;
@@ -1225,6 +1225,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @interface WCLiquidGlass ()
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
+@property(nonatomic, strong) UISwitch *chatTimeGlassSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 
 @end
@@ -1341,7 +1342,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [card.topAnchor constraintEqualToAnchor:header.topAnchor constant:14.0],
         [card.bottomAnchor constraintEqualToAnchor:header.bottomAnchor constant:-12.0],
         [brandIcon.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor constant:22.0],
-        [brandIcon.topAnchor constraintEqualToAnchor:card.contentView.topAnchor constant:24.0],
+        [brandIcon.centerYAnchor constraintEqualToAnchor:card.contentView.centerYAnchor],
         [brandIcon.widthAnchor constraintEqualToConstant:58.0],
         [brandIcon.heightAnchor constraintEqualToConstant:58.0],
         [title.leadingAnchor constraintEqualToAnchor:brandIcon.trailingAnchor constant:15.0],
@@ -1372,7 +1373,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 0) {
         return 4;
     }
-    return section == 3 ? 2 : 1;
+    return section == 1 || section == 3 ? 2 : 1;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1389,7 +1390,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。");
+        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。");
@@ -1405,7 +1406,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。", 54.0);
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距。", 72.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
@@ -1439,14 +1440,22 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 0) {
-        WCLiquidGlassConfigureCell(cell, @"玻璃效果", [self wc_glassAppearanceTitle],
+        WCLiquidGlassConfigureCell(cell, @"液态效果", [self wc_glassAppearanceTitle],
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 1) {
+    } else if (indexPath.section == 1 && indexPath.row == 0) {
         NSString *count = [NSString stringWithFormat:@"%lu 个槽位", (unsigned long)WCLiquidGlassPreferences.buttonItems.count];
         WCLiquidGlassConfigureCell(cell, @"按钮与动作", count,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindActions, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 1) {
+        WCLiquidGlassConfigureCell(cell, @"聊天时间条液态", nil,
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
+        self.chatTimeGlassSwitch = [[UISwitch alloc] init];
+        self.chatTimeGlassSwitch.on = WCLiquidGlassPreferences.chatTimeGlassEnabled;
+        [self.chatTimeGlassSwitch addTarget:self action:@selector(wc_chatTimeGlassChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = self.chatTimeGlassSwitch;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 2) {
         WCLiquidGlassConfigureCell(cell, @"WCGlass iOS 27 兼容修复", @"修复带键盘返回时的闪退",
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompatibility, 32.0), UIColor.labelColor);
@@ -1484,7 +1493,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 0 && indexPath.row == 3) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
-    } else if (indexPath.section == 1) {
+    } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
@@ -1495,6 +1504,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_enabledChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setEnabled:sender.isOn];
+}
+
+- (void)wc_chatTimeGlassChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setChatTimeGlassEnabled:sender.isOn];
 }
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {

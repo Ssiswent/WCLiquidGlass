@@ -217,6 +217,10 @@ static UIVisualEffect *WCLiquidGlassMakeEffect(void) {
     return [UIBlurEffect effectWithStyle:style];
 }
 
+UIVisualEffect *WCLiquidGlassCurrentGlassEffect(void) {
+    return WCLiquidGlassMakeEffect();
+}
+
 static UIVisualEffect *WCLiquidGlassMakeContainerEffect(void) {
     Class containerClass = NSClassFromString(@"UIGlassContainerEffect");
     if (containerClass == Nil) {

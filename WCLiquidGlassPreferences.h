@@ -54,6 +54,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (void)setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)style;
 + (WCLiquidGlassGlassAppearance)glassAppearance;
 + (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
++ (BOOL)chatTimeGlassEnabled;
++ (void)setChatTimeGlassEnabled:(BOOL)enabled;
 + (BOOL)anchorOnLeft;
 + (CGFloat)anchorYFraction;
 + (void)setAnchorOnLeft:(BOOL)anchorOnLeft yFraction:(CGFloat)yFraction;

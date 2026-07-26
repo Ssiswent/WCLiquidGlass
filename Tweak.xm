@@ -5,6 +5,7 @@
 #import <objc/runtime.h>
 
 #import "WCLiquidGlass.h"
+#import "WCLiquidGlassChatTime.h"
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
@@ -434,6 +435,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
         dispatch_async(dispatch_get_main_queue(), ^{
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
+            WCLiquidGlassInstallChatTimeGlassHooks();
             [WCLiquidGlassManager.sharedManager start];
             WCLiquidGlassTryRegisterPlugin();
         });
