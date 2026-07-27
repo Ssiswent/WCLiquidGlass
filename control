@@ -1,6 +1,6 @@
 Package: com.ssiswent.wcliquidglass
 Name: WCLiquidGlass
-Version: 1.6.36
+Version: 1.6.37
 Architecture: iphoneos-arm64
 Description: Standalone Liquid Glass menu for WeChat.
 Maintainer: ssiswent

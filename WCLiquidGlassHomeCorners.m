@@ -290,8 +290,7 @@ static void WCLiquidGlassHomeCornerUpdateIndependentContentPadding(UITableViewCe
 static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
                                                        WCLiquidGlassHomeCornerCellState *state,
                                                        CGFloat cornerRadius,
-                                                       CACornerMask corners,
-                                                       BOOL trimsBottomOverlap) {
+                                                       CACornerMask corners) {
     UIVisualEffectView *overlay = state.glassOverlay;
     if (!overlay) {
         overlay = [[UIVisualEffectView alloc] initWithEffect:nil];
@@ -306,9 +305,6 @@ static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
         [cell.contentView insertSubview:overlay atIndex:0];
     }
     CGRect overlayFrame = cell.contentView.bounds;
-    if (trimsBottomOverlap && overlayFrame.size.height > 1.0) {
-        overlayFrame.size.height -= 1.0;
-    }
     if (!CGRectEqualToRect(overlay.frame, overlayFrame)) {
         overlay.frame = overlayFrame;
     }
@@ -351,17 +347,17 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     BOOL home = role == WCLiquidGlassHomeCornerTableRoleHome;
     CGFloat inset = home ? WCLiquidGlassPreferences.homeCornerInset : WCLiquidGlassPreferences.homeCornerInset;
     CGFloat radius = home ? WCLiquidGlassPreferences.homeCornerRadius : WCLiquidGlassPreferences.homeOtherTabsCornerRadius;
-    BOOL separate = home && WCLiquidGlassPreferences.homeSeparateCardsEnabled;
+    BOOL separate = home;
     NSInteger rows = [tableView numberOfRowsInSection:indexPath.section];
-    BOOL continuousHomeCard = home && !separate && rows > 1;
     CGFloat gap = separate ? WCLiquidGlassPreferences.homeCardGap : 0.0;
+    CGFloat layoutGap = separate ? MAX(0.0, gap - 4.0) : 0.0;
     CGRect targetFrame = baseFrame;
     targetFrame.origin.x = inset;
     targetFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
-    if (gap > 0.0) {
-        CGFloat halfGap = gap * 0.5;
+    if (layoutGap > 0.0) {
+        CGFloat halfGap = layoutGap * 0.5;
         targetFrame.origin.y += halfGap;
-        targetFrame.size.height = MAX(1.0, targetFrame.size.height - gap);
+        targetFrame.size.height = MAX(1.0, targetFrame.size.height - layoutGap);
     }
     targetFrame = CGRectIntegral(targetFrame);
     if (!CGRectEqualToRect(cell.frame, targetFrame)) {
@@ -395,16 +391,14 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     if (cell.layer.masksToBounds != (corners != 0)) {
         cell.layer.masksToBounds = corners != 0;
     }
-    WCLiquidGlassHomeCornerUpdateIndependentContentPadding(cell, state, separate, gap);
+    WCLiquidGlassHomeCornerUpdateIndependentContentPadding(cell, state, separate, layoutGap);
     if (WCLiquidGlassPreferences.homeLiquidBackgroundEnabled) {
         if (cell.backgroundView) {
             cell.backgroundView = nil;
         }
         if (cell.backgroundColor != state.appliedBackgroundColor ||
             state.appliedConfigurationEpoch != WCLiquidGlassHomeCornersConfigurationEpoch) {
-            UIColor *liquidColor = continuousHomeCard
-                ? UIColor.clearColor
-                : WCLiquidGlassHomeCornerLiquidColor();
+            UIColor *liquidColor = WCLiquidGlassHomeCornerLiquidColor();
             cell.backgroundColor = liquidColor;
             state.appliedBackgroundColor = liquidColor;
             state.appliedConfigurationEpoch = WCLiquidGlassHomeCornersConfigurationEpoch;
@@ -413,11 +407,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
             cell.contentView.backgroundColor = UIColor.clearColor;
         }
         WCLiquidGlassHomeCornerHideNativeSeparators(cell);
-        WCLiquidGlassHomeCornerUpdateGlassOverlay(cell,
-                                                  state,
-                                                  targetCornerRadius,
-                                                  corners,
-                                                  continuousHomeCard && !last);
+        WCLiquidGlassHomeCornerUpdateGlassOverlay(cell, state, targetCornerRadius, corners);
     } else {
         cell.backgroundView = state.originalBackgroundView;
         cell.backgroundColor = state.originalBackgroundColor;
@@ -820,7 +810,7 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 7 : 2;
+    return section == 0 ? 6 : 2;
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -835,7 +825,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return @"会话行两侧缩进并呈现圆角卡片。开启“液态背景”后，背景会跟随插件“液态效果”设置。";
+        return @"每条会话独立呈现圆角卡片。开启“液态背景”后，背景会跟随插件“液态效果”设置。";
     }
     return @"同步后，发现、通讯录和我页面会使用相同的卡片背景与左右缩进；圆角可单独调整。";
 }
@@ -933,13 +923,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                              maximum:52.0
                                                  tag:WCLiquidGlassHomeCornersControlTagHomeRadius
                                              enabled:active];
-            case 3:
-                return [self wc_switchCellWithTitle:@"每条独立圆角卡片"
-                                               detail:@"每条会话独立成圆角卡片，可设置会话间距"
-                                                  on:WCLiquidGlassPreferences.homeSeparateCardsEnabled
-                                              enabled:active
-                                              action:@selector(wc_separateCardsChanged:)];
-            case 4: {
+            case 3: {
                 UITableViewCell *cell = [self wc_cellWithTitle:@"会话间距"
                                                          detail:WCLiquidGlassHomeCornersDisplayValue(WCLiquidGlassPreferences.homeCardGap)
                                                         enabled:active
@@ -947,13 +931,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
                 return cell;
             }
-            case 5:
+            case 4:
                 return [self wc_switchCellWithTitle:@"置顶会话间隙"
-                                               detail:@"置顶与普通会话之间保留卡片间距；关闭则连续显示"
+                                               detail:@"置顶与普通会话之间保留额外卡片间距"
                                                   on:WCLiquidGlassPreferences.homePinnedCardGapEnabled
-                                              enabled:active && WCLiquidGlassPreferences.homeSeparateCardsEnabled
+                                              enabled:active
                                               action:@selector(wc_pinnedGapChanged:)];
-            case 6:
+            case 5:
                 return [self wc_switchCellWithTitle:@"液态背景"
                                                detail:@"卡片背景跟随“液态效果”"
                                                   on:WCLiquidGlassPreferences.homeLiquidBackgroundEnabled
@@ -988,7 +972,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self wc_presentValueInputWithTitle:@"主页圆角" value:WCLiquidGlassPreferences.homeCornerRadius minimum:0.0 maximum:52.0 setter:^(CGFloat value) {
             [WCLiquidGlassPreferences setHomeCornerRadius:value];
         }];
-    } else if (indexPath.section == 0 && indexPath.row == 4) {
+    } else if (indexPath.section == 0 && indexPath.row == 3) {
         [self wc_presentValueInputWithTitle:@"会话间距" value:WCLiquidGlassPreferences.homeCardGap minimum:0.0 maximum:24.0 setter:^(CGFloat value) {
             [WCLiquidGlassPreferences setHomeCardGap:value];
         }];
@@ -1001,10 +985,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_homeCornersChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setHomeCornersEnabled:sender.isOn];
-}
-
-- (void)wc_separateCardsChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setHomeSeparateCardsEnabled:sender.isOn];
 }
 
 - (void)wc_pinnedGapChanged:(UISwitch *)sender {

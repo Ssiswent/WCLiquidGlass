@@ -200,7 +200,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeCornersEnabledKey: @NO,
         WCLiquidGlassHomeCornerInsetKey: @16.0,
         WCLiquidGlassHomeCornerRadiusKey: @32.0,
-        WCLiquidGlassHomeSeparateCardsEnabledKey: @NO,
+        WCLiquidGlassHomeSeparateCardsEnabledKey: @YES,
         WCLiquidGlassHomeCardGapKey: @8.0,
         WCLiquidGlassHomePinnedCardGapEnabledKey: @YES,
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
@@ -301,11 +301,12 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 }
 
 + (BOOL)homeSeparateCardsEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
+    return YES;
 }
 
 + (void)setHomeSeparateCardsEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
+    (void)enabled;
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
