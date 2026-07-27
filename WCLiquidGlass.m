@@ -67,7 +67,7 @@ static UIColor *WCLiquidGlassBackdropBaseColor(void) {
 static UIVisualEffect *WCLiquidGlassGlassEffect(WCLiquidGlassGlassAppearance appearance);
 
 static UIVisualEffect *WCLiquidGlassSettingsEffect(void) {
-    return WCLiquidGlassGlassEffect(WCLiquidGlassPreferences.glassAppearance);
+    return WCLiquidGlassGlassEffect(WCLiquidGlassGlassAppearanceBalanced);
 }
 
 static UIVisualEffect *WCLiquidGlassGlassEffect(WCLiquidGlassGlassAppearance appearance) {
@@ -147,17 +147,8 @@ static void WCLiquidGlassConfigureTableBackground(UITableViewController *control
 }
 
 static UIColor *WCLiquidGlassSettingsCardColor(void) {
-    WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
     return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
         BOOL dark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
-        if (appearance == WCLiquidGlassGlassAppearanceClear) {
-            return dark ? [UIColor colorWithWhite:1.0 alpha:0.10]
-                        : [UIColor colorWithWhite:1.0 alpha:0.68];
-        }
-        if (appearance == WCLiquidGlassGlassAppearanceTinted) {
-            return dark ? [UIColor colorWithRed:0.72 green:0.82 blue:1.0 alpha:0.20]
-                        : [UIColor colorWithRed:0.95 green:0.97 blue:1.0 alpha:0.92];
-        }
         return dark ? [UIColor colorWithWhite:0.14 alpha:0.94]
                     : [UIColor colorWithWhite:1.0 alpha:0.84];
     }];

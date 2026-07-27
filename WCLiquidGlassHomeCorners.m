@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
+#import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassPreferences.h"
 
@@ -38,6 +39,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @property(nonatomic, assign) BOOL originalMasksToBounds;
 @property(nonatomic, strong, nullable) UIColor *appliedBackgroundColor;
 @property(nonatomic, assign) NSUInteger appliedConfigurationEpoch;
+@property(nonatomic, strong, nullable) UIVisualEffectView *glassOverlay;
+@property(nonatomic, assign) NSInteger appliedGlassState;
 @property(nonatomic, assign) BOOL captured;
 @end
 
@@ -46,6 +49,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 
 @interface WCLiquidGlassHomeCornerTableState : NSObject
 @property(nonatomic, assign) UITableViewCellSeparatorStyle originalSeparatorStyle;
+@property(nonatomic, strong, nullable) UIColor *originalSeparatorColor;
 @property(nonatomic, assign) BOOL captured;
 @end
 
@@ -57,6 +61,7 @@ static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(U
     if (!state) {
         state = [[WCLiquidGlassHomeCornerTableState alloc] init];
         state.originalSeparatorStyle = tableView.separatorStyle;
+        state.originalSeparatorColor = tableView.separatorColor;
         state.captured = YES;
         objc_setAssociatedObject(tableView,
                                  WCLiquidGlassHomeCornerTableStateKey,
@@ -71,12 +76,22 @@ static void WCLiquidGlassHomeCornerApplyTableStyle(UITableView *tableView) {
     if (tableView.separatorStyle != UITableViewCellSeparatorStyleNone) {
         tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     }
+    if (tableView.separatorColor != UIColor.clearColor) {
+        tableView.separatorColor = UIColor.clearColor;
+    }
+    for (UIView *subview in tableView.subviews) {
+        NSString *className = NSStringFromClass(subview.class).lowercaseString;
+        if ([className containsString:@"separator"] && !subview.hidden) {
+            subview.hidden = YES;
+        }
+    }
 }
 
 static void WCLiquidGlassHomeCornerRestoreTableStyle(UITableView *tableView) {
     WCLiquidGlassHomeCornerTableState *state = objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStateKey);
     if (state && state.captured) {
         tableView.separatorStyle = state.originalSeparatorStyle;
+        tableView.separatorColor = state.originalSeparatorColor;
     }
 }
 
@@ -174,6 +189,8 @@ static void WCLiquidGlassHomeCornerRestoreCell(UITableViewCell *cell) {
     state.hasAppliedFrame = NO;
     state.appliedBackgroundColor = nil;
     state.appliedConfigurationEpoch = 0;
+    [state.glassOverlay removeFromSuperview];
+    state.appliedGlassState = NSIntegerMin;
 }
 
 static UIColor *WCLiquidGlassHomeCornerLiquidColor(void) {
@@ -196,6 +213,55 @@ static UIColor *WCLiquidGlassHomeCornerLiquidColor(void) {
                     : [UIColor colorWithWhite:1.0 alpha:0.10];
         }
     }];
+}
+
+static void WCLiquidGlassHomeCornerHideNativeSeparators(UITableViewCell *cell) {
+    NSArray<UIView *> *containers = @[cell, cell.contentView];
+    for (UIView *container in containers) {
+        for (UIView *subview in container.subviews) {
+            NSString *className = NSStringFromClass(subview.class).lowercaseString;
+            if ([className containsString:@"separator"] && !subview.hidden) {
+                subview.hidden = YES;
+            }
+        }
+    }
+}
+
+static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
+                                                       WCLiquidGlassHomeCornerCellState *state,
+                                                       CGFloat cornerRadius,
+                                                       CACornerMask corners) {
+    UIVisualEffectView *overlay = state.glassOverlay;
+    if (!overlay) {
+        overlay = [[UIVisualEffectView alloc] initWithEffect:nil];
+        overlay.userInteractionEnabled = NO;
+        overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        overlay.layer.cornerCurve = kCACornerCurveContinuous;
+        state.glassOverlay = overlay;
+        state.appliedGlassState = NSIntegerMin;
+    }
+    if (overlay.superview != cell.contentView) {
+        [overlay removeFromSuperview];
+        [cell.contentView insertSubview:overlay atIndex:0];
+    }
+    if (!CGRectEqualToRect(overlay.frame, cell.contentView.bounds)) {
+        overlay.frame = cell.contentView.bounds;
+    }
+    if (overlay.layer.cornerRadius != cornerRadius) {
+        overlay.layer.cornerRadius = cornerRadius;
+    }
+    if (overlay.layer.maskedCorners != corners) {
+        overlay.layer.maskedCorners = corners;
+    }
+    if (!overlay.clipsToBounds) {
+        overlay.clipsToBounds = YES;
+    }
+    NSInteger glassState = WCLiquidGlassPreferences.glassAppearance * 10 + cell.traitCollection.userInterfaceStyle;
+    if (state.appliedGlassState != glassState) {
+        overlay.effect = WCLiquidGlassCurrentGlassEffect();
+        state.appliedGlassState = glassState;
+    }
+    overlay.hidden = NO;
 }
 
 static CGRect WCLiquidGlassHomeCornerBaseFrame(UITableViewCell *cell,
@@ -277,12 +343,16 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         if (cell.contentView.backgroundColor != UIColor.clearColor) {
             cell.contentView.backgroundColor = UIColor.clearColor;
         }
+        WCLiquidGlassHomeCornerHideNativeSeparators(cell);
+        WCLiquidGlassHomeCornerUpdateGlassOverlay(cell, state, targetCornerRadius, corners);
     } else {
         cell.backgroundView = state.originalBackgroundView;
         cell.backgroundColor = state.originalBackgroundColor;
         cell.contentView.backgroundColor = state.originalContentBackgroundColor;
         state.appliedBackgroundColor = nil;
         state.appliedConfigurationEpoch = 0;
+        [state.glassOverlay removeFromSuperview];
+        state.appliedGlassState = NSIntegerMin;
     }
 }
 
