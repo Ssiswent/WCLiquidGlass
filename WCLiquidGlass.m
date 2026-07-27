@@ -1,5 +1,6 @@
 #import "WCLiquidGlass.h"
 #import "WCLiquidGlassCrashLogger.h"
+#import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 
@@ -1381,7 +1382,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 0) {
         return 4;
     }
-    return section == 1 || section == 3 ? 2 : 1;
+    return section == 1 ? 3 : (section == 3 ? 2 : 1);
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1398,7 +1399,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距。");
+        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角可将会话列表改为独立卡片。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。");
@@ -1414,7 +1415,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距。", 72.0);
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角可将会话列表改为独立卡片。", 88.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
@@ -1456,7 +1457,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassConfigureCell(cell, @"按钮与动作", count,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindActions, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 1) {
+    } else if (indexPath.section == 1 && indexPath.row == 1) {
         WCLiquidGlassConfigureCell(cell, @"聊天时间条液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         self.chatTimeGlassSwitch = [[UISwitch alloc] init];
@@ -1464,6 +1465,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.chatTimeGlassSwitch addTarget:self action:@selector(wc_chatTimeGlassChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = self.chatTimeGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else if (indexPath.section == 1) {
+        WCLiquidGlassConfigureCell(cell, @"首页圆角", @"卡片化主页列表",
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 2) {
         WCLiquidGlassConfigureCell(cell, @"WCGlass iOS 27 兼容修复", @"修复带键盘返回时的闪退",
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompatibility, 32.0), UIColor.labelColor);
@@ -1503,6 +1508,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
+    } else if (indexPath.section == 1 && indexPath.row == 2) {
+        [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
     } else if (indexPath.section == 4) {
