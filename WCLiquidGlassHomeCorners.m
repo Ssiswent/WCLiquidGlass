@@ -506,7 +506,8 @@ static void WCLiquidGlassHomeCornerScheduleFinalApply(UITableView *tableView,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     __weak UITableView *weakTableView = tableView;
     __weak UITableViewCell *weakCell = cell;
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
         UITableView *strongTableView = weakTableView;
         UITableViewCell *strongCell = weakCell;
         if (!strongCell) {
