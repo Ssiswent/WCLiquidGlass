@@ -14,6 +14,7 @@ static const void *WCLiquidGlassHomeCornerTableStyledKey = &WCLiquidGlassHomeCor
 static const void *WCLiquidGlassHomeCornerTableRoleKey = &WCLiquidGlassHomeCornerTableRoleKey;
 static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHomeCornerTableRoleEpochKey;
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
+static const void *WCLiquidGlassHomeCornerFinalApplyPendingKey = &WCLiquidGlassHomeCornerFinalApplyPendingKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
@@ -486,6 +487,37 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     }
 }
 
+static void WCLiquidGlassHomeCornerScheduleFinalApply(UITableView *tableView,
+                                                       UITableViewCell *cell) {
+    if ([objc_getAssociatedObject(cell, WCLiquidGlassHomeCornerFinalApplyPendingKey) boolValue]) {
+        return;
+    }
+    objc_setAssociatedObject(cell,
+                             WCLiquidGlassHomeCornerFinalApplyPendingKey,
+                             @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    __weak UITableView *weakTableView = tableView;
+    __weak UITableViewCell *weakCell = cell;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UITableView *strongTableView = weakTableView;
+        UITableViewCell *strongCell = weakCell;
+        if (!strongCell) {
+            return;
+        }
+        objc_setAssociatedObject(strongCell,
+                                 WCLiquidGlassHomeCornerFinalApplyPendingKey,
+                                 @NO,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!strongTableView || ![strongTableView indexPathForCell:strongCell]) {
+            return;
+        }
+        WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(strongTableView);
+        if (role != WCLiquidGlassHomeCornerTableRoleNone) {
+            WCLiquidGlassHomeCornerApplyCell(strongTableView, strongCell, role);
+        }
+    });
+}
+
 static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
     WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(tableView);
     BOOL wasStyled = [objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStyledKey) boolValue];
@@ -504,6 +536,7 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
             WCLiquidGlassHomeCornerRestoreCell(cell);
         } else {
             WCLiquidGlassHomeCornerApplyCell(tableView, cell, role);
+            WCLiquidGlassHomeCornerScheduleFinalApply(tableView, cell);
         }
     }
     if (role == WCLiquidGlassHomeCornerTableRoleNone) {
@@ -538,6 +571,7 @@ static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL
     }
     WCLiquidGlassHomeCornerCellLayoutApplying = YES;
     WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
+    WCLiquidGlassHomeCornerScheduleFinalApply(tableView, self);
     WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 }
 
@@ -726,6 +760,16 @@ static void WCLiquidGlassHomeCornersAppendTableDiagnostics(NSMutableString *repo
      WCLiquidGlassHomeCornersDiagnosticColor(tableView.separatorColor, tableView.traitCollection),
      (unsigned long)tableView.visibleCells.count,
      (long)tableView.numberOfSections];
+    NSUInteger directSubviewLimit = MIN((NSUInteger)32, tableView.subviews.count);
+    for (NSUInteger subviewIndex = 0; subviewIndex < directSubviewLimit; subviewIndex += 1) {
+        UIView *subview = tableView.subviews[subviewIndex];
+        [report appendFormat:@"  TableSubview %lu class=%@ frame=%@ hidden=%@ alpha=%.2f\n",
+         (unsigned long)subviewIndex,
+         NSStringFromClass(subview.class),
+         WCLiquidGlassHomeCornersDiagnosticRect(subview.frame),
+         subview.hidden ? @"YES" : @"NO",
+         subview.alpha];
+    }
     NSUInteger cellLimit = MIN((NSUInteger)24, tableView.visibleCells.count);
     for (NSUInteger cellIndex = 0; cellIndex < cellLimit; cellIndex += 1) {
         UITableViewCell *cell = tableView.visibleCells[cellIndex];
