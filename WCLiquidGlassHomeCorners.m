@@ -34,6 +34,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @property(nonatomic, strong, nullable) UIView *originalBackgroundView;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, strong, nullable) UIColor *originalContentBackgroundColor;
+@property(nonatomic, assign) CGAffineTransform originalContentTransform;
 @property(nonatomic, assign) CGFloat originalCornerRadius;
 @property(nonatomic, assign) CACornerMask originalMaskedCorners;
 @property(nonatomic, assign) BOOL originalMasksToBounds;
@@ -50,10 +51,20 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @interface WCLiquidGlassHomeCornerTableState : NSObject
 @property(nonatomic, assign) UITableViewCellSeparatorStyle originalSeparatorStyle;
 @property(nonatomic, strong, nullable) UIColor *originalSeparatorColor;
+@property(nonatomic, strong) NSMutableDictionary<NSNumber *, id> *groupStates;
 @property(nonatomic, assign) BOOL captured;
 @end
 
 @implementation WCLiquidGlassHomeCornerTableState
+@end
+
+@interface WCLiquidGlassHomeCornerGroupState : NSObject
+@property(nonatomic, strong) UIVisualEffectView *glassView;
+@property(nonatomic, weak, nullable) UIView *hostView;
+@property(nonatomic, assign) NSInteger appliedGlassState;
+@end
+
+@implementation WCLiquidGlassHomeCornerGroupState
 @end
 
 static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(UITableView *tableView) {
@@ -62,6 +73,7 @@ static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(U
         state = [[WCLiquidGlassHomeCornerTableState alloc] init];
         state.originalSeparatorStyle = tableView.separatorStyle;
         state.originalSeparatorColor = tableView.separatorColor;
+        state.groupStates = [[NSMutableDictionary alloc] init];
         state.captured = YES;
         objc_setAssociatedObject(tableView,
                                  WCLiquidGlassHomeCornerTableStateKey,
@@ -164,6 +176,7 @@ static WCLiquidGlassHomeCornerCellState *WCLiquidGlassHomeCornerStateForCell(UIT
         state.originalBackgroundView = cell.backgroundView;
         state.originalBackgroundColor = cell.backgroundColor;
         state.originalContentBackgroundColor = cell.contentView.backgroundColor;
+        state.originalContentTransform = cell.contentView.transform;
         state.originalCornerRadius = cell.layer.cornerRadius;
         state.originalMaskedCorners = cell.layer.maskedCorners;
         state.originalMasksToBounds = cell.layer.masksToBounds;
@@ -183,6 +196,7 @@ static void WCLiquidGlassHomeCornerRestoreCell(UITableViewCell *cell) {
     cell.backgroundView = state.originalBackgroundView;
     cell.backgroundColor = state.originalBackgroundColor;
     cell.contentView.backgroundColor = state.originalContentBackgroundColor;
+    cell.contentView.transform = state.originalContentTransform;
     cell.layer.cornerRadius = state.originalCornerRadius;
     cell.layer.maskedCorners = state.originalMaskedCorners;
     cell.layer.masksToBounds = state.originalMasksToBounds;
@@ -225,6 +239,97 @@ static void WCLiquidGlassHomeCornerHideNativeSeparators(UITableViewCell *cell) {
             }
         }
     }
+}
+
+static WCLiquidGlassHomeCornerGroupState *WCLiquidGlassHomeCornerGroupStateForSection(UITableView *tableView,
+                                                                                       NSInteger section) {
+    WCLiquidGlassHomeCornerTableState *tableState = WCLiquidGlassHomeCornerStateForTable(tableView);
+    NSNumber *key = @(section);
+    WCLiquidGlassHomeCornerGroupState *state = tableState.groupStates[key];
+    if (!state) {
+        state = [[WCLiquidGlassHomeCornerGroupState alloc] init];
+        state.glassView = [[UIVisualEffectView alloc] initWithEffect:nil];
+        state.glassView.userInteractionEnabled = NO;
+        state.glassView.autoresizingMask = UIViewAutoresizingNone;
+        state.glassView.layer.cornerCurve = kCACornerCurveContinuous;
+        state.glassView.clipsToBounds = YES;
+        state.appliedGlassState = NSIntegerMin;
+        tableState.groupStates[key] = state;
+    }
+    return state;
+}
+
+static void WCLiquidGlassHomeCornerRemoveGroupOverlays(UITableView *tableView) {
+    WCLiquidGlassHomeCornerTableState *tableState = objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStateKey);
+    for (WCLiquidGlassHomeCornerGroupState *state in tableState.groupStates.allValues) {
+        [state.glassView removeFromSuperview];
+        state.hostView = nil;
+        state.appliedGlassState = NSIntegerMin;
+    }
+}
+
+static void WCLiquidGlassHomeCornerUpdateGroupGlass(UITableView *tableView,
+                                                     UITableViewCell *cell,
+                                                     NSIndexPath *indexPath,
+                                                     CGFloat inset,
+                                                     CGFloat cornerRadius) {
+    NSInteger rows = [tableView numberOfRowsInSection:indexPath.section];
+    if (rows <= 0) {
+        return;
+    }
+    UIView *hostView = cell.superview;
+    if (!hostView) {
+        return;
+    }
+    NSIndexPath *firstIndexPath = [NSIndexPath indexPathForRow:0 inSection:indexPath.section];
+    NSIndexPath *lastIndexPath = [NSIndexPath indexPathForRow:rows - 1 inSection:indexPath.section];
+    CGRect firstRect = [tableView rectForRowAtIndexPath:firstIndexPath];
+    CGRect lastRect = [tableView rectForRowAtIndexPath:lastIndexPath];
+    CGRect fullGroupRect = CGRectUnion(firstRect, lastRect);
+    fullGroupRect.origin.x = inset;
+    fullGroupRect.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
+    CGRect coverageRect = CGRectIntersection(fullGroupRect,
+                                              CGRectInset(tableView.bounds, 0.0, -180.0));
+    if (CGRectIsNull(coverageRect) || CGRectIsEmpty(coverageRect)) {
+        return;
+    }
+    CGRect groupRect = CGRectIntegral([tableView convertRect:coverageRect toView:hostView]);
+    WCLiquidGlassHomeCornerGroupState *state = WCLiquidGlassHomeCornerGroupStateForSection(tableView, indexPath.section);
+    UIVisualEffectView *glassView = state.glassView;
+    if (state.hostView != hostView || glassView.superview != hostView) {
+        [glassView removeFromSuperview];
+        NSUInteger insertIndex = hostView.subviews.count;
+        for (NSUInteger index = 0; index < hostView.subviews.count; index += 1) {
+            if ([hostView.subviews[index] isKindOfClass:UITableViewCell.class]) {
+                insertIndex = index;
+                break;
+            }
+        }
+        [hostView insertSubview:glassView atIndex:insertIndex];
+        state.hostView = hostView;
+    }
+    if (!CGRectEqualToRect(glassView.frame, groupRect)) {
+        glassView.frame = groupRect;
+    }
+    if (glassView.layer.cornerRadius != cornerRadius) {
+        glassView.layer.cornerRadius = cornerRadius;
+    }
+    CACornerMask corners = 0;
+    if (CGRectGetMinY(coverageRect) <= CGRectGetMinY(fullGroupRect) + 0.5) {
+        corners |= kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    }
+    if (CGRectGetMaxY(coverageRect) >= CGRectGetMaxY(fullGroupRect) - 0.5) {
+        corners |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    }
+    if (glassView.layer.maskedCorners != corners) {
+        glassView.layer.maskedCorners = corners;
+    }
+    NSInteger glassState = WCLiquidGlassPreferences.glassAppearance * 10 + tableView.traitCollection.userInterfaceStyle;
+    if (state.appliedGlassState != glassState) {
+        glassView.effect = WCLiquidGlassCurrentGlassEffect();
+        state.appliedGlassState = glassState;
+    }
+    glassView.hidden = NO;
 }
 
 static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
@@ -287,6 +392,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     CGFloat inset = home ? WCLiquidGlassPreferences.homeCornerInset : WCLiquidGlassPreferences.homeCornerInset;
     CGFloat radius = home ? WCLiquidGlassPreferences.homeCornerRadius : WCLiquidGlassPreferences.homeOtherTabsCornerRadius;
     BOOL separate = home && WCLiquidGlassPreferences.homeSeparateCardsEnabled;
+    BOOL continuousHomeCard = home && !separate;
     CGFloat gap = separate ? WCLiquidGlassPreferences.homeCardGap : 0.0;
     CGRect targetFrame = baseFrame;
     targetFrame.origin.x = inset;
@@ -316,6 +422,9 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     } else if (last) {
         corners = kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
+    if (continuousHomeCard && WCLiquidGlassPreferences.homeLiquidBackgroundEnabled) {
+        corners = 0;
+    }
     CGFloat targetCornerRadius = corners ? radius : 0.0;
     if (cell.layer.cornerRadius != targetCornerRadius) {
         cell.layer.cornerRadius = targetCornerRadius;
@@ -333,19 +442,40 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         if (cell.backgroundView) {
             cell.backgroundView = nil;
         }
-        if (cell.backgroundColor != state.appliedBackgroundColor ||
-            state.appliedConfigurationEpoch != WCLiquidGlassHomeCornersConfigurationEpoch) {
-            UIColor *liquidColor = WCLiquidGlassHomeCornerLiquidColor();
-            cell.backgroundColor = liquidColor;
-            state.appliedBackgroundColor = liquidColor;
-            state.appliedConfigurationEpoch = WCLiquidGlassHomeCornersConfigurationEpoch;
-        }
         if (cell.contentView.backgroundColor != UIColor.clearColor) {
             cell.contentView.backgroundColor = UIColor.clearColor;
         }
         WCLiquidGlassHomeCornerHideNativeSeparators(cell);
-        WCLiquidGlassHomeCornerUpdateGlassOverlay(cell, state, targetCornerRadius, corners);
+        if (continuousHomeCard) {
+            cell.backgroundColor = UIColor.clearColor;
+            state.appliedBackgroundColor = UIColor.clearColor;
+            state.appliedConfigurationEpoch = WCLiquidGlassHomeCornersConfigurationEpoch;
+            if (!CGAffineTransformEqualToTransform(cell.contentView.transform, state.originalContentTransform)) {
+                cell.contentView.transform = state.originalContentTransform;
+            }
+            [state.glassOverlay removeFromSuperview];
+            state.appliedGlassState = NSIntegerMin;
+            WCLiquidGlassHomeCornerUpdateGroupGlass(tableView, cell, indexPath, inset, radius);
+        } else {
+            WCLiquidGlassHomeCornerRemoveGroupOverlays(tableView);
+            if (cell.backgroundColor != state.appliedBackgroundColor ||
+                state.appliedConfigurationEpoch != WCLiquidGlassHomeCornersConfigurationEpoch) {
+                UIColor *liquidColor = WCLiquidGlassHomeCornerLiquidColor();
+                cell.backgroundColor = liquidColor;
+                state.appliedBackgroundColor = liquidColor;
+                state.appliedConfigurationEpoch = WCLiquidGlassHomeCornersConfigurationEpoch;
+            }
+            CGAffineTransform contentTransform = state.originalContentTransform;
+            if (separate && gap > 0.0) {
+                contentTransform = CGAffineTransformTranslate(contentTransform, 0.0, -gap * 0.5);
+            }
+            if (!CGAffineTransformEqualToTransform(cell.contentView.transform, contentTransform)) {
+                cell.contentView.transform = contentTransform;
+            }
+            WCLiquidGlassHomeCornerUpdateGlassOverlay(cell, state, targetCornerRadius, corners);
+        }
     } else {
+        WCLiquidGlassHomeCornerRemoveGroupOverlays(tableView);
         cell.backgroundView = state.originalBackgroundView;
         cell.backgroundColor = state.originalBackgroundColor;
         cell.contentView.backgroundColor = state.originalContentBackgroundColor;
