@@ -16,9 +16,13 @@ static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHome
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static const void *WCLiquidGlassHomeCornerSubviewStateKey = &WCLiquidGlassHomeCornerSubviewStateKey;
 static void (*WCLiquidGlassOriginalHomeCornersTableLayoutSubviews)(UITableView *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornersHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornersHookInstallAttempts = 0;
+static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
+static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
+static __thread BOOL WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
@@ -361,11 +365,11 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
             state.cardBackground.userInteractionEnabled = NO;
         }
         [state.cardBackground wc_updateAppearance];
-        state.cardBackground.frame = cell.contentView.bounds;
+        state.cardBackground.frame = cell.bounds;
         state.cardBackground.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        if (state.cardBackground.superview != cell.contentView) {
+        if (cell.backgroundView != state.cardBackground) {
             [state.cardBackground removeFromSuperview];
-            [cell.contentView insertSubview:state.cardBackground atIndex:0];
+            cell.backgroundView = state.cardBackground;
         }
     } else {
         [state.cardBackground removeFromSuperview];
@@ -412,6 +416,32 @@ static void WCLiquidGlassHomeCornersTableLayoutSubviews(UITableView *self, SEL s
     WCLiquidGlassHomeCornersUpdateTable(self);
 }
 
+static UITableView *WCLiquidGlassHomeCornersTableForCell(UITableViewCell *cell) {
+    for (UIView *view = cell.superview; view; view = view.superview) {
+        if ([view isKindOfClass:UITableView.class]) {
+            return (UITableView *)view;
+        }
+    }
+    return nil;
+}
+
+static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL selector) {
+    if (WCLiquidGlassOriginalHomeCornerCellLayoutSubviews) {
+        WCLiquidGlassOriginalHomeCornerCellLayoutSubviews(self, selector);
+    }
+    if (WCLiquidGlassHomeCornerCellLayoutApplying) {
+        return;
+    }
+    UITableView *tableView = WCLiquidGlassHomeCornersTableForCell(self);
+    WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(tableView);
+    if (role == WCLiquidGlassHomeCornerTableRoleNone) {
+        return;
+    }
+    WCLiquidGlassHomeCornerCellLayoutApplying = YES;
+    WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
+    WCLiquidGlassHomeCornerCellLayoutApplying = NO;
+}
+
 static void WCLiquidGlassHomeCornersRefreshTablesInView(UIView *view, NSUInteger depth) {
     if (!view || depth > 24) {
         return;
@@ -435,8 +465,34 @@ static void WCLiquidGlassHomeCornersRefreshVisibleTables(void) {
     }
 }
 
+static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
+    if (WCLiquidGlassOriginalHomeCornerCellLayoutSubviews) {
+        return;
+    }
+    Class cellClass = NSClassFromString(@"NewMainFrameCell");
+    Method layoutMethod = cellClass ? class_getInstanceMethod(cellClass, @selector(layoutSubviews)) : NULL;
+    if (!layoutMethod) {
+        if (!WCLiquidGlassHomeCornerCellHookRetryScheduled &&
+            WCLiquidGlassHomeCornerCellHookInstallAttempts < 10) {
+            WCLiquidGlassHomeCornerCellHookRetryScheduled = YES;
+            WCLiquidGlassHomeCornerCellHookInstallAttempts += 1;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
+                WCLiquidGlassInstallHomeCornerCellLayoutHook();
+            });
+        }
+        return;
+    }
+    MSHookMessageEx(cellClass,
+                    @selector(layoutSubviews),
+                    (IMP)&WCLiquidGlassHomeCornerCellLayoutSubviews,
+                    (IMP *)&WCLiquidGlassOriginalHomeCornerCellLayoutSubviews);
+}
+
 void WCLiquidGlassInstallHomeCornersHooks(void) {
     if (WCLiquidGlassHomeCornersHooksInstalled) {
+        WCLiquidGlassInstallHomeCornerCellLayoutHook();
         return;
     }
     Method layoutMethod = class_getInstanceMethod(UITableView.class, @selector(layoutSubviews));
@@ -458,6 +514,7 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
                     (IMP *)&WCLiquidGlassOriginalHomeCornersTableLayoutSubviews);
     WCLiquidGlassHomeCornersHooksInstalled = WCLiquidGlassOriginalHomeCornersTableLayoutSubviews != NULL;
     if (WCLiquidGlassHomeCornersHooksInstalled) {
+        WCLiquidGlassInstallHomeCornerCellLayoutHook();
         [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                           object:nil
                                                            queue:NSOperationQueue.mainQueue
