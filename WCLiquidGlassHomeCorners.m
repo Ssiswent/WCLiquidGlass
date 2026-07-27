@@ -16,13 +16,10 @@ static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHome
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static const void *WCLiquidGlassHomeCornerFinalApplyPendingKey = &WCLiquidGlassHomeCornerFinalApplyPendingKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
-static void (*WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor)(UIView *, SEL, UIColor *) = NULL;
-static void (*WCLiquidGlassUIViewSetBackgroundColor)(UIView *, SEL, UIColor *) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
 static __thread BOOL WCLiquidGlassHomeCornerCellLayoutApplying = NO;
-static __thread BOOL WCLiquidGlassHomeCornerBackgroundColorApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
@@ -529,37 +526,6 @@ static void WCLiquidGlassHomeCornerScheduleFinalApply(UITableView *tableView,
     });
 }
 
-static void WCLiquidGlassHomeCornerCellSetBackgroundColor(UIView *self,
-                                                           SEL selector,
-                                                           UIColor *color) {
-    if (WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
-        WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor(self, selector, color);
-    }
-    if (WCLiquidGlassHomeCornerBackgroundColorApplying ||
-        ![self isKindOfClass:UITableViewCell.class]) {
-        return;
-    }
-    UITableViewCell *cell = (UITableViewCell *)self;
-    UITableView *tableView = WCLiquidGlassHomeCornersTableForCell(cell);
-    WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(tableView);
-    if (role == WCLiquidGlassHomeCornerTableRoleNone ||
-        !WCLiquidGlassPreferences.homeLiquidBackgroundEnabled) {
-        return;
-    }
-    BOOL continuousHomeCard = role == WCLiquidGlassHomeCornerTableRoleHome &&
-        !WCLiquidGlassPreferences.homeSeparateCardsEnabled;
-    UIColor *targetColor = continuousHomeCard
-        ? UIColor.clearColor
-        : WCLiquidGlassHomeCornerLiquidColor();
-    WCLiquidGlassHomeCornerBackgroundColorApplying = YES;
-    if (WCLiquidGlassUIViewSetBackgroundColor) {
-        WCLiquidGlassUIViewSetBackgroundColor(self, selector, targetColor);
-    } else if (WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
-        WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor(self, selector, targetColor);
-    }
-    WCLiquidGlassHomeCornerBackgroundColorApplying = NO;
-}
-
 static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
     WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(tableView);
     BOOL wasStyled = [objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStyledKey) boolValue];
@@ -641,8 +607,7 @@ static void WCLiquidGlassHomeCornersRefreshVisibleTables(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
-    if (WCLiquidGlassOriginalHomeCornerCellLayoutSubviews &&
-        WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
+    if (WCLiquidGlassOriginalHomeCornerCellLayoutSubviews) {
         return;
     }
     Class cellClass = NSClassFromString(@"NewMainFrameCell");
@@ -665,17 +630,6 @@ static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
                         @selector(layoutSubviews),
                         (IMP)&WCLiquidGlassHomeCornerCellLayoutSubviews,
                         (IMP *)&WCLiquidGlassOriginalHomeCornerCellLayoutSubviews);
-    }
-    Method backgroundColorMethod = class_getInstanceMethod(cellClass, @selector(setBackgroundColor:));
-    if (backgroundColorMethod && !WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
-        MSHookMessageEx(cellClass,
-                        @selector(setBackgroundColor:),
-                        (IMP)&WCLiquidGlassHomeCornerCellSetBackgroundColor,
-                        (IMP *)&WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor);
-        Method viewBackgroundColorMethod = class_getInstanceMethod(UIView.class, @selector(setBackgroundColor:));
-        WCLiquidGlassUIViewSetBackgroundColor = viewBackgroundColorMethod
-            ? (void (*)(UIView *, SEL, UIColor *))method_getImplementation(viewBackgroundColorMethod)
-            : NULL;
     }
 }
 
