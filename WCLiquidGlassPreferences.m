@@ -40,8 +40,6 @@ static NSString *const WCLiquidGlassHomeSeparateCardsEnabledKey = @"WCLiquidGlas
 static NSString *const WCLiquidGlassHomeCardGapKey = @"WCLiquidGlass.HomeCorners.Gap";
 static NSString *const WCLiquidGlassHomePinnedCardGapEnabledKey = @"WCLiquidGlass.HomeCorners.PinnedGapEnabled";
 static NSString *const WCLiquidGlassHomeLiquidBackgroundEnabledKey = @"WCLiquidGlass.HomeCorners.LiquidBackgroundEnabled";
-static NSString *const WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey = @"WCLiquidGlass.HomeCorners.SyncOtherTabsEnabled";
-static NSString *const WCLiquidGlassHomeOtherTabsCornerRadiusKey = @"WCLiquidGlass.HomeCorners.OtherTabsRadius";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
 static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
@@ -204,8 +202,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeCardGapKey: @8.0,
         WCLiquidGlassHomePinnedCardGapEnabledKey: @YES,
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
-        WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey: @NO,
-        WCLiquidGlassHomeOtherTabsCornerRadiusKey: @26.0,
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
         WCLiquidGlassFullCrashReportsEnabledKey: @NO,
@@ -337,24 +333,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
-+ (BOOL)homeCornersSyncOtherTabsEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey];
-}
-
-+ (void)setHomeCornersSyncOtherTabsEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (CGFloat)homeOtherTabsCornerRadius {
-    return MIN(52.0, MAX(0.0, [NSUserDefaults.standardUserDefaults doubleForKey:WCLiquidGlassHomeOtherTabsCornerRadiusKey]));
-}
-
-+ (void)setHomeOtherTabsCornerRadius:(CGFloat)radius {
-    [NSUserDefaults.standardUserDefaults setDouble:MIN(52.0, MAX(0.0, radius)) forKey:WCLiquidGlassHomeOtherTabsCornerRadiusKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
 + (BOOL)anchorOnLeft {
     return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassAnchorOnLeftKey];
 }
@@ -437,8 +415,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassHomeCardGapKey];
     [defaults removeObjectForKey:WCLiquidGlassHomePinnedCardGapEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeOtherTabsCornerRadiusKey];
     [defaults removeObjectForKey:WCLiquidGlassChatTimeGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorOnLeftKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorYKey];

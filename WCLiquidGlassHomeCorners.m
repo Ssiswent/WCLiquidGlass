@@ -15,10 +15,12 @@ static const void *WCLiquidGlassHomeCornerTableRoleKey = &WCLiquidGlassHomeCorne
 static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHomeCornerTableRoleEpochKey;
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalHomeCornerTableLayoutSubviews)(UITableView *, SEL) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
 static __thread BOOL WCLiquidGlassHomeCornerCellLayoutApplying = NO;
+static __thread BOOL WCLiquidGlassHomeCornerTableLayoutApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
@@ -54,6 +56,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @interface WCLiquidGlassHomeCornerTableState : NSObject
 @property(nonatomic, assign) UITableViewCellSeparatorStyle originalSeparatorStyle;
 @property(nonatomic, strong, nullable) UIColor *originalSeparatorColor;
+@property(nonatomic, assign) CGSize baseContentSize;
+@property(nonatomic, assign) CGSize appliedContentSize;
+@property(nonatomic, assign) BOOL hasAppliedContentSize;
 @property(nonatomic, assign) BOOL captured;
 @end
 
@@ -96,6 +101,10 @@ static void WCLiquidGlassHomeCornerRestoreTableStyle(UITableView *tableView) {
     if (state && state.captured) {
         tableView.separatorStyle = state.originalSeparatorStyle;
         tableView.separatorColor = state.originalSeparatorColor;
+        if (state.hasAppliedContentSize && CGSizeEqualToSize(tableView.contentSize, state.appliedContentSize)) {
+            tableView.contentSize = state.baseContentSize;
+        }
+        state.hasAppliedContentSize = NO;
     }
 }
 
@@ -109,6 +118,45 @@ static BOOL WCLiquidGlassHomeCornerNameContains(NSString *name, NSArray<NSString
     return NO;
 }
 
+static BOOL WCLiquidGlassHomeCornerControllerOwnsTable(UIViewController *controller,
+                                                       UITableView *tableView,
+                                                       NSArray<NSString *> *tokens,
+                                                       NSUInteger depth) {
+    if (!controller || depth > 12) {
+        return NO;
+    }
+    NSString *name = NSStringFromClass(controller.class);
+    if (controller.isViewLoaded &&
+        WCLiquidGlassHomeCornerNameContains(name, tokens) &&
+        [tableView isDescendantOfView:controller.view]) {
+        return YES;
+    }
+    if (WCLiquidGlassHomeCornerControllerOwnsTable(controller.presentedViewController, tableView, tokens, depth + 1)) {
+        return YES;
+    }
+    for (UIViewController *child in controller.childViewControllers) {
+        if (WCLiquidGlassHomeCornerControllerOwnsTable(child, tableView, tokens, depth + 1)) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL WCLiquidGlassHomeCornerIsOtherMainTabTable(UITableView *tableView) {
+    NSArray<NSString *> *tokens = @[@"findfriendentryviewcontroller", @"contactsviewcontroller", @"moreviewcontroller"];
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) {
+            continue;
+        }
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            if (WCLiquidGlassHomeCornerControllerOwnsTable(window.rootViewController, tableView, tokens, 0)) {
+                return YES;
+            }
+        }
+    }
+    return NO;
+}
+
 static WCLiquidGlassHomeCornerTableRole WCLiquidGlassHomeCornerUncachedRoleForTable(UITableView *tableView) {
     if (!WCLiquidGlassPreferences.homeCornersEnabled) {
         return WCLiquidGlassHomeCornerTableRoleNone;
@@ -117,23 +165,7 @@ static WCLiquidGlassHomeCornerTableRole WCLiquidGlassHomeCornerUncachedRoleForTa
     if (homeTableClass && [tableView isKindOfClass:homeTableClass]) {
         return WCLiquidGlassHomeCornerTableRoleHome;
     }
-    if (!WCLiquidGlassPreferences.homeCornersSyncOtherTabsEnabled) {
-        return WCLiquidGlassHomeCornerTableRoleNone;
-    }
-    BOOL belongsToMainFrame = NO;
-    BOOL otherTabController = NO;
-    for (UIResponder *responder = tableView.nextResponder;
-         responder;
-         responder = responder.nextResponder) {
-        NSString *name = NSStringFromClass(responder.class);
-        if ([name isEqualToString:@"NewMainFrameViewController"]) {
-            belongsToMainFrame = YES;
-        }
-        if (WCLiquidGlassHomeCornerNameContains(name, @[@"findfriend", @"contact", @"more"])) {
-            otherTabController = YES;
-        }
-    }
-    return belongsToMainFrame && otherTabController
+    return WCLiquidGlassHomeCornerIsOtherMainTabTable(tableView)
         ? WCLiquidGlassHomeCornerTableRoleOtherTab
         : WCLiquidGlassHomeCornerTableRoleNone;
 }
@@ -334,6 +366,41 @@ static CGRect WCLiquidGlassHomeCornerBaseFrame(UITableViewCell *cell,
     return currentFrame;
 }
 
+static NSInteger WCLiquidGlassHomeCornerCardOrdinal(UITableView *tableView, NSIndexPath *indexPath) {
+    NSInteger ordinal = indexPath.row;
+    for (NSInteger section = 0; section < indexPath.section; section += 1) {
+        ordinal += [tableView numberOfRowsInSection:section];
+    }
+    return ordinal;
+}
+
+static NSInteger WCLiquidGlassHomeCornerCardCount(UITableView *tableView) {
+    NSInteger count = 0;
+    for (NSInteger section = 0; section < tableView.numberOfSections; section += 1) {
+        count += [tableView numberOfRowsInSection:section];
+    }
+    return count;
+}
+
+static void WCLiquidGlassHomeCornerUpdateTableContentSize(UITableView *tableView,
+                                                           WCLiquidGlassHomeCornerTableRole role) {
+    WCLiquidGlassHomeCornerTableState *state = WCLiquidGlassHomeCornerStateForTable(tableView);
+    CGSize currentSize = tableView.contentSize;
+    CGSize baseSize = state.hasAppliedContentSize && CGSizeEqualToSize(currentSize, state.appliedContentSize)
+        ? state.baseContentSize
+        : currentSize;
+    CGFloat gap = role == WCLiquidGlassHomeCornerTableRoleNone ? 0.0 : WCLiquidGlassPreferences.homeCardGap;
+    NSInteger cardCount = role == WCLiquidGlassHomeCornerTableRoleNone ? 0 : WCLiquidGlassHomeCornerCardCount(tableView);
+    CGFloat extraHeight = cardCount > 0 ? gap * (cardCount - 0.5) : 0.0;
+    CGSize targetSize = CGSizeMake(baseSize.width, baseSize.height + extraHeight);
+    if (!CGSizeEqualToSize(currentSize, targetSize)) {
+        tableView.contentSize = targetSize;
+    }
+    state.baseContentSize = baseSize;
+    state.appliedContentSize = targetSize;
+    state.hasAppliedContentSize = YES;
+}
+
 static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
                                              UITableViewCell *cell,
                                              WCLiquidGlassHomeCornerTableRole role) {
@@ -344,20 +411,17 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     WCLiquidGlassHomeCornerApplyTableStyle(tableView);
     WCLiquidGlassHomeCornerCellState *state = WCLiquidGlassHomeCornerStateForCell(cell);
     CGRect baseFrame = WCLiquidGlassHomeCornerBaseFrame(cell, state);
-    BOOL home = role == WCLiquidGlassHomeCornerTableRoleHome;
-    CGFloat inset = home ? WCLiquidGlassPreferences.homeCornerInset : WCLiquidGlassPreferences.homeCornerInset;
-    CGFloat radius = home ? WCLiquidGlassPreferences.homeCornerRadius : WCLiquidGlassPreferences.homeOtherTabsCornerRadius;
-    BOOL separate = home;
+    CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
+    CGFloat radius = WCLiquidGlassPreferences.homeCornerRadius;
+    BOOL separate = YES;
     NSInteger rows = [tableView numberOfRowsInSection:indexPath.section];
-    CGFloat gap = separate ? WCLiquidGlassPreferences.homeCardGap : 0.0;
-    CGFloat layoutGap = separate ? MAX(0.0, gap - 4.0) : 0.0;
+    CGFloat gap = WCLiquidGlassPreferences.homeCardGap;
     CGRect targetFrame = baseFrame;
     targetFrame.origin.x = inset;
     targetFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
-    if (layoutGap > 0.0) {
-        CGFloat halfGap = layoutGap * 0.5;
-        targetFrame.origin.y += halfGap;
-        targetFrame.size.height = MAX(1.0, targetFrame.size.height - layoutGap);
+    if (gap > 0.0) {
+        NSInteger ordinal = WCLiquidGlassHomeCornerCardOrdinal(tableView, indexPath);
+        targetFrame.origin.y += gap * (ordinal + 0.5);
     }
     targetFrame = CGRectIntegral(targetFrame);
     if (!CGRectEqualToRect(cell.frame, targetFrame)) {
@@ -391,7 +455,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     if (cell.layer.masksToBounds != (corners != 0)) {
         cell.layer.masksToBounds = corners != 0;
     }
-    WCLiquidGlassHomeCornerUpdateIndependentContentPadding(cell, state, separate, layoutGap);
+    WCLiquidGlassHomeCornerUpdateIndependentContentPadding(cell, state, NO, 0.0);
     if (WCLiquidGlassPreferences.homeLiquidBackgroundEnabled) {
         if (cell.backgroundView) {
             cell.backgroundView = nil;
@@ -439,6 +503,9 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
             WCLiquidGlassHomeCornerApplyCell(tableView, cell, role);
         }
     }
+    if (role != WCLiquidGlassHomeCornerTableRoleNone) {
+        WCLiquidGlassHomeCornerUpdateTableContentSize(tableView, role);
+    }
     if (role == WCLiquidGlassHomeCornerTableRoleNone) {
         WCLiquidGlassHomeCornerRestoreTableStyle(tableView);
         objc_setAssociatedObject(tableView,
@@ -472,6 +539,22 @@ static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL
     WCLiquidGlassHomeCornerCellLayoutApplying = YES;
     WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
     WCLiquidGlassHomeCornerCellLayoutApplying = NO;
+}
+
+static void WCLiquidGlassHomeCornerTableLayoutSubviews(UITableView *self, SEL selector) {
+    if (WCLiquidGlassOriginalHomeCornerTableLayoutSubviews) {
+        WCLiquidGlassOriginalHomeCornerTableLayoutSubviews(self, selector);
+    }
+    if (WCLiquidGlassHomeCornerTableLayoutApplying) {
+        return;
+    }
+    WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(self);
+    if (role == WCLiquidGlassHomeCornerTableRoleNone) {
+        return;
+    }
+    WCLiquidGlassHomeCornerTableLayoutApplying = YES;
+    WCLiquidGlassHomeCornersUpdateTable(self);
+    WCLiquidGlassHomeCornerTableLayoutApplying = NO;
 }
 
 static void WCLiquidGlassHomeCornersRefreshTablesInView(UIView *view, NSUInteger depth) {
@@ -522,13 +605,25 @@ static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
                     (IMP *)&WCLiquidGlassOriginalHomeCornerCellLayoutSubviews);
 }
 
+static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
+    if (WCLiquidGlassOriginalHomeCornerTableLayoutSubviews) {
+        return;
+    }
+    MSHookMessageEx(UITableView.class,
+                    @selector(layoutSubviews),
+                    (IMP)&WCLiquidGlassHomeCornerTableLayoutSubviews,
+                    (IMP *)&WCLiquidGlassOriginalHomeCornerTableLayoutSubviews);
+}
+
 void WCLiquidGlassInstallHomeCornersHooks(void) {
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
+        WCLiquidGlassInstallHomeCornerTableLayoutHook();
         return;
     }
     WCLiquidGlassHomeCornersHooksInstalled = YES;
     WCLiquidGlassInstallHomeCornerCellLayoutHook();
+    WCLiquidGlassInstallHomeCornerTableLayoutHook();
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                       object:nil
                                                        queue:NSOperationQueue.mainQueue
@@ -691,7 +786,7 @@ static void WCLiquidGlassHomeCornersAppendTableDiagnostics(NSMutableString *repo
 static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread(void) {
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"Privacy: this report intentionally excludes visible text, message content, contact names, and accessibility labels.\n\n"];
-    [report appendFormat:@"Home Corners Preferences\nenabled=%@ liquidBackground=%@ inset=%.1f homeRadius=%.1f separateCards=%@ gap=%.1f pinnedGap=%@ syncOtherTabs=%@ otherTabsRadius=%.1f glassAppearance=%ld\n",
+    [report appendFormat:@"Home Corners Preferences\nenabled=%@ liquidBackground=%@ inset=%.1f homeRadius=%.1f separateCards=%@ gap=%.1f pinnedGap=%@ appliesAllMainTabs=YES glassAppearance=%ld\n",
      WCLiquidGlassPreferences.homeCornersEnabled ? @"YES" : @"NO",
      WCLiquidGlassPreferences.homeLiquidBackgroundEnabled ? @"YES" : @"NO",
      WCLiquidGlassPreferences.homeCornerInset,
@@ -699,8 +794,6 @@ static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMain
      WCLiquidGlassPreferences.homeSeparateCardsEnabled ? @"YES" : @"NO",
      WCLiquidGlassPreferences.homeCardGap,
      WCLiquidGlassPreferences.homePinnedCardGapEnabled ? @"YES" : @"NO",
-     WCLiquidGlassPreferences.homeCornersSyncOtherTabsEnabled ? @"YES" : @"NO",
-     WCLiquidGlassPreferences.homeOtherTabsCornerRadius,
      (long)WCLiquidGlassPreferences.glassAppearance];
 
     NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
@@ -777,8 +870,7 @@ void WCLiquidGlassCaptureCurrentPageHierarchyDiagnostics(void) {
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornersControlTag) {
     WCLiquidGlassHomeCornersControlTagInset = 1,
-    WCLiquidGlassHomeCornersControlTagHomeRadius,
-    WCLiquidGlassHomeCornersControlTagOtherTabsRadius
+    WCLiquidGlassHomeCornersControlTagHomeRadius
 };
 
 static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
@@ -806,11 +898,11 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;
+    return 1;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 6 : 2;
+    return 6;
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -820,14 +912,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return section == 0 ? @"卡片化主页列表" : @"同步到发现/通讯录/我";
+    return @"卡片化首页列表";
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    if (section == 0) {
-        return @"每条会话独立呈现圆角卡片。开启“液态背景”后，背景会跟随插件“液态效果”设置。";
-    }
-    return @"同步后，发现、通讯录和我页面会使用相同的卡片背景与左右缩进；圆角可单独调整。";
+    return @"聊天、发现、通讯录和我页面统一使用相同的圆角、左右缩进、会话间距与液态背景设置。";
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -844,7 +933,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     NSString *text = [self tableView:tableView titleForFooterInSection:section];
-    return WCLiquidGlassSettingsFooterHeight(text, section == 0 ? 68.0 : 56.0);
+    return WCLiquidGlassSettingsFooterHeight(text, 68.0);
 }
 
 - (UITableViewCell *)wc_cellWithTitle:(NSString *)title
@@ -947,19 +1036,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 break;
         }
     }
-    if (indexPath.row == 0) {
-        return [self wc_switchCellWithTitle:@"同步到发现/通讯录/我"
-                                       detail:@"这三页也套用卡片样式（圆角可在下方单独调整）"
-                                          on:WCLiquidGlassPreferences.homeCornersSyncOtherTabsEnabled
-                                      enabled:active
-                                      action:@selector(wc_syncOtherTabsChanged:)];
-    }
-    return [self wc_sliderCellWithTitle:@"发现/通讯录/我 圆角"
-                                   value:WCLiquidGlassPreferences.homeOtherTabsCornerRadius
-                                 minimum:0.0
-                                 maximum:52.0
-                                     tag:WCLiquidGlassHomeCornersControlTagOtherTabsRadius
-                                 enabled:active && WCLiquidGlassPreferences.homeCornersSyncOtherTabsEnabled];
+    return [self wc_cellWithTitle:@"" detail:nil enabled:NO identifier:@"WCLiquidGlassHomeCornersUnusedCell"];
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -976,10 +1053,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self wc_presentValueInputWithTitle:@"会话间距" value:WCLiquidGlassPreferences.homeCardGap minimum:0.0 maximum:24.0 setter:^(CGFloat value) {
             [WCLiquidGlassPreferences setHomeCardGap:value];
         }];
-    } else if (indexPath.section == 1 && indexPath.row == 1) {
-        [self wc_presentValueInputWithTitle:@"发现/通讯录/我 圆角" value:WCLiquidGlassPreferences.homeOtherTabsCornerRadius minimum:0.0 maximum:52.0 setter:^(CGFloat value) {
-            [WCLiquidGlassPreferences setHomeOtherTabsCornerRadius:value];
-        }];
     }
 }
 
@@ -995,10 +1068,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [WCLiquidGlassPreferences setHomeLiquidBackgroundEnabled:sender.isOn];
 }
 
-- (void)wc_syncOtherTabsChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setHomeCornersSyncOtherTabsEnabled:sender.isOn];
-}
-
 - (void)wc_sliderChanged:(UISlider *)slider {
     CGFloat value = round(slider.value);
     [slider setValue:value animated:NO];
@@ -1008,9 +1077,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             break;
         case WCLiquidGlassHomeCornersControlTagHomeRadius:
             [WCLiquidGlassPreferences setHomeCornerRadius:value];
-            break;
-        case WCLiquidGlassHomeCornersControlTagOtherTabsRadius:
-            [WCLiquidGlassPreferences setHomeOtherTabsCornerRadius:value];
             break;
     }
 }
