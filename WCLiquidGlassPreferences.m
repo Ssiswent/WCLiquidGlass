@@ -39,7 +39,6 @@ static NSString *const WCLiquidGlassHomeSeparateCardsEnabledKey = @"WCLiquidGlas
 static NSString *const WCLiquidGlassHomeCardGapKey = @"WCLiquidGlass.HomeCorners.Gap";
 static NSString *const WCLiquidGlassHomePinnedCardGapEnabledKey = @"WCLiquidGlass.HomeCorners.PinnedGapEnabled";
 static NSString *const WCLiquidGlassHomeLiquidBackgroundEnabledKey = @"WCLiquidGlass.HomeCorners.LiquidBackgroundEnabled";
-static NSString *const WCLiquidGlassHomeCardBackgroundColorHexKey = @"WCLiquidGlass.HomeCorners.BackgroundColorHex";
 static NSString *const WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey = @"WCLiquidGlass.HomeCorners.SyncOtherTabsEnabled";
 static NSString *const WCLiquidGlassHomeOtherTabsCornerRadiusKey = @"WCLiquidGlass.HomeCorners.OtherTabsRadius";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
@@ -203,7 +202,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeCardGapKey: @8.0,
         WCLiquidGlassHomePinnedCardGapEnabledKey: @YES,
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
-        WCLiquidGlassHomeCardBackgroundColorHexKey: @"#FFFFFF",
         WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey: @NO,
         WCLiquidGlassHomeOtherTabsCornerRadiusKey: @26.0,
         WCLiquidGlassAnchorOnLeftKey: @NO,
@@ -336,16 +334,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
-+ (NSString *)homeCardBackgroundColorHex {
-    NSString *hex = [NSUserDefaults.standardUserDefaults stringForKey:WCLiquidGlassHomeCardBackgroundColorHexKey];
-    return [hex isKindOfClass:NSString.class] && hex.length > 0 ? hex.uppercaseString : @"#FFFFFF";
-}
-
-+ (void)setHomeCardBackgroundColorHex:(NSString *)hex {
-    [NSUserDefaults.standardUserDefaults setObject:hex.uppercaseString forKey:WCLiquidGlassHomeCardBackgroundColorHexKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
 + (BOOL)homeCornersSyncOtherTabsEnabled {
     return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey];
 }
@@ -446,7 +434,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassHomeCardGapKey];
     [defaults removeObjectForKey:WCLiquidGlassHomePinnedCardGapEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeCardBackgroundColorHexKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornersSyncOtherTabsEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeOtherTabsCornerRadiusKey];
     [defaults removeObjectForKey:WCLiquidGlassChatTimeGlassEnabledKey];

@@ -12,12 +12,13 @@ static const void *WCLiquidGlassHomeCornerStateKey = &WCLiquidGlassHomeCornerSta
 static const void *WCLiquidGlassHomeCornerTableStyledKey = &WCLiquidGlassHomeCornerTableStyledKey;
 static const void *WCLiquidGlassHomeCornerTableRoleKey = &WCLiquidGlassHomeCornerTableRoleKey;
 static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHomeCornerTableRoleEpochKey;
+static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
+static const void *WCLiquidGlassHomeCornerSubviewStateKey = &WCLiquidGlassHomeCornerSubviewStateKey;
 static void (*WCLiquidGlassOriginalHomeCornersTableLayoutSubviews)(UITableView *, SEL) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornersHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornersHookInstallAttempts = 0;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
-static UIColor *WCLiquidGlassHomeCornerColorFromHex(NSString *hex);
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
     WCLiquidGlassHomeCornerTableRoleNone = 0,
@@ -50,17 +51,14 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
     BOOL liquid = WCLiquidGlassPreferences.homeLiquidBackgroundEnabled;
     NSInteger state = liquid
         ? WCLiquidGlassPreferences.glassAppearance * 10 + self.traitCollection.userInterfaceStyle
-        : -((NSInteger)WCLiquidGlassPreferences.homeCardBackgroundColorHex.hash + 2);
+        : -1;
     if (self.visualState == state) {
         return;
     }
     self.visualState = state;
     self.effectView.hidden = !liquid;
     self.effectView.effect = liquid ? WCLiquidGlassCurrentGlassEffect() : nil;
-    UIColor *backgroundColor = liquid ? UIColor.clearColor : WCLiquidGlassHomeCornerColorFromHex(WCLiquidGlassPreferences.homeCardBackgroundColorHex);
-    if (![self.backgroundColor isEqual:backgroundColor]) {
-        self.backgroundColor = backgroundColor;
-    }
+    self.backgroundColor = UIColor.clearColor;
 }
 
 @end
@@ -82,18 +80,123 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @implementation WCLiquidGlassHomeCornerCellState
 @end
 
-static UIColor *WCLiquidGlassHomeCornerColorFromHex(NSString *hex) {
-    NSString *value = [[hex stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]
-        stringByReplacingOccurrencesOfString:@"#" withString:@""];
-    if (value.length != 6) {
-        return UIColor.systemBackgroundColor;
+@interface WCLiquidGlassHomeCornerTableState : NSObject
+@property(nonatomic, assign) UITableViewCellSeparatorStyle originalSeparatorStyle;
+@property(nonatomic, assign) BOOL captured;
+@end
+
+@implementation WCLiquidGlassHomeCornerTableState
+@end
+
+@interface WCLiquidGlassHomeCornerSubviewState : NSObject
+@property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
+@property(nonatomic, assign) BOOL originalHidden;
+@property(nonatomic, assign) BOOL captured;
+@end
+
+@implementation WCLiquidGlassHomeCornerSubviewState
+@end
+
+static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(UITableView *tableView) {
+    WCLiquidGlassHomeCornerTableState *state = objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStateKey);
+    if (!state) {
+        state = [[WCLiquidGlassHomeCornerTableState alloc] init];
+        state.originalSeparatorStyle = tableView.separatorStyle;
+        state.captured = YES;
+        objc_setAssociatedObject(tableView,
+                                 WCLiquidGlassHomeCornerTableStateKey,
+                                 state,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    unsigned int rgb = 0;
-    [[NSScanner scannerWithString:value] scanHexInt:&rgb];
-    return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0
-                           green:((rgb >> 8) & 0xFF) / 255.0
-                            blue:(rgb & 0xFF) / 255.0
-                           alpha:1.0];
+    return state;
+}
+
+static void WCLiquidGlassHomeCornerApplyTableStyle(UITableView *tableView) {
+    WCLiquidGlassHomeCornerStateForTable(tableView);
+    if (tableView.separatorStyle != UITableViewCellSeparatorStyleNone) {
+        tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    }
+}
+
+static void WCLiquidGlassHomeCornerRestoreTableStyle(UITableView *tableView) {
+    WCLiquidGlassHomeCornerTableState *state = objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStateKey);
+    if (state && state.captured) {
+        tableView.separatorStyle = state.originalSeparatorStyle;
+    }
+}
+
+static BOOL WCLiquidGlassHomeCornerColorIsOpaqueWhite(UIColor *color, UITraitCollection *traits) {
+    if (!color) {
+        return NO;
+    }
+    UIColor *resolvedColor = [color resolvedColorWithTraitCollection:traits];
+    CGFloat white = 0.0;
+    CGFloat alpha = 0.0;
+    if ([resolvedColor getWhite:&white alpha:&alpha]) {
+        return white > 0.86 && alpha > 0.68;
+    }
+    CGFloat red = 0.0;
+    CGFloat green = 0.0;
+    CGFloat blue = 0.0;
+    return [resolvedColor getRed:&red green:&green blue:&blue alpha:&alpha] &&
+        red > 0.86 && green > 0.86 && blue > 0.86 && alpha > 0.68;
+}
+
+static BOOL WCLiquidGlassHomeCornerShouldPreserveSubview(UIView *view) {
+    return [view isKindOfClass:UILabel.class] ||
+        [view isKindOfClass:UIImageView.class] ||
+        [view isKindOfClass:UIControl.class] ||
+        [view isKindOfClass:UIVisualEffectView.class];
+}
+
+static WCLiquidGlassHomeCornerSubviewState *WCLiquidGlassHomeCornerStateForSubview(UIView *view) {
+    WCLiquidGlassHomeCornerSubviewState *state = objc_getAssociatedObject(view, WCLiquidGlassHomeCornerSubviewStateKey);
+    if (!state) {
+        state = [[WCLiquidGlassHomeCornerSubviewState alloc] init];
+        state.originalBackgroundColor = view.backgroundColor;
+        state.originalHidden = view.hidden;
+        state.captured = YES;
+        objc_setAssociatedObject(view,
+                                 WCLiquidGlassHomeCornerSubviewStateKey,
+                                 state,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return state;
+}
+
+static void WCLiquidGlassHomeCornerPrepareContent(UIView *view, NSUInteger depth) {
+    if (!view || depth > 8) {
+        return;
+    }
+    if (!WCLiquidGlassHomeCornerShouldPreserveSubview(view) &&
+        WCLiquidGlassHomeCornerColorIsOpaqueWhite(view.backgroundColor, view.traitCollection)) {
+        WCLiquidGlassHomeCornerStateForSubview(view);
+        view.backgroundColor = UIColor.clearColor;
+    }
+    CGRect bounds = view.bounds;
+    if (depth > 0 &&
+        CGRectGetHeight(bounds) <= 1.5 &&
+        CGRectGetWidth(bounds) >= CGRectGetWidth(view.superview.bounds) * 0.72) {
+        WCLiquidGlassHomeCornerStateForSubview(view);
+        view.hidden = YES;
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassHomeCornerPrepareContent(subview, depth + 1);
+    }
+}
+
+static void WCLiquidGlassHomeCornerRestoreContent(UIView *view, NSUInteger depth) {
+    if (!view || depth > 8) {
+        return;
+    }
+    WCLiquidGlassHomeCornerSubviewState *state = objc_getAssociatedObject(view, WCLiquidGlassHomeCornerSubviewStateKey);
+    if (state && state.captured) {
+        view.backgroundColor = state.originalBackgroundColor;
+        view.hidden = state.originalHidden;
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassHomeCornerRestoreContent(subview, depth + 1);
+    }
 }
 
 static BOOL WCLiquidGlassHomeCornerNameContains(NSString *name, NSArray<NSString *> *tokens) {
@@ -184,6 +287,7 @@ static void WCLiquidGlassHomeCornerRestoreCell(UITableViewCell *cell) {
     cell.backgroundView = state.originalBackgroundView;
     cell.backgroundColor = state.originalBackgroundColor;
     cell.contentView.backgroundColor = state.originalContentBackgroundColor;
+    WCLiquidGlassHomeCornerRestoreContent(cell.contentView, 0);
     cell.layer.cornerRadius = state.originalCornerRadius;
     cell.layer.maskedCorners = state.originalMaskedCorners;
     cell.layer.masksToBounds = state.originalMasksToBounds;
@@ -245,14 +349,22 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     cell.layer.cornerCurve = kCACornerCurveContinuous;
     cell.layer.maskedCorners = corners;
     cell.layer.masksToBounds = corners != 0;
-    cell.backgroundColor = UIColor.clearColor;
-    cell.contentView.backgroundColor = UIColor.clearColor;
-    if (!state.cardBackground) {
-        state.cardBackground = [[WCLiquidGlassHomeCornerBackgroundView alloc] initWithFrame:CGRectZero];
-    }
-    [state.cardBackground wc_updateAppearance];
-    if (cell.backgroundView != state.cardBackground) {
-        cell.backgroundView = state.cardBackground;
+    if (WCLiquidGlassPreferences.homeLiquidBackgroundEnabled) {
+        cell.backgroundColor = UIColor.clearColor;
+        cell.contentView.backgroundColor = UIColor.clearColor;
+        WCLiquidGlassHomeCornerPrepareContent(cell.contentView, 0);
+        if (!state.cardBackground) {
+            state.cardBackground = [[WCLiquidGlassHomeCornerBackgroundView alloc] initWithFrame:CGRectZero];
+        }
+        [state.cardBackground wc_updateAppearance];
+        if (cell.backgroundView != state.cardBackground) {
+            cell.backgroundView = state.cardBackground;
+        }
+    } else {
+        cell.backgroundView = state.originalBackgroundView;
+        cell.backgroundColor = state.originalBackgroundColor;
+        cell.contentView.backgroundColor = state.originalContentBackgroundColor;
+        WCLiquidGlassHomeCornerRestoreContent(cell.contentView, 0);
     }
 }
 
@@ -263,6 +375,7 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
         return;
     }
     if (role != WCLiquidGlassHomeCornerTableRoleNone) {
+        WCLiquidGlassHomeCornerApplyTableStyle(tableView);
         objc_setAssociatedObject(tableView,
                                  WCLiquidGlassHomeCornerTableStyledKey,
                                  @YES,
@@ -276,6 +389,7 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
         }
     }
     if (role == WCLiquidGlassHomeCornerTableRoleNone) {
+        WCLiquidGlassHomeCornerRestoreTableStyle(tableView);
         objc_setAssociatedObject(tableView,
                                  WCLiquidGlassHomeCornerTableStyledKey,
                                  @NO,
@@ -380,7 +494,7 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 8 : 2;
+    return section == 0 ? 7 : 2;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -389,7 +503,7 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return @"会话行两侧缩进并呈现圆角卡片。开启“液态背景”后，背景会跟随插件“液态效果”设置；背景颜色与它互斥。";
+        return @"会话行两侧缩进并呈现圆角卡片。开启“液态背景”后，背景会跟随插件“液态效果”设置。";
     }
     return @"同步后，发现、通讯录和我页面会使用相同的卡片背景与左右缩进；圆角可单独调整。";
 }
@@ -504,15 +618,8 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
                                                   on:WCLiquidGlassPreferences.homeLiquidBackgroundEnabled
                                               enabled:active
                                               action:@selector(wc_liquidBackgroundChanged:)];
-            default: {
-                BOOL colorEnabled = active && !WCLiquidGlassPreferences.homeLiquidBackgroundEnabled;
-                UITableViewCell *cell = [self wc_cellWithTitle:@"背景颜色"
-                                                         detail:WCLiquidGlassPreferences.homeCardBackgroundColorHex
-                                                        enabled:colorEnabled
-                                                     identifier:@"WCLiquidGlassHomeCornersColorCell"];
-                cell.accessoryType = colorEnabled ? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
-                return cell;
-            }
+            default:
+                break;
         }
     }
     if (indexPath.row == 0) {
@@ -544,8 +651,6 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
         [self wc_presentValueInputWithTitle:@"会话间距" value:WCLiquidGlassPreferences.homeCardGap minimum:0.0 maximum:24.0 setter:^(CGFloat value) {
             [WCLiquidGlassPreferences setHomeCardGap:value];
         }];
-    } else if (indexPath.section == 0 && indexPath.row == 7) {
-        [self wc_presentBackgroundColorInput];
     } else if (indexPath.section == 1 && indexPath.row == 1) {
         [self wc_presentValueInputWithTitle:@"发现/通讯录/我 圆角" value:WCLiquidGlassPreferences.homeOtherTabsCornerRadius minimum:0.0 maximum:52.0 setter:^(CGFloat value) {
             [WCLiquidGlassPreferences setHomeOtherTabsCornerRadius:value];
@@ -606,28 +711,6 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
         CGFloat enteredValue = alert.textFields.firstObject.text.doubleValue;
         setter(MIN(maximum, MAX(minimum, enteredValue)));
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-- (void)wc_presentBackgroundColorInput {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"背景颜色"
-                                                                   message:@"输入十六进制颜色，例如 #FFFFFF"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
-        textField.autocapitalizationType = UITextAutocapitalizationTypeAllCharacters;
-        textField.text = WCLiquidGlassPreferences.homeCardBackgroundColorHex;
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-        NSString *value = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        if (![value hasPrefix:@"#"]) {
-            value = [@"#" stringByAppendingString:value];
-        }
-        NSRegularExpression *pattern = [NSRegularExpression regularExpressionWithPattern:@"^#[0-9A-Fa-f]{6}$" options:0 error:nil];
-        if ([pattern firstMatchInString:value options:0 range:NSMakeRange(0, value.length)]) {
-            [WCLiquidGlassPreferences setHomeCardBackgroundColorHex:value];
-        }
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }
