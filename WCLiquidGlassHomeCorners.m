@@ -16,6 +16,7 @@ static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHome
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static const void *WCLiquidGlassHomeCornerFinalApplyPendingKey = &WCLiquidGlassHomeCornerFinalApplyPendingKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor)(UITableViewCell *, SEL, UIColor *) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
@@ -29,6 +30,17 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 };
 
 static UITableView *WCLiquidGlassHomeCornersTableForCell(UITableViewCell *cell);
+static WCLiquidGlassHomeCornerTableRole WCLiquidGlassHomeCornerRoleForTable(UITableView *tableView);
+
+static BOOL WCLiquidGlassHomeCornerShouldKeepCellBackgroundTransparent(UITableViewCell *cell) {
+    if (!cell || !WCLiquidGlassPreferences.homeCornersEnabled ||
+        !WCLiquidGlassPreferences.homeLiquidBackgroundEnabled ||
+        WCLiquidGlassPreferences.homeSeparateCardsEnabled) {
+        return NO;
+    }
+    UITableView *tableView = WCLiquidGlassHomeCornersTableForCell(cell);
+    return tableView && WCLiquidGlassHomeCornerRoleForTable(tableView) == WCLiquidGlassHomeCornerTableRoleHome;
+}
 
 @interface WCLiquidGlassHomeCornerCellState : NSObject
 @property(nonatomic, assign) CGRect baseFrame;
@@ -584,6 +596,17 @@ static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL
     WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 }
 
+static void WCLiquidGlassHomeCornerCellSetBackgroundColor(UITableViewCell *self,
+                                                           SEL selector,
+                                                           UIColor *color) {
+    UIColor *targetColor = WCLiquidGlassHomeCornerShouldKeepCellBackgroundTransparent(self)
+        ? UIColor.clearColor
+        : color;
+    if (WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
+        WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor(self, selector, targetColor);
+    }
+}
+
 static void WCLiquidGlassHomeCornersRefreshTablesInView(UIView *view, NSUInteger depth) {
     if (!view || depth > 24) {
         return;
@@ -608,12 +631,14 @@ static void WCLiquidGlassHomeCornersRefreshVisibleTables(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
-    if (WCLiquidGlassOriginalHomeCornerCellLayoutSubviews) {
+    if (WCLiquidGlassOriginalHomeCornerCellLayoutSubviews &&
+        WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
         return;
     }
     Class cellClass = NSClassFromString(@"NewMainFrameCell");
     Method layoutMethod = cellClass ? class_getInstanceMethod(cellClass, @selector(layoutSubviews)) : NULL;
-    if (!layoutMethod) {
+    Method backgroundColorMethod = cellClass ? class_getInstanceMethod(cellClass, @selector(setBackgroundColor:)) : NULL;
+    if (!layoutMethod || !backgroundColorMethod) {
         if (!WCLiquidGlassHomeCornerCellHookRetryScheduled &&
             WCLiquidGlassHomeCornerCellHookInstallAttempts < 10) {
             WCLiquidGlassHomeCornerCellHookRetryScheduled = YES;
@@ -631,6 +656,12 @@ static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
                         @selector(layoutSubviews),
                         (IMP)&WCLiquidGlassHomeCornerCellLayoutSubviews,
                         (IMP *)&WCLiquidGlassOriginalHomeCornerCellLayoutSubviews);
+    }
+    if (!WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
+        MSHookMessageEx(cellClass,
+                        @selector(setBackgroundColor:),
+                        (IMP)&WCLiquidGlassHomeCornerCellSetBackgroundColor,
+                        (IMP *)&WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor);
     }
 }
 
