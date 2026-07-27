@@ -1,4 +1,5 @@
 #import "WCLiquidGlassMenu.h"
+#import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassIconAssets.h"
 #import "WCLiquidGlassPreferences.h"
 
@@ -1541,6 +1542,8 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
             if (navigationController) {
                 [availableActions addObject:actionIdentifier];
             }
+        } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
+            [availableActions addObject:actionIdentifier];
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
             if (navigationController && NSClassFromString(@"WCLGSettingsViewController")) {
                 [availableActions addObject:actionIdentifier];
@@ -1595,6 +1598,10 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
 
 static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     id tabController = WCLiquidGlassCurrentTabController();
+    if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
+        WCLiquidGlassCaptureCurrentPageHierarchyDiagnostics();
+        return;
+    }
     if ([actionIdentifier hasPrefix:@"tab."]) {
         NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
         SEL setSelectedIndexSelector = NSSelectorFromString(@"setSelectedIndex:");
@@ -2910,7 +2917,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     if (actionIdentifier) {
         NSUInteger actionGeneration = self.contentRefreshGeneration;
         [self wc_emitSelectionFeedback];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.22 * NSEC_PER_SEC)),
+        NSTimeInterval actionDelay = [actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]
+            ? 0.25 + MAX(0, (NSInteger)self.optionOrbs.count - 1) * 0.018
+            : 0.22;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(actionDelay * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (actionGeneration != self.contentRefreshGeneration ||
                 UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {

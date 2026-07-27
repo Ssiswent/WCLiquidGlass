@@ -26,6 +26,7 @@ NSString *const WCLiquidGlassActionVoiceInput = @"voice_input";
 NSString *const WCLiquidGlassActionNewLine = @"new_line";
 NSString *const WCLiquidGlassActionMention = @"mention";
 NSString *const WCLiquidGlassActionFullInput = @"full_input";
+NSString *const WCLiquidGlassActionPageHierarchyDiagnostics = @"page_hierarchy_diagnostics";
 
 static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
 static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
@@ -112,6 +113,7 @@ NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void
         catalog = @[
             @{@"identifier": WCLiquidGlassActionSettings, @"title": @"WCLiquidGlass", @"symbol": @"circle.grid.cross.fill"},
             @{@"identifier": WCLiquidGlassActionWCGlassSettings, @"title": @"WCGlass", @"symbol": @"drop.fill"},
+            @{@"identifier": WCLiquidGlassActionPageHierarchyDiagnostics, @"title": @"当前页面层级诊断", @"symbol": @"rectangle.3.group.bubble.left"},
             @{@"identifier": WCLiquidGlassActionPlugins, @"title": @"插件列表", @"symbol": @"shippingbox.fill"},
             @{@"identifier": WCLiquidGlassActionDoutuAssistant, @"title": @"斗图助手", @"symbol": @"face.smiling"},
             @{@"identifier": WCLiquidGlassActionMoments, @"title": @"朋友圈", @"symbol": @"circle.hexagongrid.fill"},

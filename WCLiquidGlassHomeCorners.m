@@ -6,6 +6,7 @@
 #import <objc/runtime.h>
 
 #import "WCLiquidGlassMenu.h"
+#import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassPreferences.h"
 
 static const void *WCLiquidGlassHomeCornerStateKey = &WCLiquidGlassHomeCornerStateKey;
@@ -467,6 +468,233 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
     }
 }
 
+static NSString *WCLiquidGlassHomeCornersDiagnosticRect(CGRect rect) {
+    return [NSString stringWithFormat:@"{x=%.1f y=%.1f w=%.1f h=%.1f}",
+            rect.origin.x, rect.origin.y, rect.size.width, rect.size.height];
+}
+
+static NSString *WCLiquidGlassHomeCornersDiagnosticColor(UIColor *color,
+                                                           UITraitCollection *traits) {
+    if (!color) {
+        return @"nil";
+    }
+    UIColor *resolved = [color resolvedColorWithTraitCollection:traits ?: UITraitCollection.currentTraitCollection];
+    CGFloat red = 0.0;
+    CGFloat green = 0.0;
+    CGFloat blue = 0.0;
+    CGFloat alpha = 0.0;
+    if ([resolved getRed:&red green:&green blue:&blue alpha:&alpha]) {
+        return [NSString stringWithFormat:@"rgba(%.3f, %.3f, %.3f, %.3f)", red, green, blue, alpha];
+    }
+    CGFloat white = 0.0;
+    if ([resolved getWhite:&white alpha:&alpha]) {
+        return [NSString stringWithFormat:@"white(%.3f, %.3f)", white, alpha];
+    }
+    return NSStringFromClass(resolved.class);
+}
+
+static void WCLiquidGlassHomeCornersAppendViewTree(NSMutableString *report,
+                                                    UIView *view,
+                                                    NSUInteger depth,
+                                                    NSUInteger *viewCount) {
+    if (!view || depth > 7 || *viewCount >= 420) {
+        return;
+    }
+    *viewCount += 1;
+    NSString *indent = [@"" stringByPaddingToLength:depth * 2 withString:@" " startingAtIndex:0];
+    [report appendFormat:@"%@%@ frame=%@ bounds=%@ alpha=%.2f hidden=%@ bg=%@ corner=%.1f masks=%@ clips=%@ subviews=%lu\n",
+     indent,
+     NSStringFromClass(view.class),
+     WCLiquidGlassHomeCornersDiagnosticRect(view.frame),
+     WCLiquidGlassHomeCornersDiagnosticRect(view.bounds),
+     view.alpha,
+     view.hidden ? @"YES" : @"NO",
+     WCLiquidGlassHomeCornersDiagnosticColor(view.backgroundColor, view.traitCollection),
+     view.layer.cornerRadius,
+     view.layer.masksToBounds ? @"YES" : @"NO",
+     view.clipsToBounds ? @"YES" : @"NO",
+     (unsigned long)view.subviews.count];
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassHomeCornersAppendViewTree(report, subview, depth + 1, viewCount);
+    }
+}
+
+static void WCLiquidGlassHomeCornersCollectTables(UIView *view,
+                                                   NSMutableArray<UITableView *> *tables,
+                                                   NSMutableSet<NSValue *> *seen,
+                                                   NSUInteger depth) {
+    if (!view || depth > 24) {
+        return;
+    }
+    if ([view isKindOfClass:UITableView.class]) {
+        NSValue *identity = [NSValue valueWithNonretainedObject:view];
+        if (![seen containsObject:identity]) {
+            [seen addObject:identity];
+            [tables addObject:(UITableView *)view];
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassHomeCornersCollectTables(subview, tables, seen, depth + 1);
+    }
+}
+
+static void WCLiquidGlassHomeCornersAppendControllerTree(NSMutableString *report,
+                                                          UIViewController *controller,
+                                                          NSUInteger depth,
+                                                          NSMutableSet<NSValue *> *seen) {
+    if (!controller || depth > 16) {
+        return;
+    }
+    NSValue *identity = [NSValue valueWithNonretainedObject:controller];
+    if ([seen containsObject:identity]) {
+        return;
+    }
+    [seen addObject:identity];
+    NSString *indent = [@"" stringByPaddingToLength:depth * 2 withString:@" " startingAtIndex:0];
+    [report appendFormat:@"%@%@ viewLoaded=%@ viewFrame=%@ children=%lu presented=%@\n",
+     indent,
+     NSStringFromClass(controller.class),
+     controller.isViewLoaded ? @"YES" : @"NO",
+     controller.isViewLoaded ? WCLiquidGlassHomeCornersDiagnosticRect(controller.view.frame) : @"n/a",
+     (unsigned long)controller.childViewControllers.count,
+     controller.presentedViewController ? NSStringFromClass(controller.presentedViewController.class) : @"nil"];
+    if (controller.presentedViewController) {
+        WCLiquidGlassHomeCornersAppendControllerTree(report, controller.presentedViewController, depth + 1, seen);
+    }
+    for (UIViewController *child in controller.childViewControllers) {
+        WCLiquidGlassHomeCornersAppendControllerTree(report, child, depth + 1, seen);
+    }
+}
+
+static void WCLiquidGlassHomeCornersAppendTableDiagnostics(NSMutableString *report,
+                                                           UITableView *tableView,
+                                                           NSUInteger index) {
+    Class mainFrameTableClass = NSClassFromString(@"MainFrameTableView");
+    BOOL mainFrameTable = mainFrameTableClass && [tableView isKindOfClass:mainFrameTableClass];
+    [report appendFormat:@"\nTable %lu%@\nclass=%@ frame=%@ bounds=%@ contentSize={w=%.1f h=%.1f} contentOffset={x=%.1f y=%.1f} adjustedInset={t=%.1f l=%.1f b=%.1f r=%.1f} separatorStyle=%ld separatorColor=%@ visibleCells=%lu sections=%ld\n",
+     (unsigned long)index,
+     mainFrameTable ? @" [MainFrameTableView]" : @"",
+     NSStringFromClass(tableView.class),
+     WCLiquidGlassHomeCornersDiagnosticRect(tableView.frame),
+     WCLiquidGlassHomeCornersDiagnosticRect(tableView.bounds),
+     tableView.contentSize.width,
+     tableView.contentSize.height,
+     tableView.contentOffset.x,
+     tableView.contentOffset.y,
+     tableView.adjustedContentInset.top,
+     tableView.adjustedContentInset.left,
+     tableView.adjustedContentInset.bottom,
+     tableView.adjustedContentInset.right,
+     (long)tableView.separatorStyle,
+     WCLiquidGlassHomeCornersDiagnosticColor(tableView.separatorColor, tableView.traitCollection),
+     (unsigned long)tableView.visibleCells.count,
+     (long)tableView.numberOfSections];
+    NSUInteger cellLimit = MIN((NSUInteger)24, tableView.visibleCells.count);
+    for (NSUInteger cellIndex = 0; cellIndex < cellLimit; cellIndex += 1) {
+        UITableViewCell *cell = tableView.visibleCells[cellIndex];
+        NSIndexPath *indexPath = [tableView indexPathForCell:cell];
+        [report appendFormat:@"  Cell %lu indexPath=%@ class=%@ frame=%@ bg=%@ contentBg=%@ backgroundView=%@ corner=%.1f masks=%@\n",
+         (unsigned long)cellIndex,
+         indexPath ?: @"nil",
+         NSStringFromClass(cell.class),
+         WCLiquidGlassHomeCornersDiagnosticRect(cell.frame),
+         WCLiquidGlassHomeCornersDiagnosticColor(cell.backgroundColor, cell.traitCollection),
+         WCLiquidGlassHomeCornersDiagnosticColor(cell.contentView.backgroundColor, cell.traitCollection),
+         cell.backgroundView ? NSStringFromClass(cell.backgroundView.class) : @"nil",
+         cell.layer.cornerRadius,
+         cell.layer.masksToBounds ? @"YES" : @"NO"];
+        NSUInteger viewCount = 0;
+        WCLiquidGlassHomeCornersAppendViewTree(report, cell, 2, &viewCount);
+    }
+}
+
+static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread(void) {
+    NSMutableString *report = [NSMutableString string];
+    [report appendString:@"Privacy: this report intentionally excludes visible text, message content, contact names, and accessibility labels.\n\n"];
+    [report appendFormat:@"Home Corners Preferences\nenabled=%@ liquidBackground=%@ inset=%.1f homeRadius=%.1f separateCards=%@ gap=%.1f pinnedGap=%@ syncOtherTabs=%@ otherTabsRadius=%.1f glassAppearance=%ld\n",
+     WCLiquidGlassPreferences.homeCornersEnabled ? @"YES" : @"NO",
+     WCLiquidGlassPreferences.homeLiquidBackgroundEnabled ? @"YES" : @"NO",
+     WCLiquidGlassPreferences.homeCornerInset,
+     WCLiquidGlassPreferences.homeCornerRadius,
+     WCLiquidGlassPreferences.homeSeparateCardsEnabled ? @"YES" : @"NO",
+     WCLiquidGlassPreferences.homeCardGap,
+     WCLiquidGlassPreferences.homePinnedCardGapEnabled ? @"YES" : @"NO",
+     WCLiquidGlassPreferences.homeCornersSyncOtherTabsEnabled ? @"YES" : @"NO",
+     WCLiquidGlassPreferences.homeOtherTabsCornerRadius,
+     (long)WCLiquidGlassPreferences.glassAppearance];
+
+    NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) {
+            continue;
+        }
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        if (windowScene.activationState == UISceneActivationStateUnattached) {
+            continue;
+        }
+        for (UIWindow *window in windowScene.windows) {
+            if (!window.hidden && window.alpha > 0.01) {
+                [windows addObject:window];
+            }
+        }
+    }
+    [windows sortUsingComparator:^NSComparisonResult(UIWindow *first, UIWindow *second) {
+        if (first.isKeyWindow == second.isKeyWindow) {
+            return NSOrderedSame;
+        }
+        return first.isKeyWindow ? NSOrderedAscending : NSOrderedDescending;
+    }];
+    [report appendFormat:@"\nVisible Windows: %lu\n", (unsigned long)windows.count];
+    NSMutableArray<UITableView *> *tables = [NSMutableArray array];
+    NSMutableSet<NSValue *> *seenTables = [NSMutableSet set];
+    for (NSUInteger index = 0; index < windows.count; index += 1) {
+        UIWindow *window = windows[index];
+        [report appendFormat:@"Window %lu key=%@ class=%@ level=%.1f frame=%@ root=%@\n",
+         (unsigned long)index,
+         window.isKeyWindow ? @"YES" : @"NO",
+         NSStringFromClass(window.class),
+         window.windowLevel,
+         WCLiquidGlassHomeCornersDiagnosticRect(window.frame),
+         window.rootViewController ? NSStringFromClass(window.rootViewController.class) : @"nil"];
+        WCLiquidGlassHomeCornersCollectTables(window, tables, seenTables, 0);
+    }
+
+    [report appendString:@"\nController Hierarchy\n"];
+    NSMutableSet<NSValue *> *seenControllers = [NSMutableSet set];
+    for (UIWindow *window in windows) {
+        WCLiquidGlassHomeCornersAppendControllerTree(report, window.rootViewController, 0, seenControllers);
+    }
+    [report appendFormat:@"\nDiscovered Tables: %lu\n", (unsigned long)tables.count];
+    for (NSUInteger index = 0; index < tables.count; index += 1) {
+        WCLiquidGlassHomeCornersAppendTableDiagnostics(report, tables[index], index);
+    }
+    [report appendString:@"\nKey Window View Hierarchy\n"];
+    if (windows.firstObject) {
+        NSUInteger viewCount = 0;
+        WCLiquidGlassHomeCornersAppendViewTree(report, windows.firstObject, 0, &viewCount);
+    } else {
+        [report appendString:@"No visible window found.\n"];
+    }
+
+    NSURL *URL = [WCLiquidGlassCrashLogger.sharedLogger writeDiagnosticReportWithTitle:@"Current Page Hierarchy"
+                                                                                content:report];
+    if (URL) {
+        UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+        [feedback prepare];
+        [feedback impactOccurred];
+    }
+}
+
+void WCLiquidGlassCaptureCurrentPageHierarchyDiagnostics(void) {
+    if (NSThread.isMainThread) {
+        WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread();
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread();
+    });
+}
+
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornersControlTag) {
     WCLiquidGlassHomeCornersControlTagInset = 1,
     WCLiquidGlassHomeCornersControlTagHomeRadius,
@@ -477,168 +705,20 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
     return [NSString stringWithFormat:@"%.0f pt", value];
 }
 
-static UIFont *WCLiquidGlassHomeCornersFont(CGFloat size, UIFontWeight weight) {
-    NSString *fontName = weight >= UIFontWeightSemibold ? @"PingFangSC-Semibold" : @"PingFangSC-Regular";
-    UIFont *font = [UIFont fontWithName:fontName size:size] ?: [UIFont systemFontOfSize:size weight:weight];
-    return [[UIFontMetrics metricsForTextStyle:size >= 16.0 ? UIFontTextStyleBody : UIFontTextStyleFootnote] scaledFontForFont:font];
-}
-
-static UIColor *WCLiquidGlassHomeCornersCardColor(void) {
-    WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
-    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
-        BOOL dark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
-        if (appearance == WCLiquidGlassGlassAppearanceClear) {
-            return dark ? [UIColor colorWithWhite:1.0 alpha:0.10] : [UIColor colorWithWhite:1.0 alpha:0.68];
-        }
-        if (appearance == WCLiquidGlassGlassAppearanceTinted) {
-            return dark ? [UIColor colorWithRed:0.72 green:0.82 blue:1.0 alpha:0.20]
-                        : [UIColor colorWithRed:0.95 green:0.97 blue:1.0 alpha:0.92];
-        }
-        return dark ? [UIColor colorWithWhite:0.14 alpha:0.94] : [UIColor colorWithWhite:1.0 alpha:0.84];
-    }];
-}
-
-@interface WCLiquidGlassHomeCornersBackdropView : UIView
-@property(nonatomic, strong) CAGradientLayer *gradientLayer;
-@end
-
-@implementation WCLiquidGlassHomeCornersBackdropView
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        _gradientLayer = [CAGradientLayer layer];
-        _gradientLayer.startPoint = CGPointMake(0.0, 0.0);
-        _gradientLayer.endPoint = CGPointMake(1.0, 1.0);
-        [self.layer insertSublayer:_gradientLayer atIndex:0];
-        [self wc_updateColors];
-    }
-    return self;
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    self.gradientLayer.frame = self.bounds;
-}
-
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-    [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
-        [self wc_updateColors];
-    }
-}
-
-- (void)wc_updateColors {
-    BOOL dark = self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    self.gradientLayer.colors = @[
-        (id)(dark ? [UIColor colorWithRed:0.06 green:0.10 blue:0.16 alpha:1.0] : [UIColor colorWithRed:0.90 green:0.96 blue:1.0 alpha:1.0]).CGColor,
-        (id)(dark ? [UIColor colorWithRed:0.12 green:0.08 blue:0.18 alpha:1.0] : [UIColor colorWithRed:0.97 green:0.92 blue:1.0 alpha:1.0]).CGColor,
-        (id)(dark ? [UIColor colorWithRed:0.05 green:0.13 blue:0.15 alpha:1.0] : [UIColor colorWithRed:0.91 green:0.98 blue:0.96 alpha:1.0]).CGColor
-    ];
-}
-
-@end
-
-static void WCLiquidGlassHomeCornersStyleCardCell(UITableViewCell *cell,
-                                                   NSIndexPath *indexPath,
-                                                   UITableView *tableView) {
-    NSInteger rowCount = [tableView.dataSource tableView:tableView numberOfRowsInSection:indexPath.section];
-    BOOL first = indexPath.row == 0;
-    BOOL last = indexPath.row == rowCount - 1;
-    CACornerMask corners = 0;
-    if (first) {
-        corners |= kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    }
-    if (last) {
-        corners |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-    }
-    cell.backgroundConfiguration = nil;
-    cell.backgroundColor = WCLiquidGlassHomeCornersCardColor();
-    cell.contentView.backgroundColor = UIColor.clearColor;
-    cell.layer.cornerRadius = (first || last) ? 24.0 : 0.0;
-    cell.layer.cornerCurve = kCACornerCurveContinuous;
-    cell.layer.maskedCorners = corners;
-    cell.layer.masksToBounds = YES;
-}
-
 @implementation WCLiquidGlassHomeCornersController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"首页圆角";
-    self.view.backgroundColor = UIColor.clearColor;
-    self.tableView.backgroundColor = UIColor.clearColor;
-    self.tableView.backgroundView = [[WCLiquidGlassHomeCornersBackdropView alloc] initWithFrame:CGRectZero];
+    WCLiquidGlassConfigureSettingsTableBackground(self);
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64.0;
     self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
-    self.tableView.tableHeaderView = [self wc_makeHeaderView];
     [WCLiquidGlassPreferences registerDefaults];
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_preferencesChanged:)
                                                name:WCLiquidGlassPreferencesDidChangeNotification
                                              object:nil];
-}
-
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-    UIView *header = self.tableView.tableHeaderView;
-    CGFloat width = CGRectGetWidth(self.tableView.bounds);
-    if (header && fabs(CGRectGetWidth(header.frame) - width) > 0.5) {
-        header.frame = CGRectMake(0.0, 0.0, width, 154.0);
-        self.tableView.tableHeaderView = header;
-    }
-}
-
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-    [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
-        self.tableView.tableHeaderView = [self wc_makeHeaderView];
-        [self.tableView reloadData];
-    }
-}
-
-- (UIView *)wc_makeHeaderView {
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 320.0, 154.0)];
-    UIVisualEffectView *card = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassEffect()];
-    card.frame = CGRectMake(20.0, 14.0, 280.0, 126.0);
-    card.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    card.layer.cornerRadius = 28.0;
-    card.layer.cornerCurve = kCACornerCurveContinuous;
-    card.clipsToBounds = YES;
-
-    UIView *iconBackground = [[UIView alloc] initWithFrame:CGRectMake(20.0, 33.0, 56.0, 56.0)];
-    iconBackground.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
-        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
-            ? [UIColor colorWithWhite:1.0 alpha:0.16]
-            : [UIColor colorWithWhite:1.0 alpha:0.58];
-    }];
-    iconBackground.layer.cornerRadius = 18.0;
-    iconBackground.layer.cornerCurve = kCACornerCurveContinuous;
-    UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"rectangle.inset.filled"]];
-    icon.frame = CGRectInset(iconBackground.bounds, 14.0, 14.0);
-    icon.contentMode = UIViewContentModeScaleAspectFit;
-    icon.tintColor = UIColor.labelColor;
-    [iconBackground addSubview:icon];
-
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(92.0, 30.0, 168.0, 28.0)];
-    title.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    title.text = @"首页圆角";
-    title.font = WCLiquidGlassHomeCornersFont(22.0, UIFontWeightSemibold);
-    title.adjustsFontForContentSizeCategory = YES;
-    title.textColor = UIColor.labelColor;
-    UILabel *detail = [[UILabel alloc] initWithFrame:CGRectMake(92.0, 62.0, 168.0, 42.0)];
-    detail.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    detail.text = @"以圆润的液态卡片呈现主页会话";
-    detail.font = WCLiquidGlassHomeCornersFont(14.0, UIFontWeightRegular);
-    detail.adjustsFontForContentSizeCategory = YES;
-    detail.textColor = UIColor.secondaryLabelColor;
-    detail.numberOfLines = 2;
-    [header addSubview:card];
-    [card.contentView addSubview:iconBackground];
-    [card.contentView addSubview:title];
-    [card.contentView addSubview:detail];
-    return header;
 }
 
 - (void)dealloc {
@@ -656,7 +736,7 @@ static void WCLiquidGlassHomeCornersStyleCardCell(UITableViewCell *cell,
 - (void)tableView:(UITableView *)tableView
   willDisplayCell:(UITableViewCell *)cell
 forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassHomeCornersStyleCardCell(cell, indexPath, tableView);
+    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -671,32 +751,20 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 4.0, 300.0, 24.0)];
-    label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    label.text = [self tableView:tableView titleForHeaderInSection:section];
-    label.font = WCLiquidGlassHomeCornersFont(13.0, UIFontWeightSemibold);
-    label.adjustsFontForContentSizeCategory = YES;
-    label.textColor = UIColor.secondaryLabelColor;
-    return label;
+    return WCLiquidGlassSettingsSectionHeader([self tableView:tableView titleForHeaderInSection:section]);
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return 32.0;
+    return WCLiquidGlassSettingsSectionHeaderHeight();
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 3.0, CGRectGetWidth(tableView.bounds) - 40.0, 58.0)];
-    label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-    label.text = [self tableView:tableView titleForFooterInSection:section];
-    label.font = WCLiquidGlassHomeCornersFont(13.0, UIFontWeightRegular);
-    label.adjustsFontForContentSizeCategory = YES;
-    label.textColor = UIColor.secondaryLabelColor;
-    label.numberOfLines = 0;
-    return label;
+    return WCLiquidGlassSettingsFooter([self tableView:tableView titleForFooterInSection:section]);
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return section == 0 ? 66.0 : 52.0;
+    NSString *text = [self tableView:tableView titleForFooterInSection:section];
+    return WCLiquidGlassSettingsFooterHeight(text, section == 0 ? 68.0 : 56.0);
 }
 
 - (UITableViewCell *)wc_cellWithTitle:(NSString *)title
@@ -707,16 +775,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
     }
-    cell.textLabel.text = title;
-    cell.textLabel.font = WCLiquidGlassHomeCornersFont(17.0, UIFontWeightRegular);
-    cell.textLabel.adjustsFontForContentSizeCategory = YES;
-    cell.detailTextLabel.text = detail;
-    cell.detailTextLabel.font = WCLiquidGlassHomeCornersFont(13.0, UIFontWeightRegular);
-    cell.detailTextLabel.adjustsFontForContentSizeCategory = YES;
-    cell.textLabel.textColor = enabled ? UIColor.labelColor : UIColor.tertiaryLabelColor;
-    cell.detailTextLabel.textColor = enabled ? UIColor.secondaryLabelColor : UIColor.tertiaryLabelColor;
-    cell.accessoryView = nil;
-    cell.accessoryType = UITableViewCellAccessoryNone;
+    WCLiquidGlassConfigureSettingsCell(cell, title, detail, nil, enabled ? UIColor.labelColor : UIColor.tertiaryLabelColor);
+    cell.contentView.alpha = enabled ? 1.0 : 0.45;
     cell.selectionStyle = enabled ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
     cell.userInteractionEnabled = enabled;
     return cell;

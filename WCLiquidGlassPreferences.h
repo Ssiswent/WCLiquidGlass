@@ -29,6 +29,7 @@ extern NSString *const WCLiquidGlassActionVoiceInput;
 extern NSString *const WCLiquidGlassActionNewLine;
 extern NSString *const WCLiquidGlassActionMention;
 extern NSString *const WCLiquidGlassActionFullInput;
+extern NSString *const WCLiquidGlassActionPageHierarchyDiagnostics;
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassCompactLayoutStyle) {
     WCLiquidGlassCompactLayoutStyleDoubleCrescent = 0,

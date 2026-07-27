@@ -207,6 +207,28 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
     WCLiquidGlassRecordEvent(event);
 }
 
+- (nullable NSURL *)writeDiagnosticReportWithTitle:(NSString *)title content:(NSString *)content {
+    [self wc_prepareDirectories];
+    NSString *safeTitle = title.length > 0 ? title : @"Manual";
+    NSString *body = [NSString stringWithFormat:@"%@Manual Diagnostic: %@\n\n%@\n",
+                      WCLiquidGlassReportHeader(@"Manual / Page Hierarchy"),
+                      safeTitle,
+                      content ?: @""];
+    NSURL *URL = [self.class.crashLogsDirectoryURL
+                  URLByAppendingPathComponent:[NSString stringWithFormat:@"Diagnostic-%@.txt",
+                                              WCLiquidGlassTimestamp()]];
+    NSError *writeError = nil;
+    if (![body writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Manual diagnostic write failed: %@",
+                                  writeError.localizedDescription ?: @"Unknown error"]);
+        return nil;
+    }
+    WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Manual diagnostic saved: %@", URL.lastPathComponent]);
+    [self wc_trimOldLogs];
+    [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassCrashLogsDidChangeNotification object:nil];
+    return URL;
+}
+
 - (NSArray<NSURL *> *)crashLogURLs {
     NSArray<NSURL *> *URLs = [NSFileManager.defaultManager contentsOfDirectoryAtURL:self.class.crashLogsDirectoryURL
                                                         includingPropertiesForKeys:@[NSURLContentModificationDateKey, NSURLFileSizeKey]

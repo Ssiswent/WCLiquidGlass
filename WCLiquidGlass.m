@@ -240,6 +240,40 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 }
 
+void WCLiquidGlassConfigureSettingsTableBackground(UITableViewController *controller) {
+    WCLiquidGlassConfigureTableBackground(controller);
+}
+
+void WCLiquidGlassStyleSettingsCardCell(UITableViewCell *cell,
+                                        NSIndexPath *indexPath,
+                                        UITableView *tableView) {
+    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
+}
+
+UIView *WCLiquidGlassSettingsSectionHeader(NSString *text) {
+    return WCLiquidGlassSectionLabel(text, UIColor.secondaryLabelColor);
+}
+
+CGFloat WCLiquidGlassSettingsSectionHeaderHeight(void) {
+    return WCLiquidGlassSectionHeaderHeight();
+}
+
+UIView *WCLiquidGlassSettingsFooter(NSString *text) {
+    return WCLiquidGlassFooterLabel(text);
+}
+
+CGFloat WCLiquidGlassSettingsFooterHeight(NSString *text, CGFloat minimumHeight) {
+    return WCLiquidGlassFooterHeight(text, minimumHeight);
+}
+
+void WCLiquidGlassConfigureSettingsCell(UITableViewCell *cell,
+                                        NSString *title,
+                                        NSString *secondaryText,
+                                        UIImage * _Nullable image,
+                                        UIColor *titleColor) {
+    WCLiquidGlassConfigureCell(cell, title, secondaryText, image, titleColor);
+}
+
 static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance appearance) {
     switch (appearance) {
         case WCLiquidGlassGlassAppearanceBalanced:
@@ -826,6 +860,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     NSSet<NSString *> *currentActions = [self wc_currentActionIdentifiers];
     NSArray<NSString *> *navigationActions = @[
         WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
+        WCLiquidGlassActionPageHierarchyDiagnostics,
         WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
     ];
@@ -853,6 +888,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (NSInteger)wc_availableSectionForAction:(NSString *)actionIdentifier {
     NSArray<NSString *> *navigationActions = @[
         WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
+        WCLiquidGlassActionPageHierarchyDiagnostics,
         WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
     ];
