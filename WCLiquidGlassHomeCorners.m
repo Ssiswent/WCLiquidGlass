@@ -86,6 +86,15 @@ static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
                                                   WCLiquidGlassHomeCornerTableRole role,
                                                   CGRect baseFrame);
 
+static void WCLiquidGlassHomeCornerWriteStartupMarker(NSString *stage) {
+    NSString *marker = [NSString stringWithFormat:@"%@\nframeHook=%@\nmultiMenuBackgroundHook=%@\nhighlightHook=%@",
+                       stage,
+                       WCLiquidGlassPreferences.homeCornerFrameHookEnabled ? @"ON" : @"OFF",
+                       WCLiquidGlassPreferences.homeCornerMultiMenuBackgroundHookEnabled ? @"ON" : @"OFF",
+                       WCLiquidGlassPreferences.homeCornerHighlightHookEnabled ? @"ON" : @"OFF"];
+    [WCLiquidGlassCrashLogger.sharedLogger writeStartupMarker:marker];
+}
+
 static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(UITableView *tableView) {
     WCLiquidGlassHomeCornerTableState *state = objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStateKey);
     if (!state) {
@@ -946,6 +955,9 @@ static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerSelectionHook(void) {
+    if (!WCLiquidGlassPreferences.homeCornerHighlightHookEnabled) {
+        return;
+    }
     if (WCLiquidGlassOriginalHomeCornerCellSetHighlighted) {
         return;
     }
@@ -956,6 +968,9 @@ static void WCLiquidGlassInstallHomeCornerSelectionHook(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerFrameHook(void) {
+    if (!WCLiquidGlassPreferences.homeCornerFrameHookEnabled) {
+        return;
+    }
     if (WCLiquidGlassOriginalHomeCornerCellSetFrame) {
         return;
     }
@@ -966,17 +981,23 @@ static void WCLiquidGlassInstallHomeCornerFrameHook(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerMultiMenuHooks(void) {
+    if (!WCLiquidGlassPreferences.homeCornerMultiMenuBackgroundHookEnabled &&
+        !WCLiquidGlassPreferences.homeCornerHighlightHookEnabled) {
+        return;
+    }
     Class cellClass = NSClassFromString(@"MMMultiMenuTableViewCell");
     if (!cellClass) {
         return;
     }
-    if (!WCLiquidGlassOriginalHomeCornerMultiMenuSetBackgroundColor) {
+    if (WCLiquidGlassPreferences.homeCornerMultiMenuBackgroundHookEnabled &&
+        !WCLiquidGlassOriginalHomeCornerMultiMenuSetBackgroundColor) {
         MSHookMessageEx(cellClass,
                         @selector(setBackgroundColor:),
                         (IMP)&WCLiquidGlassHomeCornerMultiMenuSetBackgroundColor,
                         (IMP *)&WCLiquidGlassOriginalHomeCornerMultiMenuSetBackgroundColor);
     }
-    if (!WCLiquidGlassOriginalHomeCornerMultiMenuSetHighlighted) {
+    if (WCLiquidGlassPreferences.homeCornerHighlightHookEnabled &&
+        !WCLiquidGlassOriginalHomeCornerMultiMenuSetHighlighted) {
         MSHookMessageEx(cellClass,
                         @selector(setHighlighted:animated:),
                         (IMP)&WCLiquidGlassHomeCornerMultiMenuSetHighlighted,
@@ -985,12 +1006,14 @@ static void WCLiquidGlassInstallHomeCornerMultiMenuHooks(void) {
 }
 
 void WCLiquidGlassInstallHomeCornersHooks(void) {
+    WCLiquidGlassHomeCornerWriteStartupMarker(@"Home corners hook installation started");
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
         WCLiquidGlassInstallHomeCornerTableLayoutHook();
         WCLiquidGlassInstallHomeCornerSelectionHook();
         WCLiquidGlassInstallHomeCornerFrameHook();
         WCLiquidGlassInstallHomeCornerMultiMenuHooks();
+        WCLiquidGlassHomeCornerWriteStartupMarker(@"Home corners hook installation completed");
         return;
     }
     WCLiquidGlassHomeCornersHooksInstalled = YES;
@@ -998,8 +1021,11 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
     WCLiquidGlassInstallHomeCornerCellLayoutHook();
     WCLiquidGlassInstallHomeCornerTableLayoutHook();
     WCLiquidGlassInstallHomeCornerSelectionHook();
+    WCLiquidGlassHomeCornerWriteStartupMarker(@"Highlight hook installation completed");
     WCLiquidGlassInstallHomeCornerFrameHook();
+    WCLiquidGlassHomeCornerWriteStartupMarker(@"Frame hook installation completed");
     WCLiquidGlassInstallHomeCornerMultiMenuHooks();
+    WCLiquidGlassHomeCornerWriteStartupMarker(@"Multi-menu hook installation completed");
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                       object:nil
                                                        queue:NSOperationQueue.mainQueue
@@ -1007,6 +1033,7 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
         WCLiquidGlassHomeCornersConfigurationEpoch += 1;
         WCLiquidGlassHomeCornersRefreshVisibleTables();
     }];
+    WCLiquidGlassHomeCornerWriteStartupMarker(@"Home corners hook installation finished");
 }
 
 static NSString *WCLiquidGlassHomeCornersDiagnosticRect(CGRect rect) {
@@ -1272,11 +1299,11 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 1;
+    return 2;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return 6;
+    return section == 0 ? 6 : 3;
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -1286,11 +1313,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return @"卡片化首页列表";
+    return section == 0 ? @"卡片化首页列表" : @"启动兼容诊断";
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    return @"聊天列表使用上方的圆角与会话间距；发现、通讯录和我固定使用 26 pt 圆角和 8 pt 间距。所有页面共用左右缩进与液态背景。";
+    return section == 0
+        ? @"聊天列表使用上方的圆角与会话间距；发现、通讯录和我固定使用 26 pt 圆角和 8 pt 间距。所有页面共用左右缩进与液态背景。"
+        : @"诊断版默认关闭本次新增的三个 Hook。每次仅开启一项并重启微信；启动阶段会写入“崩溃日志”中的 Startup-Hook-Diagnostics.txt。";
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1307,7 +1336,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     NSString *text = [self tableView:tableView titleForFooterInSection:section];
-    return WCLiquidGlassSettingsFooterHeight(text, 68.0);
+    return WCLiquidGlassSettingsFooterHeight(text, section == 0 ? 68.0 : 82.0);
 }
 
 - (UITableViewCell *)wc_cellWithTitle:(NSString *)title
@@ -1410,6 +1439,30 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 break;
         }
     }
+    if (indexPath.section == 1) {
+        switch (indexPath.row) {
+            case 0:
+                return [self wc_switchCellWithTitle:@"全局布局帧 Hook"
+                                               detail:@"调整 UITableViewCell 原生 frame"
+                                                  on:WCLiquidGlassPreferences.homeCornerFrameHookEnabled
+                                              enabled:YES
+                                              action:@selector(wc_frameHookChanged:)];
+            case 1:
+                return [self wc_switchCellWithTitle:@"多菜单背景 Hook"
+                                               detail:@"保持发现页原生背景为液态背景"
+                                                  on:WCLiquidGlassPreferences.homeCornerMultiMenuBackgroundHookEnabled
+                                              enabled:YES
+                                              action:@selector(wc_multiMenuBackgroundHookChanged:)];
+            case 2:
+                return [self wc_switchCellWithTitle:@"多菜单高亮 Hook"
+                                               detail:@"抑制朋友圈等项目的按压重叠动画"
+                                                  on:WCLiquidGlassPreferences.homeCornerHighlightHookEnabled
+                                              enabled:YES
+                                              action:@selector(wc_highlightHookChanged:)];
+            default:
+                break;
+        }
+    }
     return [self wc_cellWithTitle:@"" detail:nil enabled:NO identifier:@"WCLiquidGlassHomeCornersUnusedCell"];
 }
 
@@ -1440,6 +1493,29 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_liquidBackgroundChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setHomeLiquidBackgroundEnabled:sender.isOn];
+}
+
+- (void)wc_frameHookChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setHomeCornerFrameHookEnabled:sender.isOn];
+    [self wc_presentRestartRequiredAlert];
+}
+
+- (void)wc_multiMenuBackgroundHookChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setHomeCornerMultiMenuBackgroundHookEnabled:sender.isOn];
+    [self wc_presentRestartRequiredAlert];
+}
+
+- (void)wc_highlightHookChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setHomeCornerHighlightHookEnabled:sender.isOn];
+    [self wc_presentRestartRequiredAlert];
+}
+
+- (void)wc_presentRestartRequiredAlert {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"重启微信后生效"
+                                                                   message:@"为避免运行时重复安装 Hook，本项只会在下次启动微信时应用。请每次只改变一项，再重启测试。"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)wc_sliderChanged:(UISlider *)slider {
