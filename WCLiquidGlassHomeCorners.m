@@ -44,7 +44,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @property(nonatomic, strong, nullable) UIView *originalBackgroundView;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, strong, nullable) UIColor *originalContentBackgroundColor;
-@property(nonatomic, assign) CGRect originalContentBounds;
+@property(nonatomic, assign) CGRect baseContentFrame;
+@property(nonatomic, assign) CGRect appliedContentFrame;
+@property(nonatomic, assign) BOOL hasAppliedContentFrame;
 @property(nonatomic, assign) UITableViewCellSelectionStyle originalSelectionStyle;
 @property(nonatomic, strong, nullable) UIView *originalSelectedBackgroundView;
 @property(nonatomic, assign) CGFloat originalCornerRadius;
@@ -272,7 +274,6 @@ static WCLiquidGlassHomeCornerCellState *WCLiquidGlassHomeCornerStateForCell(UIT
         state.originalBackgroundView = cell.backgroundView;
         state.originalBackgroundColor = cell.backgroundColor;
         state.originalContentBackgroundColor = cell.contentView.backgroundColor;
-        state.originalContentBounds = cell.contentView.bounds;
         state.originalSelectionStyle = cell.selectionStyle;
         state.originalSelectedBackgroundView = cell.selectedBackgroundView;
         state.originalCornerRadius = cell.layer.cornerRadius;
@@ -294,15 +295,17 @@ static void WCLiquidGlassHomeCornerRestoreCell(UITableViewCell *cell) {
     cell.backgroundView = state.originalBackgroundView;
     cell.backgroundColor = state.originalBackgroundColor;
     cell.contentView.backgroundColor = state.originalContentBackgroundColor;
-    CGRect contentBounds = cell.contentView.bounds;
-    contentBounds.origin.x = state.originalContentBounds.origin.x;
-    cell.contentView.bounds = contentBounds;
+    if (state.hasAppliedContentFrame &&
+        CGRectEqualToRect(cell.contentView.frame, state.appliedContentFrame)) {
+        cell.contentView.frame = state.baseContentFrame;
+    }
     cell.selectionStyle = state.originalSelectionStyle;
     cell.selectedBackgroundView = state.originalSelectedBackgroundView;
     cell.layer.cornerRadius = state.originalCornerRadius;
     cell.layer.maskedCorners = state.originalMaskedCorners;
     cell.layer.masksToBounds = state.originalMasksToBounds;
     state.hasAppliedFrame = NO;
+    state.hasAppliedContentFrame = NO;
     state.appliedBackgroundColor = nil;
     state.appliedConfigurationEpoch = 0;
     [state.glassOverlay removeFromSuperview];
@@ -610,18 +613,25 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         ? cell.selectionStyle != UITableViewCellSelectionStyleNone || cell.selectedBackgroundView != nil
         : cell.selectionStyle != state.originalSelectionStyle ||
             cell.selectedBackgroundView != state.originalSelectedBackgroundView;
-    CGRect targetContentBounds = cell.contentView.bounds;
-    if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
-        targetContentBounds.origin.x = state.originalContentBounds.origin.x - 16.0;
-    } else {
-        targetContentBounds.origin.x = state.originalContentBounds.origin.x;
+    CGRect baseContentFrame = cell.contentView.frame;
+    if (state.hasAppliedContentFrame &&
+        CGRectEqualToRect(baseContentFrame, state.appliedContentFrame)) {
+        baseContentFrame = state.baseContentFrame;
     }
-    BOOL needsContentBoundsUpdate = !CGRectEqualToRect(cell.contentView.bounds,
-                                                       targetContentBounds);
+    CGRect targetContentFrame = baseContentFrame;
+    if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        targetContentFrame.origin.x += 8.0;
+        targetContentFrame.size.width = MAX(0.0, targetContentFrame.size.width - 16.0);
+    }
+    BOOL needsContentFrameUpdate = !CGRectEqualToRect(cell.contentView.frame,
+                                                      targetContentFrame);
+    state.baseContentFrame = baseContentFrame;
+    state.appliedContentFrame = targetContentFrame;
+    state.hasAppliedContentFrame = role == WCLiquidGlassHomeCornerTableRoleOtherTab;
     BOOL needsRestore = !isLiquidBackground &&
         (state.glassOverlay || state.appliedConfigurationEpoch != 0);
     if (!needsFrameUpdate && !needsCornerUpdate && !needsLiquidUpdate && !needsSelectionUpdate &&
-        !needsContentBoundsUpdate && !needsRestore) {
+        !needsContentFrameUpdate && !needsRestore) {
         return;
     }
     if (suppressesSelectionEffect) {
@@ -631,8 +641,8 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     if (needsFrameUpdate) {
         cell.frame = targetFrame;
     }
-    if (needsContentBoundsUpdate) {
-        cell.contentView.bounds = targetContentBounds;
+    if (needsContentFrameUpdate) {
+        cell.contentView.frame = targetContentFrame;
     }
     if (cell.layer.cornerRadius != targetCornerRadius) {
         cell.layer.cornerRadius = targetCornerRadius;
