@@ -47,6 +47,9 @@ static NSUInteger WCLiquidGlassContactsDiagnosticUpdateCount = 0;
 static CFTimeInterval WCLiquidGlassContactsDiagnosticUpdateTotal = 0.0;
 static CFTimeInterval WCLiquidGlassContactsDiagnosticUpdateMaximum = 0.0;
 static __weak UIViewController *WCLiquidGlassContactsDiagnosticController = nil;
+static BOOL WCLiquidGlassContactsPrewarmCompleted = NO;
+static BOOL WCLiquidGlassContactsPrewarmRetryScheduled = NO;
+static NSUInteger WCLiquidGlassContactsPrewarmAttempts = 0;
 static __thread BOOL WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 static __thread BOOL WCLiquidGlassHomeCornerTableLayoutApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
@@ -118,6 +121,7 @@ static NSRange WCLiquidGlassHomeCornerVisualSectionRange(
 static void WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook(void);
 static void WCLiquidGlassInstallHomeCornerContactsCellLayoutHook(void);
 static void WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook(void);
+static void WCLiquidGlassContactsPrewarmIfPossible(void);
 
 static void WCLiquidGlassContactsDiagnosticAppend(NSString *event) {
     if (!WCLiquidGlassContactsDiagnosticStarted || event.length == 0) {
@@ -147,6 +151,7 @@ static void WCLiquidGlassContactsDiagnosticArm(void) {
                      queue:NSOperationQueue.mainQueue
                 usingBlock:^(__unused NSNotification *notification) {
         WCLiquidGlassContactsDiagnosticAppend(@"UIApplicationDidBecomeActiveNotification");
+        WCLiquidGlassContactsPrewarmIfPossible();
     }];
     [NSNotificationCenter.defaultCenter
         addObserverForName:UIApplicationWillEnterForegroundNotification
@@ -359,6 +364,77 @@ static void WCLiquidGlassContactsDiagnosticViewDidAppear(UIViewController *self,
          (CACurrentMediaTime() - started) * 1000.0,
          animated ? @"YES" : @"NO"]);
     WCLiquidGlassContactsDiagnosticSnapshot(self, @"after viewDidAppear");
+}
+
+static UIViewController *WCLiquidGlassFindContactsController(UIViewController *controller,
+                                                              Class contactsClass,
+                                                              NSUInteger depth) {
+    if (!controller || !contactsClass || depth > 12) {
+        return nil;
+    }
+    if ([controller isKindOfClass:contactsClass]) {
+        return controller;
+    }
+    UIViewController *presented =
+        WCLiquidGlassFindContactsController(controller.presentedViewController,
+                                             contactsClass,
+                                             depth + 1);
+    if (presented) {
+        return presented;
+    }
+    for (UIViewController *child in controller.childViewControllers) {
+        UIViewController *match =
+            WCLiquidGlassFindContactsController(child, contactsClass, depth + 1);
+        if (match) {
+            return match;
+        }
+    }
+    return nil;
+}
+
+static void WCLiquidGlassContactsPrewarmIfPossible(void) {
+    if (WCLiquidGlassContactsPrewarmCompleted) {
+        return;
+    }
+    Class contactsClass = NSClassFromString(@"ContactsViewController");
+    UIViewController *contactsController = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) {
+            continue;
+        }
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            contactsController =
+                WCLiquidGlassFindContactsController(window.rootViewController,
+                                                     contactsClass,
+                                                     0);
+            if (contactsController) {
+                break;
+            }
+        }
+        if (contactsController) {
+            break;
+        }
+    }
+    if (contactsController) {
+        WCLiquidGlassContactsPrewarmCompleted = YES;
+        CFTimeInterval started = CACurrentMediaTime();
+        [contactsController loadViewIfNeeded];
+        WCLiquidGlassContactsDiagnosticAppend(
+            [NSString stringWithFormat:@"contacts controller prewarmed duration=%.3fms",
+             (CACurrentMediaTime() - started) * 1000.0]);
+        return;
+    }
+    if (WCLiquidGlassContactsPrewarmRetryScheduled ||
+        WCLiquidGlassContactsPrewarmAttempts >= 10) {
+        return;
+    }
+    WCLiquidGlassContactsPrewarmRetryScheduled = YES;
+    WCLiquidGlassContactsPrewarmAttempts += 1;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        WCLiquidGlassContactsPrewarmRetryScheduled = NO;
+        WCLiquidGlassContactsPrewarmIfPossible();
+    });
 }
 
 static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(UITableView *tableView) {
@@ -1540,6 +1616,11 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
         WCLiquidGlassInstallHomeCornerTableLayoutHook();
         WCLiquidGlassInstallContactsDiagnosticLifecycleHooks();
+        if (UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                WCLiquidGlassContactsPrewarmIfPossible();
+            });
+        }
         return;
     }
     WCLiquidGlassHomeCornersHooksInstalled = YES;
@@ -1554,6 +1635,11 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
         WCLiquidGlassHomeCornersConfigurationEpoch += 1;
         WCLiquidGlassHomeCornersRefreshVisibleTables();
     }];
+    if (UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            WCLiquidGlassContactsPrewarmIfPossible();
+        });
+    }
 }
 
 static NSString *WCLiquidGlassHomeCornersDiagnosticRect(CGRect rect) {
