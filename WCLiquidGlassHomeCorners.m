@@ -25,9 +25,6 @@ static void (*WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor)(UITableView
 static void (*WCLiquidGlassOriginalHomeCornerTableLayoutSubviews)(UITableView *, SEL) = NULL;
 static CGFloat (*WCLiquidGlassOriginalHomeHeightForRow)(id, SEL, UITableView *, NSIndexPath *) = NULL;
 static CGFloat (*WCLiquidGlassOriginalContactsHeightForHeader)(id, SEL, UITableView *, NSInteger) = NULL;
-static void (*WCLiquidGlassOriginalContactsViewDidLoad)(UIViewController *, SEL) = NULL;
-static void (*WCLiquidGlassOriginalContactsViewWillAppear)(UIViewController *, SEL, BOOL) = NULL;
-static void (*WCLiquidGlassOriginalContactsViewDidAppear)(UIViewController *, SEL, BOOL) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
@@ -35,8 +32,6 @@ static BOOL WCLiquidGlassHomeCornerContactsCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerContactsCellHookInstallAttempts = 0;
 static BOOL WCLiquidGlassHomeCornerContactsAvatarHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerContactsAvatarHookInstallAttempts = 0;
-static BOOL WCLiquidGlassContactsDiagnosticHookRetryScheduled = NO;
-static NSUInteger WCLiquidGlassContactsDiagnosticHookInstallAttempts = 0;
 static BOOL WCLiquidGlassContactsDiagnosticStarted = NO;
 static BOOL WCLiquidGlassContactsDiagnosticSaved = NO;
 static BOOL WCLiquidGlassContactsDiagnosticEntered = NO;
@@ -310,55 +305,6 @@ static void WCLiquidGlassContactsDiagnosticStart(UIViewController *controller,
             }
         });
     }
-}
-
-static void WCLiquidGlassContactsDiagnosticViewDidLoad(UIViewController *self, SEL selector) {
-    WCLiquidGlassContactsDiagnosticStart(self, @"ContactsViewController viewDidLoad");
-    CFTimeInterval hookInstallStarted = CACurrentMediaTime();
-    WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
-    WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
-    WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
-    WCLiquidGlassContactsDiagnosticAppend(
-        [NSString stringWithFormat:@"contacts hooks installed lazily duration=%.3fms",
-         (CACurrentMediaTime() - hookInstallStarted) * 1000.0]);
-    CFTimeInterval started = CACurrentMediaTime();
-    if (WCLiquidGlassOriginalContactsViewDidLoad) {
-        WCLiquidGlassOriginalContactsViewDidLoad(self, selector);
-    }
-    WCLiquidGlassContactsDiagnosticAppend(
-        [NSString stringWithFormat:@"viewDidLoad original completed duration=%.3fms",
-         (CACurrentMediaTime() - started) * 1000.0]);
-    WCLiquidGlassContactsDiagnosticSnapshot(self, @"after viewDidLoad");
-}
-
-static void WCLiquidGlassContactsDiagnosticViewWillAppear(UIViewController *self,
-                                                           SEL selector,
-                                                           BOOL animated) {
-    WCLiquidGlassContactsDiagnosticStart(self, @"ContactsViewController viewWillAppear");
-    CFTimeInterval started = CACurrentMediaTime();
-    if (WCLiquidGlassOriginalContactsViewWillAppear) {
-        WCLiquidGlassOriginalContactsViewWillAppear(self, selector, animated);
-    }
-    WCLiquidGlassContactsDiagnosticAppend(
-        [NSString stringWithFormat:@"viewWillAppear original completed duration=%.3fms animated=%@",
-         (CACurrentMediaTime() - started) * 1000.0,
-         animated ? @"YES" : @"NO"]);
-    WCLiquidGlassContactsDiagnosticSnapshot(self, @"after viewWillAppear");
-}
-
-static void WCLiquidGlassContactsDiagnosticViewDidAppear(UIViewController *self,
-                                                          SEL selector,
-                                                          BOOL animated) {
-    WCLiquidGlassContactsDiagnosticStart(self, @"ContactsViewController viewDidAppear");
-    CFTimeInterval started = CACurrentMediaTime();
-    if (WCLiquidGlassOriginalContactsViewDidAppear) {
-        WCLiquidGlassOriginalContactsViewDidAppear(self, selector, animated);
-    }
-    WCLiquidGlassContactsDiagnosticAppend(
-        [NSString stringWithFormat:@"viewDidAppear original completed duration=%.3fms animated=%@",
-         (CACurrentMediaTime() - started) * 1000.0,
-         animated ? @"YES" : @"NO"]);
-    WCLiquidGlassContactsDiagnosticSnapshot(self, @"after viewDidAppear");
 }
 
 static WCLiquidGlassHomeCornerTableState *WCLiquidGlassHomeCornerStateForTable(UITableView *tableView) {
@@ -797,7 +743,6 @@ static void WCLiquidGlassHomeCornerInstallHomeHeightHook(void) {
 
 static void WCLiquidGlassHomeCornerInstallNativeHeightHooks(void) {
     WCLiquidGlassHomeCornerInstallHomeHeightHook();
-    WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
 }
 
 static void WCLiquidGlassHomeCornerRequestNativeHeightUpdate(UITableView *tableView) {
@@ -1196,6 +1141,13 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
     }
     if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
         WCLiquidGlassContactsDiagnosticStart(nil, @"contacts table role detected");
+        CFTimeInterval contactsHookInstallStarted = CACurrentMediaTime();
+        WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
+        WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
+        WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
+        WCLiquidGlassContactsDiagnosticAppend(
+            [NSString stringWithFormat:@"contacts hooks installed after native table layout duration=%.3fms",
+             (CACurrentMediaTime() - contactsHookInstallStarted) * 1000.0]);
     }
     if (role != WCLiquidGlassHomeCornerTableRoleNone) {
         WCLiquidGlassHomeCornerInstallNativeHeightHooks();
@@ -1496,57 +1448,16 @@ static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
                     (IMP *)&WCLiquidGlassOriginalHomeCornerTableLayoutSubviews);
 }
 
-static void WCLiquidGlassInstallContactsDiagnosticLifecycleHooks(void) {
-    Class contactsClass = NSClassFromString(@"ContactsViewController");
-    if (!contactsClass) {
-        if (!WCLiquidGlassContactsDiagnosticHookRetryScheduled &&
-            WCLiquidGlassContactsDiagnosticHookInstallAttempts < 10) {
-            WCLiquidGlassContactsDiagnosticHookRetryScheduled = YES;
-            WCLiquidGlassContactsDiagnosticHookInstallAttempts += 1;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                WCLiquidGlassContactsDiagnosticHookRetryScheduled = NO;
-                WCLiquidGlassInstallContactsDiagnosticLifecycleHooks();
-            });
-        }
-        return;
-    }
-    if (!WCLiquidGlassOriginalContactsViewDidLoad &&
-        class_getInstanceMethod(contactsClass, @selector(viewDidLoad))) {
-        MSHookMessageEx(contactsClass,
-                        @selector(viewDidLoad),
-                        (IMP)&WCLiquidGlassContactsDiagnosticViewDidLoad,
-                        (IMP *)&WCLiquidGlassOriginalContactsViewDidLoad);
-    }
-    if (!WCLiquidGlassOriginalContactsViewWillAppear &&
-        class_getInstanceMethod(contactsClass, @selector(viewWillAppear:))) {
-        MSHookMessageEx(contactsClass,
-                        @selector(viewWillAppear:),
-                        (IMP)&WCLiquidGlassContactsDiagnosticViewWillAppear,
-                        (IMP *)&WCLiquidGlassOriginalContactsViewWillAppear);
-    }
-    if (!WCLiquidGlassOriginalContactsViewDidAppear &&
-        class_getInstanceMethod(contactsClass, @selector(viewDidAppear:))) {
-        MSHookMessageEx(contactsClass,
-                        @selector(viewDidAppear:),
-                        (IMP)&WCLiquidGlassContactsDiagnosticViewDidAppear,
-                        (IMP *)&WCLiquidGlassOriginalContactsViewDidAppear);
-    }
-}
-
 void WCLiquidGlassInstallHomeCornersHooks(void) {
-    WCLiquidGlassContactsDiagnosticArm();
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
         WCLiquidGlassInstallHomeCornerTableLayoutHook();
-        WCLiquidGlassInstallContactsDiagnosticLifecycleHooks();
         return;
     }
     WCLiquidGlassHomeCornersHooksInstalled = YES;
     WCLiquidGlassHomeCornerInstallHomeHeightHook();
     WCLiquidGlassInstallHomeCornerCellLayoutHook();
     WCLiquidGlassInstallHomeCornerTableLayoutHook();
-    WCLiquidGlassInstallContactsDiagnosticLifecycleHooks();
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                       object:nil
                                                        queue:NSOperationQueue.mainQueue
