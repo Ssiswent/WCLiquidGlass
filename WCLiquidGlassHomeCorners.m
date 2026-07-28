@@ -620,8 +620,8 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     }
     CGRect targetContentFrame = baseContentFrame;
     if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
-        targetContentFrame.origin.x += 8.0;
-        targetContentFrame.size.width = MAX(0.0, targetContentFrame.size.width - 16.0);
+        targetContentFrame.origin.x += 16.0;
+        targetContentFrame.size.width = MAX(0.0, targetContentFrame.size.width - 24.0);
     }
     BOOL needsContentFrameUpdate = !CGRectEqualToRect(cell.contentView.frame,
                                                       targetContentFrame);
