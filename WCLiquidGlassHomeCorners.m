@@ -659,9 +659,8 @@ static UIView *WCLiquidGlassHomeCornerFirstCellSubview(UITableView *tableView) {
     return nil;
 }
 
-static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
-                                                   NSInteger section,
-                                                   WCLiquidGlassHomeCornerTableRole role) {
+static CGRect WCLiquidGlassHomeCornerRawSectionFrame(UITableView *tableView,
+                                                      NSInteger section) {
     NSInteger rowCount = [tableView numberOfRowsInSection:section];
     if (rowCount <= 0) {
         return CGRectNull;
@@ -670,14 +669,69 @@ static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
                                                                          inSection:section]];
     CGRect lastRow = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:rowCount - 1
                                                                         inSection:section]];
-    CGRect sectionFrame = CGRectUnion(firstRow, lastRow);
-    CGFloat inset = role == WCLiquidGlassHomeCornerTableRoleOtherTab
-        ? 8.0
-        : WCLiquidGlassPreferences.homeCornerInset;
-    sectionFrame.origin.x = inset;
-    sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
+    return CGRectUnion(firstRow, lastRow);
+}
+
+static BOOL WCLiquidGlassHomeCornerSectionsAreContiguous(UITableView *tableView,
+                                                          NSInteger firstSection,
+                                                          NSInteger secondSection) {
+    CGRect firstFrame = WCLiquidGlassHomeCornerRawSectionFrame(tableView, firstSection);
+    CGRect secondFrame = WCLiquidGlassHomeCornerRawSectionFrame(tableView, secondSection);
+    if (CGRectIsNull(firstFrame) || CGRectIsNull(secondFrame)) {
+        return NO;
+    }
+    CGFloat gap = CGRectGetMinY(secondFrame) - CGRectGetMaxY(firstFrame);
+    return gap >= -1.0 && gap <= 1.0;
+}
+
+static NSRange WCLiquidGlassHomeCornerVisualSectionRange(
+    UITableView *tableView,
+    NSInteger section,
+    WCLiquidGlassHomeCornerTableRole role) {
+    if (role != WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        return NSMakeRange(section, 1);
+    }
+    NSInteger sectionCount = tableView.numberOfSections;
+    NSInteger firstSection = section;
+    NSInteger lastSection = section;
+    while (firstSection > 0 &&
+           WCLiquidGlassHomeCornerSectionsAreContiguous(tableView,
+                                                        firstSection - 1,
+                                                        firstSection)) {
+        firstSection -= 1;
+    }
+    while (lastSection + 1 < sectionCount &&
+           WCLiquidGlassHomeCornerSectionsAreContiguous(tableView,
+                                                        lastSection,
+                                                        lastSection + 1)) {
+        lastSection += 1;
+    }
+    return NSMakeRange(firstSection, lastSection - firstSection + 1);
+}
+
+static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
+                                                   NSInteger section,
+                                                   WCLiquidGlassHomeCornerTableRole role) {
+    NSRange sectionRange = WCLiquidGlassHomeCornerVisualSectionRange(tableView,
+                                                                    section,
+                                                                    role);
+    CGRect firstSectionFrame = WCLiquidGlassHomeCornerRawSectionFrame(tableView,
+                                                                      sectionRange.location);
+    CGRect lastSectionFrame = WCLiquidGlassHomeCornerRawSectionFrame(
+        tableView,
+        NSMaxRange(sectionRange) - 1);
+    if (CGRectIsNull(firstSectionFrame) || CGRectIsNull(lastSectionFrame)) {
+        return CGRectNull;
+    }
+    CGRect sectionFrame = CGRectUnion(firstSectionFrame, lastSectionFrame);
     if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
-        sectionFrame = CGRectInset(sectionFrame, 0.0, 4.0);
+        sectionFrame.origin.x = 0.0;
+        sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - 24.0);
+        sectionFrame = CGRectInset(sectionFrame, 0.0, -8.0);
+    } else {
+        CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
+        sectionFrame.origin.x = inset;
+        sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
     }
     return CGRectIntegral(sectionFrame);
 }
@@ -708,7 +762,10 @@ static void WCLiquidGlassHomeCornerUpdateSectionGlassViews(
         for (UITableViewCell *cell in tableView.visibleCells) {
             NSIndexPath *indexPath = [tableView indexPathForCell:cell];
             if (indexPath && !WCLiquidGlassHomeCornerUsesIndependentCard(role, indexPath)) {
-                [activeSections addIndex:indexPath.section];
+                NSRange sectionRange = WCLiquidGlassHomeCornerVisualSectionRange(tableView,
+                                                                                indexPath.section,
+                                                                                role);
+                [activeSections addIndex:sectionRange.location];
             }
         }
     }
