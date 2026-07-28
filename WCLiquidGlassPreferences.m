@@ -38,7 +38,6 @@ static NSString *const WCLiquidGlassHomeCornerInsetKey = @"WCLiquidGlass.HomeCor
 static NSString *const WCLiquidGlassHomeCornerRadiusKey = @"WCLiquidGlass.HomeCorners.Radius";
 static NSString *const WCLiquidGlassHomeSeparateCardsEnabledKey = @"WCLiquidGlass.HomeCorners.SeparateCardsEnabled";
 static NSString *const WCLiquidGlassHomeCardGapKey = @"WCLiquidGlass.HomeCorners.Gap";
-static NSString *const WCLiquidGlassHomePinnedCardGapEnabledKey = @"WCLiquidGlass.HomeCorners.PinnedGapEnabled";
 static NSString *const WCLiquidGlassHomeLiquidBackgroundEnabledKey = @"WCLiquidGlass.HomeCorners.LiquidBackgroundEnabled";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
@@ -200,7 +199,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeCornerRadiusKey: @32.0,
         WCLiquidGlassHomeSeparateCardsEnabledKey: @YES,
         WCLiquidGlassHomeCardGapKey: @8.0,
-        WCLiquidGlassHomePinnedCardGapEnabledKey: @YES,
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
@@ -314,15 +312,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
-+ (BOOL)homePinnedCardGapEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomePinnedCardGapEnabledKey];
-}
-
-+ (void)setHomePinnedCardGapEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomePinnedCardGapEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
 + (BOOL)homeLiquidBackgroundEnabled {
     return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
 }
@@ -412,7 +401,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassHomeCornerRadiusKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCardGapKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomePinnedCardGapEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassChatTimeGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassAnchorOnLeftKey];

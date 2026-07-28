@@ -1582,7 +1582,7 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"首页圆角";
+    self.title = @"首页圆角与液态";
     WCLiquidGlassConfigureSettingsTableBackground(self);
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64.0;
@@ -1603,7 +1603,7 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return 7;
+    return 6;
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -1613,11 +1613,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return @"卡片化首页列表";
+    return @"主页会话样式";
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    return @"主页可在独立卡片与微信原生连续分组之间切换；会话间距仅用于独立卡片。发现、通讯录和我保留微信原生连续分组，只应用 26 pt 外层圆角与液态材质。";
+    return @"主页可切换独立卡片与微信原生连续分区；独立卡片可调缩进、圆角和间距。发现、通讯录和我保持连续分区，使用固定圆角和液态材质。";
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1695,13 +1695,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.section == 0) {
         switch (indexPath.row) {
             case 0:
-                return [self wc_switchCellWithTitle:@"卡片化主页列表"
-                                               detail:@"会话行两侧缩进并加圆角卡片"
+                return [self wc_switchCellWithTitle:@"启用首页圆角与液态"
+                                               detail:@"主页及微信分区的圆角和液态材质"
                                                   on:active
                                               enabled:YES
                                               action:@selector(wc_homeCornersChanged:)];
             case 1:
-                return [self wc_sliderCellWithTitle:@"左右缩进"
+                return [self wc_sliderCellWithTitle:@"主页左右缩进"
                                                value:WCLiquidGlassPreferences.homeCornerInset
                                              minimum:0.0
                                              maximum:32.0
@@ -1715,13 +1715,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                  tag:WCLiquidGlassHomeCornersControlTagHomeRadius
                                              enabled:active];
             case 3:
-                return [self wc_switchCellWithTitle:@"每条独立圆角卡片"
-                                               detail:@"每条会话单独成为圆角卡片"
+                return [self wc_switchCellWithTitle:@"主页使用独立卡片"
+                                               detail:@"关闭后合并为微信原生连续分区"
                                                   on:separate
                                               enabled:active
                                               action:@selector(wc_separateCardsChanged:)];
             case 4: {
-                UITableViewCell *cell = [self wc_cellWithTitle:@"会话间距"
+                UITableViewCell *cell = [self wc_cellWithTitle:@"独立卡片间距"
                                                          detail:WCLiquidGlassHomeCornersDisplayValue(WCLiquidGlassPreferences.homeCardGap)
                                                         enabled:active && separate
                                                      identifier:@"WCLiquidGlassHomeCornersValueCell"];
@@ -1729,14 +1729,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 return cell;
             }
             case 5:
-                return [self wc_switchCellWithTitle:@"置顶会话间隙"
-                                               detail:@"置顶与普通会话之间保留额外卡片间距"
-                                                  on:WCLiquidGlassPreferences.homePinnedCardGapEnabled
-                                              enabled:active && separate
-                                              action:@selector(wc_pinnedGapChanged:)];
-            case 6:
-                return [self wc_switchCellWithTitle:@"液态背景"
-                                               detail:@"卡片背景跟随“液态效果”"
+                return [self wc_switchCellWithTitle:@"启用液态背景"
+                                               detail:@"卡片与分区使用“液态效果”材质"
                                                   on:WCLiquidGlassPreferences.homeLiquidBackgroundEnabled
                                               enabled:active
                                               action:@selector(wc_liquidBackgroundChanged:)];
@@ -1758,7 +1752,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             [WCLiquidGlassPreferences setHomeCornerRadius:value];
         }];
     } else if (indexPath.section == 0 && indexPath.row == 4) {
-        [self wc_presentValueInputWithTitle:@"会话间距" value:WCLiquidGlassPreferences.homeCardGap minimum:0.0 maximum:24.0 setter:^(CGFloat value) {
+        [self wc_presentValueInputWithTitle:@"独立卡片间距" value:WCLiquidGlassPreferences.homeCardGap minimum:0.0 maximum:24.0 setter:^(CGFloat value) {
             [WCLiquidGlassPreferences setHomeCardGap:value];
         }];
     }
@@ -1770,10 +1764,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_separateCardsChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setHomeSeparateCardsEnabled:sender.isOn];
-}
-
-- (void)wc_pinnedGapChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setHomePinnedCardGapEnabled:sender.isOn];
 }
 
 - (void)wc_liquidBackgroundChanged:(UISwitch *)sender {

@@ -1426,7 +1426,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角可将会话列表改为独立卡片。");
+        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。");
@@ -1442,7 +1442,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角可将会话列表改为独立卡片。", 88.0);
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。", 88.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
@@ -1493,8 +1493,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.chatTimeGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1) {
-        WCLiquidGlassConfigureCell(cell, @"首页圆角", @"卡片化主页列表",
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
+        WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", @"主页与微信分区的圆角和液态材质",
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 2) {
         WCLiquidGlassConfigureCell(cell, @"WCGlass iOS 27 兼容修复", @"修复带键盘返回时的闪退",
