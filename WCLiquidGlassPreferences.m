@@ -297,12 +297,11 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 }
 
 + (BOOL)homeSeparateCardsEnabled {
-    return YES;
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
 }
 
 + (void)setHomeSeparateCardsEnabled:(BOOL)enabled {
-    (void)enabled;
-    [NSUserDefaults.standardUserDefaults setBool:YES forKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
