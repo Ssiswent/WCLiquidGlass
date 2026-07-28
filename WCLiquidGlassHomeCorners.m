@@ -15,6 +15,7 @@ static const void *WCLiquidGlassHomeCornerTableRoleKey = &WCLiquidGlassHomeCorne
 static const void *WCLiquidGlassHomeCornerTableRoleEpochKey = &WCLiquidGlassHomeCornerTableRoleEpochKey;
 static const void *WCLiquidGlassHomeCornerTableRoleRetryScheduledKey = &WCLiquidGlassHomeCornerTableRoleRetryScheduledKey;
 static const void *WCLiquidGlassHomeCornerTableRoleRetryCountKey = &WCLiquidGlassHomeCornerTableRoleRetryCountKey;
+static const void *WCLiquidGlassHomeCornerTableStabilizationEpochKey = &WCLiquidGlassHomeCornerTableStabilizationEpochKey;
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static const void *WCLiquidGlassHomeCornerNativeHeightEpochKey = &WCLiquidGlassHomeCornerNativeHeightEpochKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
@@ -76,6 +77,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @end
 
 static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView);
+static void WCLiquidGlassHomeCornerScheduleInitialStabilization(UITableView *tableView);
 static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
                                                   NSIndexPath *indexPath,
                                                   WCLiquidGlassHomeCornerTableRole role,
@@ -347,7 +349,7 @@ static UIColor *WCLiquidGlassHomeCornerActiveGlassTintColor(void) {
     }];
 }
 
-static UIColor *WCLiquidGlassHomeCornerStableFindFriendBackingColor(void) {
+static UIColor *WCLiquidGlassHomeCornerStableOtherTabBackingColor(void) {
     WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
     return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
         BOOL dark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
@@ -369,7 +371,7 @@ static UIColor *WCLiquidGlassHomeCornerStableFindFriendBackingColor(void) {
     }];
 }
 
-static UIColor *WCLiquidGlassHomeCornerStableFindFriendTintColor(void) {
+static UIColor *WCLiquidGlassHomeCornerStableOtherTabTintColor(void) {
     return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
         return traits.userInterfaceStyle == UIUserInterfaceStyleDark
             ? [UIColor colorWithWhite:1.0 alpha:0.09]
@@ -505,7 +507,7 @@ static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
         backingView.layer.cornerRadius = cornerRadius;
         backingView.layer.maskedCorners = corners;
         backingView.clipsToBounds = YES;
-        backingView.backgroundColor = WCLiquidGlassHomeCornerStableFindFriendBackingColor();
+        backingView.backgroundColor = WCLiquidGlassHomeCornerStableOtherTabBackingColor();
     } else if (backingView) {
         [backingView removeFromSuperview];
     }
@@ -550,7 +552,7 @@ static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
     }
     if (state.appliedGlassTintState != tintState) {
         overlay.contentView.backgroundColor = usesStableBacking
-            ? WCLiquidGlassHomeCornerStableFindFriendTintColor()
+            ? WCLiquidGlassHomeCornerStableOtherTabTintColor()
             : WCLiquidGlassHomeCornerActiveGlassTintColor();
         state.appliedGlassTintState = tintState;
     }
@@ -732,6 +734,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     WCLiquidGlassHomeCornerCellState *state = WCLiquidGlassHomeCornerStateForCell(cell);
     CGRect baseFrame = WCLiquidGlassHomeCornerBaseFrame(cell, state);
     BOOL preservesNativeGeometry = role == WCLiquidGlassHomeCornerTableRoleFindFriend;
+    BOOL usesStableBacking = role != WCLiquidGlassHomeCornerTableRoleHome;
     if (preservesNativeGeometry && state.hasAppliedFrame &&
         CGRectEqualToRect(cell.frame, state.appliedFrame)) {
         cell.frame = state.baseFrame;
@@ -763,7 +766,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     CACornerMask cellCorners = preservesNativeGeometry ? 0 : corners;
     CGFloat targetCornerRadius = cellCorners ? radius : 0.0;
     NSInteger glassState = WCLiquidGlassPreferences.glassAppearance * 10 + cell.traitCollection.userInterfaceStyle;
-    NSInteger tintState = glassState * 2 + (preservesNativeGeometry ? 1 : 0);
+    NSInteger tintState = glassState * 2 + (usesStableBacking ? 1 : 0);
     BOOL isLiquidBackground = WCLiquidGlassPreferences.homeLiquidBackgroundEnabled;
     BOOL suppressesSelectionEffect = role == WCLiquidGlassHomeCornerTableRoleFindFriend;
     CGFloat verticalInset = preservesNativeGeometry
@@ -792,7 +795,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
          state.glassOverlay.layer.cornerRadius != visualCornerRadius ||
          state.glassOverlay.layer.maskedCorners != corners ||
          !state.glassOverlay.clipsToBounds ||
-         (preservesNativeGeometry &&
+         (usesStableBacking &&
           (!state.glassBackingView ||
            state.glassBackingView.superview != cell.contentView ||
            !CGRectEqualToRect(state.glassBackingView.frame, CGRectIntegral(overlayFrame)) ||
@@ -860,7 +863,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
                                                   overlayFrame,
                                                   visualCornerRadius,
                                                   corners,
-                                                  preservesNativeGeometry);
+                                                  usesStableBacking);
         if (preservesNativeGeometry) {
             WCLiquidGlassHomeCornerCenterFindFriendContent(cell, state, overlayFrame);
         }
@@ -893,6 +896,7 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
                                  @YES,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         WCLiquidGlassHomeCornerRequestNativeHeightUpdate(tableView);
+        WCLiquidGlassHomeCornerScheduleInitialStabilization(tableView);
     }
     for (UITableViewCell *cell in tableView.visibleCells) {
         if (role == WCLiquidGlassHomeCornerTableRoleNone) {
@@ -908,6 +912,35 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
                                  @NO,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
+}
+
+static void WCLiquidGlassHomeCornerScheduleInitialStabilization(UITableView *tableView) {
+    WCLiquidGlassHomeCornerTableRole role = WCLiquidGlassHomeCornerRoleForTable(tableView);
+    if (role == WCLiquidGlassHomeCornerTableRoleNone ||
+        role == WCLiquidGlassHomeCornerTableRoleHome) {
+        return;
+    }
+    NSNumber *epoch = objc_getAssociatedObject(tableView, WCLiquidGlassHomeCornerTableStabilizationEpochKey);
+    if (epoch.unsignedIntegerValue == WCLiquidGlassHomeCornersConfigurationEpoch) {
+        return;
+    }
+    objc_setAssociatedObject(tableView,
+                             WCLiquidGlassHomeCornerTableStabilizationEpochKey,
+                             @(WCLiquidGlassHomeCornersConfigurationEpoch),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (WCLiquidGlassHomeCornerRoleForTable(tableView) == WCLiquidGlassHomeCornerTableRoleNone) {
+            return;
+        }
+        [tableView layoutIfNeeded];
+        WCLiquidGlassHomeCornersUpdateTable(tableView);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (WCLiquidGlassHomeCornerRoleForTable(tableView) != WCLiquidGlassHomeCornerTableRoleNone) {
+                WCLiquidGlassHomeCornersUpdateTable(tableView);
+            }
+        });
+    });
 }
 
 static UITableView *WCLiquidGlassHomeCornersTableForCell(UITableViewCell *cell) {
