@@ -643,9 +643,9 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         role == WCLiquidGlassHomeCornerTableRoleFindFriend ||
         role == WCLiquidGlassHomeCornerTableRoleMore;
     if (insetsStandardTabContent) {
-        targetContentFrame.origin.x += 8.0;
+        targetContentFrame.origin.x += 16.0;
         targetContentFrame.size.width =
-            MAX(0.0, targetContentFrame.size.width - 16.0);
+            MAX(0.0, targetContentFrame.size.width - 32.0);
     }
     NSRange visualSectionRange = WCLiquidGlassHomeCornerVisualSectionRange(tableView,
                                                                           indexPath.section,
