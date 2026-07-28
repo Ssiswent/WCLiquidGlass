@@ -996,16 +996,20 @@ static CGFloat WCLiquidGlassHomeCornerMaximumImageCornerRadius(UIView *view) {
 static void WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(UIView *view) {
     NSString *className = NSStringFromClass(view.class);
     if ([className isEqualToString:@"MMHeadImageView"]) {
+        CGFloat inheritedRadius = 0.0;
+        for (UIView *imageSubview in view.subviews) {
+            NSString *imageSubviewClassName = NSStringFromClass(imageSubview.class);
+            if ([imageSubviewClassName isEqualToString:@"MMUILongPressImageView"]) {
+                continue;
+            }
+            inheritedRadius = MAX(
+                inheritedRadius,
+                WCLiquidGlassHomeCornerMaximumImageCornerRadius(imageSubview));
+        }
         for (UIView *subview in view.subviews) {
             NSString *subviewClassName = NSStringFromClass(subview.class);
             if (![subviewClassName isEqualToString:@"MMUILongPressImageView"]) {
                 continue;
-            }
-            CGFloat inheritedRadius = 0.0;
-            for (UIView *imageSubview in subview.subviews) {
-                inheritedRadius = MAX(
-                    inheritedRadius,
-                    WCLiquidGlassHomeCornerMaximumImageCornerRadius(imageSubview));
             }
             CGFloat maximumValidRadius =
                 MIN(CGRectGetWidth(subview.bounds), CGRectGetHeight(subview.bounds)) * 0.5;
