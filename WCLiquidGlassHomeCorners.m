@@ -17,8 +17,10 @@ static const void *WCLiquidGlassHomeCornerTableRoleRetryScheduledKey = &WCLiquid
 static const void *WCLiquidGlassHomeCornerTableRoleRetryCountKey = &WCLiquidGlassHomeCornerTableRoleRetryCountKey;
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static const void *WCLiquidGlassHomeCornerNativeHeightEpochKey = &WCLiquidGlassHomeCornerNativeHeightEpochKey;
+static const void *WCLiquidGlassHomeCornerContactsAvatarKey = &WCLiquidGlassHomeCornerContactsAvatarKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalContactsCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalContactsAvatarLayoutSubviews)(UIView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor)(UITableViewCell *, SEL, UIColor *) = NULL;
 static void (*WCLiquidGlassOriginalHomeCornerTableLayoutSubviews)(UITableView *, SEL) = NULL;
 static CGFloat (*WCLiquidGlassOriginalHomeHeightForRow)(id, SEL, UITableView *, NSIndexPath *) = NULL;
@@ -28,6 +30,8 @@ static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
 static BOOL WCLiquidGlassHomeCornerContactsCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerContactsCellHookInstallAttempts = 0;
+static BOOL WCLiquidGlassHomeCornerContactsAvatarHookRetryScheduled = NO;
+static NSUInteger WCLiquidGlassHomeCornerContactsAvatarHookInstallAttempts = 0;
 static __thread BOOL WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 static __thread BOOL WCLiquidGlassHomeCornerTableLayoutApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
@@ -982,46 +986,23 @@ static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL
     WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 }
 
-static CGFloat WCLiquidGlassHomeCornerMaximumImageCornerRadius(UIView *view) {
-    CGFloat maximumRadius = [view isKindOfClass:UIImageView.class]
-        ? view.layer.cornerRadius
-        : 0.0;
-    for (UIView *subview in view.subviews) {
-        maximumRadius = MAX(maximumRadius,
-                            WCLiquidGlassHomeCornerMaximumImageCornerRadius(subview));
-    }
-    return maximumRadius;
-}
-
 static void WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(UIView *view) {
     NSString *className = NSStringFromClass(view.class);
     if ([className isEqualToString:@"MMHeadImageView"]) {
-        CGFloat inheritedRadius = 0.0;
-        for (UIView *imageSubview in view.subviews) {
-            NSString *imageSubviewClassName = NSStringFromClass(imageSubview.class);
-            if ([imageSubviewClassName isEqualToString:@"MMUILongPressImageView"]) {
-                continue;
-            }
-            inheritedRadius = MAX(
-                inheritedRadius,
-                WCLiquidGlassHomeCornerMaximumImageCornerRadius(imageSubview));
-        }
-        for (UIView *subview in view.subviews) {
-            NSString *subviewClassName = NSStringFromClass(subview.class);
-            if (![subviewClassName isEqualToString:@"MMUILongPressImageView"]) {
-                continue;
-            }
-            CGFloat maximumValidRadius =
-                MIN(CGRectGetWidth(subview.bounds), CGRectGetHeight(subview.bounds)) * 0.5;
-            if (inheritedRadius <= subview.layer.cornerRadius ||
-                inheritedRadius > maximumValidRadius + 0.5) {
-                continue;
-            }
+        objc_setAssociatedObject(view,
+                                 WCLiquidGlassHomeCornerContactsAvatarKey,
+                                 @YES,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        CGFloat radius = MIN(CGRectGetWidth(view.bounds), CGRectGetHeight(view.bounds)) * 0.5;
+        if (radius > 0.0 &&
+            (view.layer.cornerRadius != radius ||
+             !view.layer.masksToBounds ||
+             !view.clipsToBounds)) {
             [CATransaction begin];
             [CATransaction setDisableActions:YES];
-            subview.layer.cornerRadius = inheritedRadius;
-            subview.layer.masksToBounds = YES;
-            subview.clipsToBounds = YES;
+            view.layer.cornerRadius = radius;
+            view.layer.masksToBounds = YES;
+            view.clipsToBounds = YES;
             [CATransaction commit];
         }
         return;
@@ -1029,6 +1010,17 @@ static void WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(UIView *view) {
     for (UIView *subview in view.subviews) {
         WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(subview);
     }
+}
+
+static void WCLiquidGlassHomeCornerContactsAvatarLayoutSubviews(UIView *self, SEL selector) {
+    if (WCLiquidGlassOriginalContactsAvatarLayoutSubviews) {
+        WCLiquidGlassOriginalContactsAvatarLayoutSubviews(self, selector);
+    }
+    if (![objc_getAssociatedObject(self, WCLiquidGlassHomeCornerContactsAvatarKey) boolValue] ||
+        !WCLiquidGlassPreferences.homeCornersEnabled) {
+        return;
+    }
+    WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(self);
 }
 
 static void WCLiquidGlassHomeCornerContactsCellLayoutSubviews(UITableViewCell *self,
@@ -1161,6 +1153,33 @@ static void WCLiquidGlassInstallHomeCornerContactsCellLayoutHook(void) {
                     (IMP *)&WCLiquidGlassOriginalContactsCellLayoutSubviews);
 }
 
+static void WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook(void) {
+    if (WCLiquidGlassOriginalContactsAvatarLayoutSubviews) {
+        return;
+    }
+    Class avatarClass = NSClassFromString(@"MMHeadImageView");
+    Method layoutMethod = avatarClass
+        ? class_getInstanceMethod(avatarClass, @selector(layoutSubviews))
+        : NULL;
+    if (!layoutMethod) {
+        if (!WCLiquidGlassHomeCornerContactsAvatarHookRetryScheduled &&
+            WCLiquidGlassHomeCornerContactsAvatarHookInstallAttempts < 10) {
+            WCLiquidGlassHomeCornerContactsAvatarHookRetryScheduled = YES;
+            WCLiquidGlassHomeCornerContactsAvatarHookInstallAttempts += 1;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                WCLiquidGlassHomeCornerContactsAvatarHookRetryScheduled = NO;
+                WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
+            });
+        }
+        return;
+    }
+    MSHookMessageEx(avatarClass,
+                    @selector(layoutSubviews),
+                    (IMP)&WCLiquidGlassHomeCornerContactsAvatarLayoutSubviews,
+                    (IMP *)&WCLiquidGlassOriginalContactsAvatarLayoutSubviews);
+}
+
 static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
     if (WCLiquidGlassOriginalHomeCornerTableLayoutSubviews) {
         return;
@@ -1175,6 +1194,7 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
         WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
+        WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
         WCLiquidGlassInstallHomeCornerTableLayoutHook();
         return;
     }
@@ -1182,6 +1202,7 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
     WCLiquidGlassHomeCornerInstallNativeHeightHooks();
     WCLiquidGlassInstallHomeCornerCellLayoutHook();
     WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
+    WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
     WCLiquidGlassInstallHomeCornerTableLayoutHook();
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                       object:nil
