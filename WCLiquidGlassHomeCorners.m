@@ -982,6 +982,51 @@ static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL
     WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 }
 
+static CGFloat WCLiquidGlassHomeCornerMaximumImageCornerRadius(UIView *view) {
+    CGFloat maximumRadius = [view isKindOfClass:UIImageView.class]
+        ? view.layer.cornerRadius
+        : 0.0;
+    for (UIView *subview in view.subviews) {
+        maximumRadius = MAX(maximumRadius,
+                            WCLiquidGlassHomeCornerMaximumImageCornerRadius(subview));
+    }
+    return maximumRadius;
+}
+
+static void WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(UIView *view) {
+    NSString *className = NSStringFromClass(view.class);
+    if ([className isEqualToString:@"MMHeadImageView"]) {
+        for (UIView *subview in view.subviews) {
+            NSString *subviewClassName = NSStringFromClass(subview.class);
+            if (![subviewClassName isEqualToString:@"MMUILongPressImageView"]) {
+                continue;
+            }
+            CGFloat inheritedRadius = 0.0;
+            for (UIView *imageSubview in subview.subviews) {
+                inheritedRadius = MAX(
+                    inheritedRadius,
+                    WCLiquidGlassHomeCornerMaximumImageCornerRadius(imageSubview));
+            }
+            CGFloat maximumValidRadius =
+                MIN(CGRectGetWidth(subview.bounds), CGRectGetHeight(subview.bounds)) * 0.5;
+            if (inheritedRadius <= subview.layer.cornerRadius ||
+                inheritedRadius > maximumValidRadius + 0.5) {
+                continue;
+            }
+            [CATransaction begin];
+            [CATransaction setDisableActions:YES];
+            subview.layer.cornerRadius = inheritedRadius;
+            subview.layer.masksToBounds = YES;
+            subview.clipsToBounds = YES;
+            [CATransaction commit];
+        }
+        return;
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(subview);
+    }
+}
+
 static void WCLiquidGlassHomeCornerContactsCellLayoutSubviews(UITableViewCell *self,
                                                                SEL selector) {
     if (WCLiquidGlassOriginalContactsCellLayoutSubviews) {
@@ -999,12 +1044,12 @@ static void WCLiquidGlassHomeCornerContactsCellLayoutSubviews(UITableViewCell *s
     NSRange visualSectionRange = WCLiquidGlassHomeCornerVisualSectionRange(tableView,
                                                                           indexPath.section,
                                                                           role);
-    if (visualSectionRange.location != 0) {
-        return;
+    if (visualSectionRange.location == 0) {
+        WCLiquidGlassHomeCornerCellLayoutApplying = YES;
+        WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
+        WCLiquidGlassHomeCornerCellLayoutApplying = NO;
     }
-    WCLiquidGlassHomeCornerCellLayoutApplying = YES;
-    WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
-    WCLiquidGlassHomeCornerCellLayoutApplying = NO;
+    WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(self.contentView);
 }
 
 static void WCLiquidGlassHomeCornerCellSetBackgroundColor(UITableViewCell *self,
