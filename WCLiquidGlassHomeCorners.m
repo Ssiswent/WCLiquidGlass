@@ -18,6 +18,7 @@ static const void *WCLiquidGlassHomeCornerTableRoleRetryCountKey = &WCLiquidGlas
 static const void *WCLiquidGlassHomeCornerTableStateKey = &WCLiquidGlassHomeCornerTableStateKey;
 static const void *WCLiquidGlassHomeCornerNativeHeightEpochKey = &WCLiquidGlassHomeCornerNativeHeightEpochKey;
 static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor)(UITableViewCell *, SEL, UIColor *) = NULL;
 static void (*WCLiquidGlassOriginalHomeCornerTableLayoutSubviews)(UITableView *, SEL) = NULL;
 static CGFloat (*WCLiquidGlassOriginalHomeHeightForRow)(id, SEL, UITableView *, NSIndexPath *) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
@@ -818,6 +819,16 @@ static void WCLiquidGlassHomeCornerCellLayoutSubviews(UITableViewCell *self, SEL
     WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 }
 
+static void WCLiquidGlassHomeCornerCellSetBackgroundColor(UITableViewCell *self,
+                                                           SEL selector,
+                                                           UIColor *color) {
+    UIColor *targetColor = WCLiquidGlassPreferences.homeCornersEnabled &&
+        WCLiquidGlassPreferences.homeLiquidBackgroundEnabled
+        ? UIColor.clearColor
+        : color;
+    WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor(self, selector, targetColor);
+}
+
 static void WCLiquidGlassHomeCornerTableLayoutSubviews(UITableView *self, SEL selector) {
     if (WCLiquidGlassOriginalHomeCornerTableLayoutSubviews) {
         WCLiquidGlassOriginalHomeCornerTableLayoutSubviews(self, selector);
@@ -880,6 +891,12 @@ static void WCLiquidGlassInstallHomeCornerCellLayoutHook(void) {
                     @selector(layoutSubviews),
                     (IMP)&WCLiquidGlassHomeCornerCellLayoutSubviews,
                     (IMP *)&WCLiquidGlassOriginalHomeCornerCellLayoutSubviews);
+    if (!WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor) {
+        MSHookMessageEx(cellClass,
+                        @selector(setBackgroundColor:),
+                        (IMP)&WCLiquidGlassHomeCornerCellSetBackgroundColor,
+                        (IMP *)&WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor);
+    }
 }
 
 static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
