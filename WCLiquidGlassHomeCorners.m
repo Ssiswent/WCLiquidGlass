@@ -35,7 +35,7 @@ static __thread BOOL WCLiquidGlassHomeCornerTableLayoutApplying = NO;
 static __thread BOOL WCLiquidGlassHomeCornerCellFrameApplying = NO;
 static __thread BOOL WCLiquidGlassHomeCornerNativeBackgroundApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
-static const BOOL WCLiquidGlassHomeCornerMultiMenuHooksQuarantined = YES;
+static const BOOL WCLiquidGlassHomeCornerDiagnosticHooksQuarantined = YES;
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
     WCLiquidGlassHomeCornerTableRoleNone = 0,
@@ -88,12 +88,12 @@ static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
                                                   CGRect baseFrame);
 
 static void WCLiquidGlassHomeCornerWriteStartupMarker(NSString *stage) {
-    NSString *marker = [NSString stringWithFormat:@"%@\nframeHook=%@\nmultiMenuBackgroundHook=%@\nhighlightHook=%@\nmultiMenuHooksQuarantined=%@",
+    NSString *marker = [NSString stringWithFormat:@"%@\nframeHook=%@\nmultiMenuBackgroundHook=%@\nhighlightHook=%@\ndiagnosticHooksQuarantined=%@",
                        stage,
                        WCLiquidGlassPreferences.homeCornerFrameHookEnabled ? @"ON" : @"OFF",
                        WCLiquidGlassPreferences.homeCornerMultiMenuBackgroundHookEnabled ? @"ON" : @"OFF",
                        WCLiquidGlassPreferences.homeCornerHighlightHookEnabled ? @"ON" : @"OFF",
-                       WCLiquidGlassHomeCornerMultiMenuHooksQuarantined ? @"YES" : @"NO"];
+                       WCLiquidGlassHomeCornerDiagnosticHooksQuarantined ? @"YES" : @"NO"];
     [WCLiquidGlassCrashLogger.sharedLogger writeStartupMarker:marker];
 }
 
@@ -957,6 +957,9 @@ static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerSelectionHook(void) {
+    if (WCLiquidGlassHomeCornerDiagnosticHooksQuarantined) {
+        return;
+    }
     if (!WCLiquidGlassPreferences.homeCornerHighlightHookEnabled) {
         return;
     }
@@ -970,6 +973,9 @@ static void WCLiquidGlassInstallHomeCornerSelectionHook(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerFrameHook(void) {
+    if (WCLiquidGlassHomeCornerDiagnosticHooksQuarantined) {
+        return;
+    }
     if (!WCLiquidGlassPreferences.homeCornerFrameHookEnabled) {
         return;
     }
@@ -983,7 +989,7 @@ static void WCLiquidGlassInstallHomeCornerFrameHook(void) {
 }
 
 static void WCLiquidGlassInstallHomeCornerMultiMenuHooks(void) {
-    if (WCLiquidGlassHomeCornerMultiMenuHooksQuarantined) {
+    if (WCLiquidGlassHomeCornerDiagnosticHooksQuarantined) {
         return;
     }
     if (!WCLiquidGlassPreferences.homeCornerMultiMenuBackgroundHookEnabled &&
