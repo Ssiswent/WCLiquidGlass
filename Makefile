@@ -4,10 +4,15 @@ THEOS_PACKAGE_SCHEME = rootless
 WCLIQUIDGLASS_AUTO_BUMP ?= 1
 
 ifeq ($(WCLIQUIDGLASS_AUTO_BUMP),1)
-WCLIQUIDGLASS_VERSION := $(shell sh scripts/bump-version.sh --next)
+ifeq ($(strip $(WCLIQUIDGLASS_BUILT_VERSION)),)
+WCLIQUIDGLASS_VERSION := $(shell sh scripts/bump-version.sh --apply | sed -n 's/^Version:[[:space:]]*//p')
+else
+WCLIQUIDGLASS_VERSION := $(WCLIQUIDGLASS_BUILT_VERSION)
+endif
 else
 WCLIQUIDGLASS_VERSION := $(shell sed -n 's/^Version:[[:space:]]*//p' control)
 endif
+export WCLIQUIDGLASS_BUILT_VERSION := $(WCLIQUIDGLASS_VERSION)
 PACKAGE_VERSION := $(WCLIQUIDGLASS_VERSION)
 WCLIQUIDGLASS_UPLOAD_URL ?= http://192.168.1.145:8088
 WCLIQUIDGLASS_UPLOAD_PATH ?= /Plugins/
@@ -24,9 +29,6 @@ WCLiquidGlass_FRAMEWORKS = Foundation UIKit QuartzCore
 WCLiquidGlass_LDFLAGS = $(THEOS_PROJECT_DIR)/Vendor/PLCrashReporter/CrashReporter
 
 include $(THEOS_MAKE_PATH)/tweak.mk
-
-before-all::
-	@if [ "$(WCLIQUIDGLASS_AUTO_BUMP)" = "1" ]; then sh scripts/bump-version.sh --apply; fi
 
 after-package::
 	@WCLIQUIDGLASS_UPLOAD_URL="$(WCLIQUIDGLASS_UPLOAD_URL)" WCLIQUIDGLASS_UPLOAD_PATH="$(WCLIQUIDGLASS_UPLOAD_PATH)" sh scripts/upload-package.sh "$(__THEOS_LAST_PACKAGE_FILENAME)"
