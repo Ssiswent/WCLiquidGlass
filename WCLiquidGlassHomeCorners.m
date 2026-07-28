@@ -660,7 +660,8 @@ static UIView *WCLiquidGlassHomeCornerFirstCellSubview(UITableView *tableView) {
 }
 
 static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
-                                                   NSInteger section) {
+                                                   NSInteger section,
+                                                   WCLiquidGlassHomeCornerTableRole role) {
     NSInteger rowCount = [tableView numberOfRowsInSection:section];
     if (rowCount <= 0) {
         return CGRectNull;
@@ -670,9 +671,14 @@ static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
     CGRect lastRow = [tableView rectForRowAtIndexPath:[NSIndexPath indexPathForRow:rowCount - 1
                                                                         inSection:section]];
     CGRect sectionFrame = CGRectUnion(firstRow, lastRow);
-    CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
+    CGFloat inset = role == WCLiquidGlassHomeCornerTableRoleOtherTab
+        ? 8.0
+        : WCLiquidGlassPreferences.homeCornerInset;
     sectionFrame.origin.x = inset;
     sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
+    if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        sectionFrame = CGRectInset(sectionFrame, 0.0, 4.0);
+    }
     return CGRectIntegral(sectionFrame);
 }
 
@@ -723,7 +729,7 @@ static void WCLiquidGlassHomeCornerUpdateSectionGlassViews(
         return;
     }
     [activeSections enumerateIndexesUsingBlock:^(NSUInteger section, __unused BOOL *stop) {
-        CGRect sectionFrame = WCLiquidGlassHomeCornerSectionFrame(tableView, section);
+        CGRect sectionFrame = WCLiquidGlassHomeCornerSectionFrame(tableView, section, role);
         if (CGRectIsNull(sectionFrame) || CGRectIsEmpty(sectionFrame)) {
             return;
         }
