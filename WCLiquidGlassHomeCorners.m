@@ -936,9 +936,19 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
                                  WCLiquidGlassHomeCornerTableStyledKey,
                                  @YES,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (role == WCLiquidGlassHomeCornerTableRoleHome ||
-            role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        if (role == WCLiquidGlassHomeCornerTableRoleHome) {
             WCLiquidGlassHomeCornerRequestNativeHeightUpdate(tableView);
+        } else if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+            NSNumber *epoch = objc_getAssociatedObject(tableView,
+                                                       WCLiquidGlassHomeCornerNativeHeightEpochKey);
+            if (epoch) {
+                WCLiquidGlassHomeCornerRequestNativeHeightUpdate(tableView);
+            } else {
+                objc_setAssociatedObject(tableView,
+                                         WCLiquidGlassHomeCornerNativeHeightEpochKey,
+                                         @(WCLiquidGlassHomeCornersConfigurationEpoch),
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
         }
     }
     for (UITableViewCell *cell in tableView.visibleCells) {
