@@ -59,6 +59,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @property(nonatomic, assign) BOOL originalMasksToBounds;
 @property(nonatomic, strong, nullable) UIColor *appliedBackgroundColor;
 @property(nonatomic, assign) NSUInteger appliedConfigurationEpoch;
+@property(nonatomic, strong, nullable) UIView *glassBackingView;
 @property(nonatomic, strong, nullable) UIVisualEffectView *glassOverlay;
 @property(nonatomic, assign) NSInteger appliedGlassState;
 @property(nonatomic, assign) NSInteger appliedGlassTintState;
@@ -308,6 +309,7 @@ static void WCLiquidGlassHomeCornerRestoreCell(UITableViewCell *cell) {
     state.hasAppliedFrame = NO;
     state.appliedBackgroundColor = nil;
     state.appliedConfigurationEpoch = 0;
+    [state.glassBackingView removeFromSuperview];
     [state.glassOverlay removeFromSuperview];
     state.appliedGlassState = NSIntegerMin;
     state.appliedGlassTintState = NSIntegerMin;
@@ -468,7 +470,32 @@ static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
                                                        WCLiquidGlassHomeCornerCellState *state,
                                                        CGRect overlayFrame,
                                                        CGFloat cornerRadius,
-                                                       CACornerMask corners) {
+                                                       CACornerMask corners,
+                                                       BOOL usesStableBacking) {
+    overlayFrame = CGRectIntegral(overlayFrame);
+    UIView *backingView = state.glassBackingView;
+    if (usesStableBacking) {
+        if (!backingView) {
+            backingView = [[UIView alloc] initWithFrame:CGRectZero];
+            backingView.userInteractionEnabled = NO;
+            backingView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            backingView.layer.cornerCurve = kCACornerCurveContinuous;
+            state.glassBackingView = backingView;
+        }
+        if (backingView.superview != cell.contentView || cell.contentView.subviews.firstObject != backingView) {
+            [backingView removeFromSuperview];
+            [cell.contentView insertSubview:backingView atIndex:0];
+        }
+        if (!CGRectEqualToRect(backingView.frame, overlayFrame)) {
+            backingView.frame = overlayFrame;
+        }
+        backingView.layer.cornerRadius = cornerRadius;
+        backingView.layer.maskedCorners = corners;
+        backingView.clipsToBounds = YES;
+        backingView.backgroundColor = WCLiquidGlassHomeCornerLiquidColor();
+    } else if (backingView) {
+        [backingView removeFromSuperview];
+    }
     UIVisualEffectView *overlay = state.glassOverlay;
     if (!overlay) {
         overlay = [[UIVisualEffectView alloc] initWithEffect:nil];
@@ -479,11 +506,17 @@ static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
         state.appliedGlassState = NSIntegerMin;
         state.appliedGlassTintState = NSIntegerMin;
     }
-    if (overlay.superview != cell.contentView || cell.contentView.subviews.firstObject != overlay) {
+    if (overlay.superview != cell.contentView ||
+        (usesStableBacking
+            ? overlay.superview.subviews.count < 2 || overlay.superview.subviews[1] != overlay
+            : cell.contentView.subviews.firstObject != overlay)) {
         [overlay removeFromSuperview];
-        [cell.contentView insertSubview:overlay atIndex:0];
+        if (usesStableBacking) {
+            [cell.contentView insertSubview:overlay aboveSubview:backingView];
+        } else {
+            [cell.contentView insertSubview:overlay atIndex:0];
+        }
     }
-    overlayFrame = CGRectIntegral(overlayFrame);
     if (!CGRectEqualToRect(overlay.frame, overlayFrame)) {
         overlay.frame = overlayFrame;
     }
@@ -506,6 +539,55 @@ static void WCLiquidGlassHomeCornerUpdateGlassOverlay(UITableViewCell *cell,
         state.appliedGlassTintState = glassState;
     }
     overlay.hidden = NO;
+}
+
+static void WCLiquidGlassHomeCornerCenterFindFriendContent(UITableViewCell *cell,
+                                                            WCLiquidGlassHomeCornerCellState *state,
+                                                            CGRect cardFrame) {
+    NSMutableArray<UIView *> *pending = [NSMutableArray arrayWithObject:cell.contentView];
+    UIImageView *iconView = nil;
+    UIImageView *arrowView = nil;
+    UILabel *titleLabel = nil;
+    NSUInteger visited = 0;
+    while (pending.count && visited < 80) {
+        UIView *container = pending.lastObject;
+        [pending removeLastObject];
+        visited += 1;
+        for (UIView *view in container.subviews) {
+            if (view == state.glassOverlay || view == state.glassBackingView || view.hidden || view.alpha < 0.01) {
+                continue;
+            }
+            if (view.subviews.count) {
+                [pending addObject:view];
+            }
+            CGRect frame = [view.superview convertRect:view.frame toView:cell.contentView];
+            if ([view isKindOfClass:UILabel.class] && CGRectGetWidth(frame) > 20.0 && !titleLabel) {
+                titleLabel = (UILabel *)view;
+            } else if ([view isKindOfClass:UIImageView.class] && CGRectGetWidth(frame) >= 12.0 && CGRectGetHeight(frame) >= 12.0) {
+                if (CGRectGetMidX(frame) > CGRectGetMidX(cardFrame) && CGRectGetWidth(frame) <= 44.0 && CGRectGetHeight(frame) <= 44.0) {
+                    arrowView = (UIImageView *)view;
+                } else if (!iconView && CGRectGetMidX(frame) < CGRectGetMidX(cardFrame)) {
+                    iconView = (UIImageView *)view;
+                }
+            }
+        }
+    }
+    arrowView.hidden = YES;
+    if (!iconView || !titleLabel) {
+        return;
+    }
+    CGSize iconSize = iconView.bounds.size;
+    CGSize titleSize = titleLabel.bounds.size;
+    if (iconSize.width <= 0.0 || iconSize.height <= 0.0 || titleSize.width <= 0.0 || titleSize.height <= 0.0) {
+        return;
+    }
+    CGFloat spacing = 12.0;
+    CGFloat contentWidth = iconSize.width + spacing + titleSize.width;
+    CGFloat startX = CGRectGetMidX(cardFrame) - contentWidth * 0.5;
+    CGPoint iconCenter = CGPointMake(startX + iconSize.width * 0.5, CGRectGetMidY(cardFrame));
+    CGPoint titleCenter = CGPointMake(startX + iconSize.width + spacing + titleSize.width * 0.5, CGRectGetMidY(cardFrame));
+    iconView.center = [cell.contentView convertPoint:iconCenter toView:iconView.superview];
+    titleLabel.center = [cell.contentView convertPoint:titleCenter toView:titleLabel.superview];
 }
 
 static CGRect WCLiquidGlassHomeCornerBaseFrame(UITableViewCell *cell,
@@ -693,6 +775,13 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
          state.glassOverlay.layer.cornerRadius != visualCornerRadius ||
          state.glassOverlay.layer.maskedCorners != corners ||
          !state.glassOverlay.clipsToBounds ||
+         (preservesNativeGeometry &&
+          (!state.glassBackingView ||
+           state.glassBackingView.superview != cell.contentView ||
+           !CGRectEqualToRect(state.glassBackingView.frame, CGRectIntegral(overlayFrame)) ||
+           state.glassBackingView.layer.cornerRadius != visualCornerRadius ||
+           state.glassBackingView.layer.maskedCorners != corners ||
+           !state.glassBackingView.clipsToBounds)) ||
          state.appliedGlassState != glassState ||
          state.appliedGlassTintState != glassState);
     BOOL needsSelectionUpdate = suppressesSelectionEffect
@@ -749,7 +838,15 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         }
         WCLiquidGlassHomeCornerClearNativeContentBackgrounds(cell, state);
         WCLiquidGlassHomeCornerHideNativeSeparators(cell);
-        WCLiquidGlassHomeCornerUpdateGlassOverlay(cell, state, overlayFrame, visualCornerRadius, corners);
+        WCLiquidGlassHomeCornerUpdateGlassOverlay(cell,
+                                                  state,
+                                                  overlayFrame,
+                                                  visualCornerRadius,
+                                                  corners,
+                                                  preservesNativeGeometry);
+        if (preservesNativeGeometry) {
+            WCLiquidGlassHomeCornerCenterFindFriendContent(cell, state, overlayFrame);
+        }
     } else {
         cell.backgroundView = state.originalBackgroundView;
         cell.backgroundColor = state.originalBackgroundColor;
