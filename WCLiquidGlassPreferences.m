@@ -40,9 +40,6 @@ static NSString *const WCLiquidGlassHomeSeparateCardsEnabledKey = @"WCLiquidGlas
 static NSString *const WCLiquidGlassHomeCardGapKey = @"WCLiquidGlass.HomeCorners.Gap";
 static NSString *const WCLiquidGlassHomePinnedCardGapEnabledKey = @"WCLiquidGlass.HomeCorners.PinnedGapEnabled";
 static NSString *const WCLiquidGlassHomeLiquidBackgroundEnabledKey = @"WCLiquidGlass.HomeCorners.LiquidBackgroundEnabled";
-static NSString *const WCLiquidGlassHomeCornerFrameHookEnabledKey = @"WCLiquidGlass.HomeCorners.Diagnostics.FrameHookEnabled";
-static NSString *const WCLiquidGlassHomeCornerMultiMenuBackgroundHookEnabledKey = @"WCLiquidGlass.HomeCorners.Diagnostics.MultiMenuBackgroundHookEnabled";
-static NSString *const WCLiquidGlassHomeCornerHighlightHookEnabledKey = @"WCLiquidGlass.HomeCorners.Diagnostics.HighlightHookEnabled";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
 static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
@@ -205,9 +202,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeCardGapKey: @8.0,
         WCLiquidGlassHomePinnedCardGapEnabledKey: @YES,
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
-        WCLiquidGlassHomeCornerFrameHookEnabledKey: @NO,
-        WCLiquidGlassHomeCornerMultiMenuBackgroundHookEnabledKey: @NO,
-        WCLiquidGlassHomeCornerHighlightHookEnabledKey: @NO,
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
         WCLiquidGlassFullCrashReportsEnabledKey: @NO,
@@ -336,33 +330,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setHomeLiquidBackgroundEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (BOOL)homeCornerFrameHookEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeCornerFrameHookEnabledKey];
-}
-
-+ (void)setHomeCornerFrameHookEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeCornerFrameHookEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (BOOL)homeCornerMultiMenuBackgroundHookEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeCornerMultiMenuBackgroundHookEnabledKey];
-}
-
-+ (void)setHomeCornerMultiMenuBackgroundHookEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeCornerMultiMenuBackgroundHookEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (BOOL)homeCornerHighlightHookEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassHomeCornerHighlightHookEnabledKey];
-}
-
-+ (void)setHomeCornerHighlightHookEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassHomeCornerHighlightHookEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 

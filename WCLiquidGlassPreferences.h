@@ -71,12 +71,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (void)setHomePinnedCardGapEnabled:(BOOL)enabled;
 + (BOOL)homeLiquidBackgroundEnabled;
 + (void)setHomeLiquidBackgroundEnabled:(BOOL)enabled;
-+ (BOOL)homeCornerFrameHookEnabled;
-+ (void)setHomeCornerFrameHookEnabled:(BOOL)enabled;
-+ (BOOL)homeCornerMultiMenuBackgroundHookEnabled;
-+ (void)setHomeCornerMultiMenuBackgroundHookEnabled:(BOOL)enabled;
-+ (BOOL)homeCornerHighlightHookEnabled;
-+ (void)setHomeCornerHighlightHookEnabled:(BOOL)enabled;
 + (BOOL)anchorOnLeft;
 + (CGFloat)anchorYFraction;
 + (void)setAnchorOnLeft:(BOOL)anchorOnLeft yFraction:(CGFloat)yFraction;

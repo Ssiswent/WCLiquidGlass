@@ -207,19 +207,6 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
     WCLiquidGlassRecordEvent(event);
 }
 
-- (void)writeStartupMarker:(NSString *)stage {
-    [self wc_prepareDirectories];
-    NSString *body = [NSString stringWithFormat:@"WCLiquidGlass Startup Hook Diagnostics\nGenerated: %@\nVersion: %s\nStage: %@\n\nRecent Lifecycle Events:\n%@\n",
-                      NSDate.date,
-                      WCLIQUIDGLASS_VERSION,
-                      stage ?: @"Unknown",
-                      WCLiquidGlassRecentEventsText()];
-    NSURL *URL = [self.class.crashLogsDirectoryURL URLByAppendingPathComponent:@"Startup-Hook-Diagnostics.txt"];
-    if ([body writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
-        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Startup marker saved: %@", stage ?: @"Unknown"]);
-    }
-}
-
 - (nullable NSURL *)writeDiagnosticReportWithTitle:(NSString *)title content:(NSString *)content {
     [self wc_prepareDirectories];
     NSString *safeTitle = title.length > 0 ? title : @"Manual";
