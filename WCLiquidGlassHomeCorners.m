@@ -21,6 +21,7 @@ static void (*WCLiquidGlassOriginalHomeCornerCellLayoutSubviews)(UITableViewCell
 static void (*WCLiquidGlassOriginalHomeCornerCellSetBackgroundColor)(UITableViewCell *, SEL, UIColor *) = NULL;
 static void (*WCLiquidGlassOriginalHomeCornerTableLayoutSubviews)(UITableView *, SEL) = NULL;
 static CGFloat (*WCLiquidGlassOriginalHomeHeightForRow)(id, SEL, UITableView *, NSIndexPath *) = NULL;
+static CGFloat (*WCLiquidGlassOriginalContactsHeightForHeader)(id, SEL, UITableView *, NSInteger) = NULL;
 static BOOL WCLiquidGlassHomeCornersHooksInstalled = NO;
 static BOOL WCLiquidGlassHomeCornerCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerCellHookInstallAttempts = 0;
@@ -43,6 +44,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 @property(nonatomic, strong, nullable) UIView *originalBackgroundView;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, strong, nullable) UIColor *originalContentBackgroundColor;
+@property(nonatomic, assign) CGAffineTransform originalContentTransform;
 @property(nonatomic, assign) UITableViewCellSelectionStyle originalSelectionStyle;
 @property(nonatomic, strong, nullable) UIView *originalSelectedBackgroundView;
 @property(nonatomic, assign) CGFloat originalCornerRadius;
@@ -270,6 +272,7 @@ static WCLiquidGlassHomeCornerCellState *WCLiquidGlassHomeCornerStateForCell(UIT
         state.originalBackgroundView = cell.backgroundView;
         state.originalBackgroundColor = cell.backgroundColor;
         state.originalContentBackgroundColor = cell.contentView.backgroundColor;
+        state.originalContentTransform = cell.contentView.transform;
         state.originalSelectionStyle = cell.selectionStyle;
         state.originalSelectedBackgroundView = cell.selectedBackgroundView;
         state.originalCornerRadius = cell.layer.cornerRadius;
@@ -291,6 +294,7 @@ static void WCLiquidGlassHomeCornerRestoreCell(UITableViewCell *cell) {
     cell.backgroundView = state.originalBackgroundView;
     cell.backgroundColor = state.originalBackgroundColor;
     cell.contentView.backgroundColor = state.originalContentBackgroundColor;
+    cell.contentView.transform = state.originalContentTransform;
     cell.selectionStyle = state.originalSelectionStyle;
     cell.selectedBackgroundView = state.originalSelectedBackgroundView;
     cell.layer.cornerRadius = state.originalCornerRadius;
@@ -474,9 +478,37 @@ static void WCLiquidGlassHomeCornerInstallHeightHookForClass(Class controllerCla
                     (IMP *)original);
 }
 
+static CGFloat WCLiquidGlassHomeCornerHeightForContactsHeader(id self,
+                                                               SEL selector,
+                                                               UITableView *tableView,
+                                                               NSInteger section) {
+    CGFloat nativeHeight = WCLiquidGlassOriginalContactsHeightForHeader
+        ? WCLiquidGlassOriginalContactsHeightForHeader(self, selector, tableView, section)
+        : tableView.sectionHeaderHeight;
+    if (!WCLiquidGlassPreferences.homeCornersEnabled || nativeHeight < 0.0) {
+        return nativeHeight;
+    }
+    BOOL beginsVisualGroup = section == 0 || nativeHeight > 1.0;
+    return beginsVisualGroup ? nativeHeight + 8.0 : nativeHeight;
+}
+
+static void WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook(void) {
+    Class contactsClass = NSClassFromString(@"ContactsViewController");
+    SEL selector = @selector(tableView:heightForHeaderInSection:);
+    if (!contactsClass || WCLiquidGlassOriginalContactsHeightForHeader ||
+        !class_getInstanceMethod(contactsClass, selector)) {
+        return;
+    }
+    MSHookMessageEx(contactsClass,
+                    selector,
+                    (IMP)&WCLiquidGlassHomeCornerHeightForContactsHeader,
+                    (IMP *)&WCLiquidGlassOriginalContactsHeightForHeader);
+}
+
 static void WCLiquidGlassHomeCornerInstallNativeHeightHooks(void) {
     WCLiquidGlassHomeCornerInstallHeightHookForClass(NSClassFromString(@"NewMainFrameViewController"),
                                                      &WCLiquidGlassOriginalHomeHeightForRow);
+    WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
 }
 
 static void WCLiquidGlassHomeCornerRequestNativeHeightUpdate(UITableView *tableView) {
@@ -576,9 +608,16 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         ? cell.selectionStyle != UITableViewCellSelectionStyleNone || cell.selectedBackgroundView != nil
         : cell.selectionStyle != state.originalSelectionStyle ||
             cell.selectedBackgroundView != state.originalSelectedBackgroundView;
+    CGAffineTransform targetContentTransform = state.originalContentTransform;
+    if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        targetContentTransform = CGAffineTransformTranslate(targetContentTransform, 8.0, 0.0);
+    }
+    BOOL needsContentTransformUpdate =
+        !CGAffineTransformEqualToTransform(cell.contentView.transform, targetContentTransform);
     BOOL needsRestore = !isLiquidBackground &&
         (state.glassOverlay || state.appliedConfigurationEpoch != 0);
-    if (!needsFrameUpdate && !needsCornerUpdate && !needsLiquidUpdate && !needsSelectionUpdate && !needsRestore) {
+    if (!needsFrameUpdate && !needsCornerUpdate && !needsLiquidUpdate && !needsSelectionUpdate &&
+        !needsContentTransformUpdate && !needsRestore) {
         return;
     }
     if (suppressesSelectionEffect) {
@@ -587,6 +626,9 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     }
     if (needsFrameUpdate) {
         cell.frame = targetFrame;
+    }
+    if (needsContentTransformUpdate) {
+        cell.contentView.transform = targetContentTransform;
     }
     if (cell.layer.cornerRadius != targetCornerRadius) {
         cell.layer.cornerRadius = targetCornerRadius;
@@ -727,7 +769,7 @@ static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
     if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
         sectionFrame.origin.x = 16.0;
         sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - 40.0);
-        sectionFrame.size.height += 8.0;
+        sectionFrame = CGRectInset(sectionFrame, 0.0, -8.0);
     } else {
         CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
         sectionFrame.origin.x = inset;
@@ -833,7 +875,8 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
                                  WCLiquidGlassHomeCornerTableStyledKey,
                                  @YES,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (role == WCLiquidGlassHomeCornerTableRoleHome) {
+        if (role == WCLiquidGlassHomeCornerTableRoleHome ||
+            role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
             WCLiquidGlassHomeCornerRequestNativeHeightUpdate(tableView);
         }
     }
