@@ -39,7 +39,9 @@ static BOOL WCLiquidGlassContactsDiagnosticHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassContactsDiagnosticHookInstallAttempts = 0;
 static BOOL WCLiquidGlassContactsDiagnosticStarted = NO;
 static BOOL WCLiquidGlassContactsDiagnosticSaved = NO;
+static BOOL WCLiquidGlassContactsDiagnosticEntered = NO;
 static CFTimeInterval WCLiquidGlassContactsDiagnosticStartTime = 0.0;
+static CFTimeInterval WCLiquidGlassContactsDiagnosticEntryTime = 0.0;
 static NSMutableArray<NSString *> *WCLiquidGlassContactsDiagnosticEvents = nil;
 static NSUInteger WCLiquidGlassContactsDiagnosticUpdateCount = 0;
 static CFTimeInterval WCLiquidGlassContactsDiagnosticUpdateTotal = 0.0;
@@ -122,6 +124,50 @@ static void WCLiquidGlassContactsDiagnosticAppend(NSString *event) {
     NSString *line = [NSString stringWithFormat:@"+%.3fs  %@", elapsed, event];
     @synchronized (WCLiquidGlassContactsDiagnosticEvents) {
         [WCLiquidGlassContactsDiagnosticEvents addObject:line];
+    }
+}
+
+static void WCLiquidGlassContactsDiagnosticArm(void) {
+    if (WCLiquidGlassContactsDiagnosticStarted) {
+        return;
+    }
+    WCLiquidGlassContactsDiagnosticStarted = YES;
+    WCLiquidGlassContactsDiagnosticStartTime = CACurrentMediaTime();
+    WCLiquidGlassContactsDiagnosticEvents = [NSMutableArray array];
+    WCLiquidGlassContactsDiagnosticAppend(
+        [NSString stringWithFormat:@"plugin timeline armed appState=%ld",
+         (long)UIApplication.sharedApplication.applicationState]);
+
+    [NSNotificationCenter.defaultCenter
+        addObserverForName:UIApplicationDidBecomeActiveNotification
+                    object:nil
+                     queue:NSOperationQueue.mainQueue
+                usingBlock:^(__unused NSNotification *notification) {
+        WCLiquidGlassContactsDiagnosticAppend(@"UIApplicationDidBecomeActiveNotification");
+    }];
+    [NSNotificationCenter.defaultCenter
+        addObserverForName:UIApplicationWillEnterForegroundNotification
+                    object:nil
+                     queue:NSOperationQueue.mainQueue
+                usingBlock:^(__unused NSNotification *notification) {
+        WCLiquidGlassContactsDiagnosticAppend(@"UIApplicationWillEnterForegroundNotification");
+    }];
+
+    NSArray<NSNumber *> *delays = @[@0.0, @0.1, @0.3, @0.6, @1.0, @2.0, @3.0, @5.0];
+    for (NSNumber *delayValue in delays) {
+        NSTimeInterval delay = delayValue.doubleValue;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            CFTimeInterval elapsed =
+                CACurrentMediaTime() - WCLiquidGlassContactsDiagnosticStartTime;
+            WCLiquidGlassContactsDiagnosticAppend(
+                [NSString stringWithFormat:
+                 @"startup main pulse expected=%.1fs actual=%.3fs lateness=%.3fms appState=%ld",
+                 delay,
+                 elapsed,
+                 MAX(0.0, elapsed - delay) * 1000.0,
+                 (long)UIApplication.sharedApplication.applicationState]);
+        });
     }
 }
 
@@ -226,15 +272,18 @@ static void WCLiquidGlassContactsDiagnosticStart(UIViewController *controller,
     if (controller) {
         WCLiquidGlassContactsDiagnosticController = controller;
     }
-    if (WCLiquidGlassContactsDiagnosticStarted) {
+    WCLiquidGlassContactsDiagnosticArm();
+    if (WCLiquidGlassContactsDiagnosticEntered) {
         return;
     }
-    WCLiquidGlassContactsDiagnosticStarted = YES;
-    WCLiquidGlassContactsDiagnosticStartTime = CACurrentMediaTime();
-    WCLiquidGlassContactsDiagnosticEvents = [NSMutableArray array];
+    WCLiquidGlassContactsDiagnosticEntered = YES;
+    WCLiquidGlassContactsDiagnosticEntryTime = CACurrentMediaTime();
     WCLiquidGlassContactsDiagnosticAppend(
-        [NSString stringWithFormat:@"timeline started trigger=%@ appState=%ld",
+        [NSString stringWithFormat:
+         @"contacts timeline entered trigger=%@ launchTimelineAge=%.3fs appState=%ld",
          trigger,
+         WCLiquidGlassContactsDiagnosticEntryTime -
+             WCLiquidGlassContactsDiagnosticStartTime,
          (long)UIApplication.sharedApplication.applicationState]);
 
     NSArray<NSNumber *> *delays = @[@0.0, @0.1, @0.3, @0.6, @1.0, @2.0, @3.2, @4.0];
@@ -243,9 +292,10 @@ static void WCLiquidGlassContactsDiagnosticStart(UIViewController *controller,
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             CFTimeInterval elapsed =
-                CACurrentMediaTime() - WCLiquidGlassContactsDiagnosticStartTime;
+                CACurrentMediaTime() - WCLiquidGlassContactsDiagnosticEntryTime;
             WCLiquidGlassContactsDiagnosticAppend(
-                [NSString stringWithFormat:@"main pulse expected=%.1fs actual=%.3fs lateness=%.3fms",
+                [NSString stringWithFormat:
+                 @"contacts main pulse expected=%.1fs actual=%.3fs lateness=%.3fms",
                  delay,
                  elapsed,
                  MAX(0.0, elapsed - delay) * 1000.0]);
@@ -1471,6 +1521,7 @@ static void WCLiquidGlassInstallContactsDiagnosticLifecycleHooks(void) {
 }
 
 void WCLiquidGlassInstallHomeCornersHooks(void) {
+    WCLiquidGlassContactsDiagnosticArm();
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
         WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
