@@ -1493,7 +1493,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.chatTimeGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1) {
-        WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", @"主页与微信分区的圆角和液态材质",
+        WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 2) {
