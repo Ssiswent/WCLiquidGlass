@@ -115,6 +115,9 @@ static NSRange WCLiquidGlassHomeCornerVisualSectionRange(
     UITableView *tableView,
     NSInteger section,
     WCLiquidGlassHomeCornerTableRole role);
+static void WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook(void);
+static void WCLiquidGlassInstallHomeCornerContactsCellLayoutHook(void);
+static void WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook(void);
 
 static void WCLiquidGlassContactsDiagnosticAppend(NSString *event) {
     if (!WCLiquidGlassContactsDiagnosticStarted || event.length == 0) {
@@ -311,6 +314,13 @@ static void WCLiquidGlassContactsDiagnosticStart(UIViewController *controller,
 
 static void WCLiquidGlassContactsDiagnosticViewDidLoad(UIViewController *self, SEL selector) {
     WCLiquidGlassContactsDiagnosticStart(self, @"ContactsViewController viewDidLoad");
+    CFTimeInterval hookInstallStarted = CACurrentMediaTime();
+    WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
+    WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
+    WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
+    WCLiquidGlassContactsDiagnosticAppend(
+        [NSString stringWithFormat:@"contacts hooks installed lazily duration=%.3fms",
+         (CACurrentMediaTime() - hookInstallStarted) * 1000.0]);
     CFTimeInterval started = CACurrentMediaTime();
     if (WCLiquidGlassOriginalContactsViewDidLoad) {
         WCLiquidGlassOriginalContactsViewDidLoad(self, selector);
@@ -780,9 +790,13 @@ static void WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook(void) {
                     (IMP *)&WCLiquidGlassOriginalContactsHeightForHeader);
 }
 
-static void WCLiquidGlassHomeCornerInstallNativeHeightHooks(void) {
+static void WCLiquidGlassHomeCornerInstallHomeHeightHook(void) {
     WCLiquidGlassHomeCornerInstallHeightHookForClass(NSClassFromString(@"NewMainFrameViewController"),
                                                      &WCLiquidGlassOriginalHomeHeightForRow);
+}
+
+static void WCLiquidGlassHomeCornerInstallNativeHeightHooks(void) {
+    WCLiquidGlassHomeCornerInstallHomeHeightHook();
     WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
 }
 
@@ -1524,17 +1538,13 @@ void WCLiquidGlassInstallHomeCornersHooks(void) {
     WCLiquidGlassContactsDiagnosticArm();
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
-        WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
-        WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
         WCLiquidGlassInstallHomeCornerTableLayoutHook();
         WCLiquidGlassInstallContactsDiagnosticLifecycleHooks();
         return;
     }
     WCLiquidGlassHomeCornersHooksInstalled = YES;
-    WCLiquidGlassHomeCornerInstallNativeHeightHooks();
+    WCLiquidGlassHomeCornerInstallHomeHeightHook();
     WCLiquidGlassInstallHomeCornerCellLayoutHook();
-    WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
-    WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
     WCLiquidGlassInstallHomeCornerTableLayoutHook();
     WCLiquidGlassInstallContactsDiagnosticLifecycleHooks();
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
