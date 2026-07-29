@@ -652,6 +652,34 @@ static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
     return CGRectIntegral(targetFrame);
 }
 
+static BOOL WCLiquidGlassHomeCornerAnimationAffectsGeometry(CAAnimation *animation) {
+    if ([animation isKindOfClass:CAAnimationGroup.class]) {
+        for (CAAnimation *childAnimation in ((CAAnimationGroup *)animation).animations) {
+            if (WCLiquidGlassHomeCornerAnimationAffectsGeometry(childAnimation)) {
+                return YES;
+            }
+        }
+        return NO;
+    }
+    if (![animation isKindOfClass:CAPropertyAnimation.class]) {
+        return NO;
+    }
+    NSString *keyPath = ((CAPropertyAnimation *)animation).keyPath;
+    return [keyPath isEqualToString:@"bounds"] ||
+        [keyPath hasPrefix:@"bounds."] ||
+        [keyPath isEqualToString:@"position"] ||
+        [keyPath hasPrefix:@"position."];
+}
+
+static void WCLiquidGlassHomeCornerRemoveGeometryAnimations(CALayer *layer) {
+    for (NSString *key in layer.animationKeys.copy) {
+        CAAnimation *animation = [layer animationForKey:key];
+        if (WCLiquidGlassHomeCornerAnimationAffectsGeometry(animation)) {
+            [layer removeAnimationForKey:key];
+        }
+    }
+}
+
 static NSString *WCLiquidGlassHomeCornerDiagnosticTransform(CATransform3D transform) {
     return [NSString stringWithFormat:@"{m11=%.3f m12=%.3f m21=%.3f m22=%.3f m41=%.1f m42=%.1f}",
             transform.m11,
@@ -811,6 +839,11 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     state.baseFrame = baseFrame;
     state.appliedFrame = targetFrame;
     state.hasAppliedFrame = !preservesNativeGeometry;
+    if (isMacOnlineCard) {
+        WCLiquidGlassHomeCornerRemoveGeometryAnimations(cell.layer);
+        WCLiquidGlassHomeCornerRemoveGeometryAnimations(cell.contentView.layer);
+        WCLiquidGlassHomeCornerRemoveGeometryAnimations(state.glassOverlay.layer);
+    }
     if (isMacOnlineCard &&
         WCLiquidGlassHomeCornerMacOnlineGeometryTransitionDetected(tableView,
                                                                     cell,
