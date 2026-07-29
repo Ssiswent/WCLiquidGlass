@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.7.6] - 2026-07-29
+
+### 修复
+
+- Mac 在线卡片动画诊断确认：触发时 model frame 始终正确，但 WCGlass 的动画事务会使 Cell、内容层和玻璃层的 presentation frame 从较窄宽度隐式过渡到目标宽度。Mac 在线卡片现对自身 frame、内容层和液态背景更新禁用 UIKit / Core Animation 动画，直接保持正常宽度，不影响 WCGlass 页面切换动画。
+
 ## [1.7.5] - 2026-07-29
 
 ### 诊断

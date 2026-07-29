@@ -917,18 +917,33 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         !needsRestore) {
         return;
     }
-    if (suppressesSelectionEffect) {
+    BOOL disablesCellAnimations = suppressesSelectionEffect || isMacOnlineCard;
+    if (disablesCellAnimations) {
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
     }
-    if (needsFrameUpdate) {
-        cell.frame = targetFrame;
-    }
-    if (needsContentFrameUpdate) {
-        cell.contentView.frame = targetContentFrame;
-    }
-    if (needsInnerContentFrameUpdate) {
-        innerContentView.frame = targetInnerContentFrame;
+    if (isMacOnlineCard) {
+        [UIView performWithoutAnimation:^{
+            if (needsFrameUpdate) {
+                cell.frame = targetFrame;
+            }
+            if (needsContentFrameUpdate) {
+                cell.contentView.frame = targetContentFrame;
+            }
+            if (needsInnerContentFrameUpdate) {
+                innerContentView.frame = targetInnerContentFrame;
+            }
+        }];
+    } else {
+        if (needsFrameUpdate) {
+            cell.frame = targetFrame;
+        }
+        if (needsContentFrameUpdate) {
+            cell.contentView.frame = targetContentFrame;
+        }
+        if (needsInnerContentFrameUpdate) {
+            innerContentView.frame = targetInnerContentFrame;
+        }
     }
     if (cell.layer.cornerRadius != targetCornerRadius) {
         cell.layer.cornerRadius = targetCornerRadius;
@@ -990,7 +1005,7 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     if (insetsStandardTabContent) {
         WCLiquidGlassHomeCornerApplyStandardTabContentInset(cell, state);
     }
-    if (suppressesSelectionEffect) {
+    if (disablesCellAnimations) {
         [CATransaction commit];
     }
 }
