@@ -528,9 +528,10 @@ static CGFloat WCLiquidGlassHomeCornerOriginalHeightForController(id controller,
 
 static CGFloat WCLiquidGlassHomeCornerRadiusForCell(WCLiquidGlassHomeCornerTableRole role,
                                                      NSIndexPath *indexPath) {
-    return role == WCLiquidGlassHomeCornerTableRoleHome && indexPath.section != 0
-        ? WCLiquidGlassPreferences.homeCornerRadius
-        : 26.0;
+    if (role == WCLiquidGlassHomeCornerTableRoleHome) {
+        return indexPath.section == 0 ? 20.0 : WCLiquidGlassPreferences.homeCornerRadius;
+    }
+    return 26.0;
 }
 
 static BOOL WCLiquidGlassHomeCornerUsesIndependentCard(WCLiquidGlassHomeCornerTableRole role,
