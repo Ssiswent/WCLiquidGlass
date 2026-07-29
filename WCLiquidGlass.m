@@ -1254,6 +1254,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
 @property(nonatomic, strong) UISwitch *chatTimeGlassSwitch;
+@property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 
 @end
@@ -1409,7 +1410,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 0) {
         return 4;
     }
-    return section == 1 ? 3 : (section == 3 ? 2 : 1);
+    return section == 1 ? 4 : (section == 3 ? 2 : 1);
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1426,7 +1427,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。");
+        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条和长按菜单液态均跟随本插件材质设置；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。");
@@ -1442,7 +1443,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条液态会自动按时间文字宽度留出内边距；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。", 88.0);
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条和长按菜单液态均跟随本插件材质设置；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。", 88.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
@@ -1492,6 +1493,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.chatTimeGlassSwitch addTarget:self action:@selector(wc_chatTimeGlassChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = self.chatTimeGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else if (indexPath.section == 1 && indexPath.row == 2) {
+        WCLiquidGlassConfigureCell(cell, @"长按菜单液态", @"接管 WCGlass 消息菜单",
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
+        self.wcGlassLongPressMenuSwitch = [[UISwitch alloc] init];
+        self.wcGlassLongPressMenuSwitch.on = WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled;
+        [self.wcGlassLongPressMenuSwitch addTarget:self action:@selector(wc_wcGlassLongPressMenuChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = self.wcGlassLongPressMenuSwitch;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1) {
         WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
@@ -1535,7 +1544,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
-    } else if (indexPath.section == 1 && indexPath.row == 2) {
+    } else if (indexPath.section == 1 && indexPath.row == 3) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
@@ -1550,6 +1559,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_chatTimeGlassChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setChatTimeGlassEnabled:sender.isOn];
+}
+
+- (void)wc_wcGlassLongPressMenuChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setWCGlassLongPressMenuEnabled:sender.isOn];
 }
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {
