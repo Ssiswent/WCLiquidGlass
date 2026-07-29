@@ -670,6 +670,8 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     CGRect targetFrame = preservesNativeGeometry
         ? baseFrame
         : WCLiquidGlassHomeCornerTargetFrame(tableView, indexPath, role, baseFrame);
+    BOOL isMacOnlineCard = role == WCLiquidGlassHomeCornerTableRoleHome &&
+        indexPath.section == 0;
     BOOL needsFrameUpdate = !preservesNativeGeometry && !CGRectEqualToRect(cell.frame, targetFrame);
     state.baseFrame = baseFrame;
     state.appliedFrame = targetFrame;
@@ -687,7 +689,9 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     BOOL isLiquidBackground = WCLiquidGlassPreferences.homeLiquidBackgroundEnabled;
     BOOL usesCellGlass = isLiquidBackground && separate;
     BOOL suppressesSelectionEffect = role == WCLiquidGlassHomeCornerTableRoleFindFriend;
-    CGRect overlayFrame = cell.contentView.bounds;
+    CGRect overlayFrame = isMacOnlineCard
+        ? CGRectMake(0.0, 0.0, CGRectGetWidth(targetFrame), CGRectGetHeight(targetFrame))
+        : cell.contentView.bounds;
     UIColor *targetBackgroundColor = UIColor.clearColor;
     BOOL needsCornerUpdate = cell.layer.cornerRadius != targetCornerRadius ||
         cell.layer.cornerCurve != kCACornerCurveContinuous ||
@@ -720,6 +724,9 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
         baseContentFrame = state.baseContentFrame;
     }
     CGRect targetContentFrame = baseContentFrame;
+    if (isMacOnlineCard) {
+        targetContentFrame = overlayFrame;
+    }
     BOOL insetsStandardTabContent =
         role == WCLiquidGlassHomeCornerTableRoleFindFriend ||
         role == WCLiquidGlassHomeCornerTableRoleMore;
@@ -738,7 +745,8 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
                                                       targetContentFrame);
     state.baseContentFrame = baseContentFrame;
     state.appliedContentFrame = targetContentFrame;
-    state.hasAppliedContentFrame = role == WCLiquidGlassHomeCornerTableRoleOtherTab;
+    state.hasAppliedContentFrame = role == WCLiquidGlassHomeCornerTableRoleOtherTab ||
+        isMacOnlineCard;
     UIView *innerContentView = cell.contentView.subviews.firstObject;
     CGRect baseInnerContentFrame = innerContentView.frame;
     if (state.hasAppliedInnerContentFrame &&
