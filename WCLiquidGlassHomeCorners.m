@@ -34,6 +34,8 @@ static BOOL WCLiquidGlassHomeCornerContactsCellHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerContactsCellHookInstallAttempts = 0;
 static BOOL WCLiquidGlassHomeCornerContactsAvatarHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassHomeCornerContactsAvatarHookInstallAttempts = 0;
+static BOOL WCLiquidGlassMacOnlineGeometryDiagnosticCaptured = NO;
+static BOOL WCLiquidGlassMacOnlineGeometryDiagnosticSampling = NO;
 static __thread BOOL WCLiquidGlassHomeCornerCellLayoutApplying = NO;
 static __thread BOOL WCLiquidGlassHomeCornerTableLayoutApplying = NO;
 static NSUInteger WCLiquidGlassHomeCornersConfigurationEpoch = 1;
@@ -104,6 +106,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 
 static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView);
 static void WCLiquidGlassInstallHomeCornerStandardTabCellLayoutHook(void);
+static NSString *WCLiquidGlassHomeCornersDiagnosticRect(CGRect rect);
 static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
                                                   NSIndexPath *indexPath,
                                                   WCLiquidGlassHomeCornerTableRole role,
@@ -649,6 +652,138 @@ static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
     return CGRectIntegral(targetFrame);
 }
 
+static NSString *WCLiquidGlassHomeCornerDiagnosticTransform(CATransform3D transform) {
+    return [NSString stringWithFormat:@"{m11=%.3f m12=%.3f m21=%.3f m22=%.3f m41=%.1f m42=%.1f}",
+            transform.m11,
+            transform.m12,
+            transform.m21,
+            transform.m22,
+            transform.m41,
+            transform.m42];
+}
+
+static void WCLiquidGlassHomeCornerAppendMacOnlineGeometryView(NSMutableString *report,
+                                                                NSString *label,
+                                                                UIView *view) {
+    if (!view) {
+        [report appendFormat:@"  %@=nil\n", label];
+        return;
+    }
+    CALayer *presentationLayer = view.layer.presentationLayer;
+    [report appendFormat:@"  %@ class=%@ frame=%@ bounds=%@ transform=%@ clips=%@ layerMasks=%@ presentationFrame=%@ presentationBounds=%@ presentationTransform=%@\n",
+     label,
+     NSStringFromClass(view.class),
+     WCLiquidGlassHomeCornersDiagnosticRect(view.frame),
+     WCLiquidGlassHomeCornersDiagnosticRect(view.bounds),
+     WCLiquidGlassHomeCornerDiagnosticTransform(view.layer.transform),
+     view.clipsToBounds ? @"YES" : @"NO",
+     view.layer.masksToBounds ? @"YES" : @"NO",
+     presentationLayer ? WCLiquidGlassHomeCornersDiagnosticRect(presentationLayer.frame) : @"nil",
+     presentationLayer ? WCLiquidGlassHomeCornersDiagnosticRect(presentationLayer.bounds) : @"nil",
+     presentationLayer
+        ? WCLiquidGlassHomeCornerDiagnosticTransform(presentationLayer.transform)
+        : @"nil"];
+}
+
+static BOOL WCLiquidGlassHomeCornerMacOnlineGeometryTransitionDetected(
+    UITableView *tableView,
+    UITableViewCell *cell,
+    WCLiquidGlassHomeCornerCellState *state,
+    CGRect targetFrame) {
+    CGFloat windowWidth = CGRectGetWidth(tableView.window.bounds);
+    if (windowWidth > 0.0 && fabs(CGRectGetWidth(tableView.bounds) - windowWidth) > 0.5) {
+        return YES;
+    }
+    CALayer *cellPresentationLayer = cell.layer.presentationLayer;
+    if (cellPresentationLayer &&
+        fabs(CGRectGetWidth(cellPresentationLayer.frame) - CGRectGetWidth(targetFrame)) > 0.5) {
+        return YES;
+    }
+    CALayer *contentPresentationLayer = cell.contentView.layer.presentationLayer;
+    if (contentPresentationLayer &&
+        fabs(CGRectGetWidth(contentPresentationLayer.frame) - CGRectGetWidth(targetFrame)) > 0.5) {
+        return YES;
+    }
+    if (state.glassOverlay) {
+        CALayer *glassPresentationLayer = state.glassOverlay.layer.presentationLayer;
+        if (glassPresentationLayer &&
+            fabs(CGRectGetWidth(glassPresentationLayer.frame) - CGRectGetWidth(targetFrame)) > 0.5) {
+            return YES;
+        }
+    }
+    for (UIView *ancestor = cell.superview; ancestor; ancestor = ancestor.superview) {
+        CALayer *presentationLayer = ancestor.layer.presentationLayer;
+        if (presentationLayer &&
+            !CATransform3DEqualToTransform(presentationLayer.transform, ancestor.layer.transform)) {
+            return YES;
+        }
+        if (ancestor == tableView.window) {
+            break;
+        }
+    }
+    return NO;
+}
+
+static void WCLiquidGlassHomeCornerCaptureMacOnlineGeometryTransition(
+    UITableView *tableView,
+    UITableViewCell *cell,
+    WCLiquidGlassHomeCornerCellState *state,
+    CGRect targetFrame) {
+    if (WCLiquidGlassMacOnlineGeometryDiagnosticCaptured ||
+        WCLiquidGlassMacOnlineGeometryDiagnosticSampling) {
+        return;
+    }
+    WCLiquidGlassMacOnlineGeometryDiagnosticSampling = YES;
+    CFTimeInterval startTime = CACurrentMediaTime();
+    NSMutableString *report = [NSMutableString stringWithString:
+        @"Privacy: this report records only view classes, geometry, transforms and clipping; it excludes visible text, message content, contact names and accessibility labels.\n\n"];
+    [report appendFormat:@"Trigger targetFrame=%@ tableBounds=%@ windowBounds=%@\n",
+     WCLiquidGlassHomeCornersDiagnosticRect(targetFrame),
+     WCLiquidGlassHomeCornersDiagnosticRect(tableView.bounds),
+     WCLiquidGlassHomeCornersDiagnosticRect(tableView.window.bounds)];
+    __weak UITableView *weakTableView = tableView;
+    __weak UITableViewCell *weakCell = cell;
+    __weak UIVisualEffectView *weakGlassOverlay = state.glassOverlay;
+    for (NSUInteger sampleIndex = 0; sampleIndex <= 30; sampleIndex += 1) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                     (int64_t)(sampleIndex * 0.04 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            UITableView *strongTableView = weakTableView;
+            UITableViewCell *strongCell = weakCell;
+            UIVisualEffectView *strongGlassOverlay = weakGlassOverlay;
+            CFTimeInterval elapsed = CACurrentMediaTime() - startTime;
+            [report appendFormat:@"\n+%.3fs sample=%lu\n", elapsed, (unsigned long)sampleIndex];
+            WCLiquidGlassHomeCornerAppendMacOnlineGeometryView(report, @"table", strongTableView);
+            WCLiquidGlassHomeCornerAppendMacOnlineGeometryView(report, @"cell", strongCell);
+            WCLiquidGlassHomeCornerAppendMacOnlineGeometryView(report,
+                                                                @"contentView",
+                                                                strongCell.contentView);
+            WCLiquidGlassHomeCornerAppendMacOnlineGeometryView(report,
+                                                                @"glassOverlay",
+                                                                strongGlassOverlay);
+            NSUInteger depth = 0;
+            for (UIView *ancestor = strongCell.superview;
+                 ancestor && depth < 12;
+                 ancestor = ancestor.superview, depth += 1) {
+                WCLiquidGlassHomeCornerAppendMacOnlineGeometryView(
+                    report,
+                    [NSString stringWithFormat:@"ancestor[%lu]", (unsigned long)depth],
+                    ancestor);
+                if (ancestor == strongTableView.window) {
+                    break;
+                }
+            }
+            if (sampleIndex == 30) {
+                WCLiquidGlassMacOnlineGeometryDiagnosticSampling = NO;
+                WCLiquidGlassMacOnlineGeometryDiagnosticCaptured = YES;
+                [WCLiquidGlassCrashLogger.sharedLogger
+                    writeDiagnosticReportWithTitle:@"Mac Online Card Geometry Transition"
+                                           content:report];
+            }
+        });
+    }
+}
+
 static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
                                              UITableViewCell *cell,
                                              WCLiquidGlassHomeCornerTableRole role) {
@@ -676,6 +811,16 @@ static void WCLiquidGlassHomeCornerApplyCell(UITableView *tableView,
     state.baseFrame = baseFrame;
     state.appliedFrame = targetFrame;
     state.hasAppliedFrame = !preservesNativeGeometry;
+    if (isMacOnlineCard &&
+        WCLiquidGlassHomeCornerMacOnlineGeometryTransitionDetected(tableView,
+                                                                    cell,
+                                                                    state,
+                                                                    targetFrame)) {
+        WCLiquidGlassHomeCornerCaptureMacOnlineGeometryTransition(tableView,
+                                                                   cell,
+                                                                   state,
+                                                                   targetFrame);
+    }
 
     CACornerMask corners = separate
         ? kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
