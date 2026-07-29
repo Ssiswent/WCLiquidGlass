@@ -75,9 +75,9 @@ static void WCLiquidGlassWCGlassLongPressSetMenuContentHidden(UIView *view,
 
 static CGRect WCLiquidGlassWCGlassLongPressCollapsedFrame(CGRect targetFrame) {
     CGFloat width = MIN(CGRectGetWidth(targetFrame),
-                        MAX(88.0, CGRectGetWidth(targetFrame) * 0.46));
+                        MAX(80.0, CGRectGetWidth(targetFrame) * 0.40));
     CGFloat height = MIN(CGRectGetHeight(targetFrame),
-                         MAX(64.0, CGRectGetHeight(targetFrame) * 0.54));
+                         MAX(60.0, CGRectGetHeight(targetFrame) * 0.46));
     return CGRectMake(CGRectGetMidX(targetFrame) - width * 0.5,
                       CGRectGetMidY(targetFrame) - height * 0.5,
                       width,
@@ -85,7 +85,7 @@ static CGRect WCLiquidGlassWCGlassLongPressCollapsedFrame(CGRect targetFrame) {
 }
 
 static CGFloat WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(CGRect frame) {
-    return MIN(32.0, CGRectGetHeight(frame) * 0.5);
+    return CGRectGetHeight(frame) * 0.5;
 }
 
 static void WCLiquidGlassWCGlassLongPressHideWCGlassViews(UIView *view,
@@ -229,7 +229,7 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
     menuContentView.hidden = NO;
     menuContentView.transform = UIAccessibilityIsReduceMotionEnabled()
         ? state.originalMenuTransform
-        : CGAffineTransformScale(state.originalMenuTransform, 0.96, 0.96);
+        : CGAffineTransformScale(state.originalMenuTransform, 0.84, 0.84);
     hostView.hidden = NO;
     hostView.alpha = 1.0;
     WCLiquidGlassInstallWCGlassLongPressMenuControllerHook();
@@ -239,10 +239,10 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
         return;
     }
 
-    [UIView animateWithDuration:0.58
+    [UIView animateWithDuration:0.70
                           delay:0.0
-         usingSpringWithDamping:0.66
-          initialSpringVelocity:0.22
+         usingSpringWithDamping:0.56
+          initialSpringVelocity:0.30
                         options:UIViewAnimationOptionBeginFromCurrentState |
                                 UIViewAnimationOptionAllowUserInteraction |
                                 UIViewAnimationOptionCurveEaseOut
@@ -316,15 +316,15 @@ static void WCLiquidGlassWCGlassLongPressCompleteDismissal(
                                  nil,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    if (nativeDismissal) {
-        nativeDismissal();
-    }
     menuContentView.hidden = YES;
     menuContentView.transform = state.originalMenuTransform;
     menuContentView.maskView = state.originalMaskView;
     hostView.alpha = 1.0;
     hostView.hidden = YES;
     [state.glassContainer removeFromSuperview];
+    if (nativeDismissal) {
+        nativeDismissal();
+    }
 }
 
 static void WCLiquidGlassWCGlassLongPressDismiss(
@@ -341,16 +341,14 @@ static void WCLiquidGlassWCGlassLongPressDismiss(
         return;
     }
 
-    [UIView animateWithDuration:0.36
+    [UIView animateWithDuration:0.40
                           delay:0.0
-         usingSpringWithDamping:0.82
-          initialSpringVelocity:0.12
                         options:UIViewAnimationOptionBeginFromCurrentState |
                                 UIViewAnimationOptionAllowUserInteraction |
-                                UIViewAnimationOptionCurveEaseIn
+                                UIViewAnimationOptionCurveEaseInOut
                      animations:^{
         state.menuContentView.transform =
-            CGAffineTransformScale(state.originalMenuTransform, 0.96, 0.96);
+            CGAffineTransformScale(state.originalMenuTransform, 0.001, 0.001);
         state.revealMaskView.frame = state.collapsedFrame;
         state.revealMaskView.layer.cornerRadius =
             WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(state.collapsedFrame);
