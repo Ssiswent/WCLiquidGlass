@@ -1,5 +1,14 @@
 # 更新日志
 
+## [1.7.13] - 2026-07-29
+
+### 重构
+
+- 参考 WCGlass 3.0.1“主页加号菜单液态”的系统玻璃容器方案，移除长按消息菜单的截图、`CAShapeLayer` 蒙版路径和宿主缩放动画，改用真实 `UIGlassEffect` 在 `UIGlassContainerEffect` 中从长按触点连续形变到微信菜单的最终 frame，关闭时沿同一路径反向收起。
+- 参考 ActionPro 对 `MMMenuContentView`、`menuItemViews` 与原生 action 转发链的处理方式，不复制微信的菜单业务逻辑：继续让微信识别消息类型并生成 `MMMenuItemView`，WCLiquidGlass 仅接管呈现层。图标、文字、动态数量、布局、点击与长按行为均保持微信原样。
+- 完全隔离 WCGlass 强制插入的长按菜单模糊层；实际菜单材质持续跟随 WCLiquidGlass 的“清透 / 均衡 / 着色”设置。
+- 恢复微信原生按钮高亮与长按视觉反馈，不再全局清除 `MMMenuItemView` 的阴影或拦截其 `setHighlighted:`。
+
 ## [1.7.12] - 2026-07-29
 
 ### 优化

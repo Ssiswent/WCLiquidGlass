@@ -222,7 +222,7 @@ UIVisualEffect *WCLiquidGlassCurrentGlassEffect(void) {
     return WCLiquidGlassMakeEffect();
 }
 
-static UIVisualEffect *WCLiquidGlassMakeContainerEffect(void) {
+UIVisualEffect *WCLiquidGlassCurrentGlassContainerEffect(void) {
     Class containerClass = NSClassFromString(@"UIGlassContainerEffect");
     if (containerClass == Nil) {
         return nil;
@@ -1962,7 +1962,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     [_dismissControl addTarget:self action:@selector(wc_backgroundTapped) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:_dismissControl];
 
-    _glassContainer = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassMakeContainerEffect()];
+    _glassContainer = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassContainerEffect()];
     _glassContainer.frame = self.bounds;
     _glassContainer.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _glassContainer.backgroundColor = UIColor.clearColor;

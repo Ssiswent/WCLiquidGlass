@@ -9,23 +9,29 @@
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 
-static const void *WCLiquidGlassWCGlassLongPressAnimatedKey =
-    &WCLiquidGlassWCGlassLongPressAnimatedKey;
-static const void *WCLiquidGlassWCGlassLongPressReplacementKey =
-    &WCLiquidGlassWCGlassLongPressReplacementKey;
-static const void *WCLiquidGlassWCGlassLongPressHostKey =
-    &WCLiquidGlassWCGlassLongPressHostKey;
-static const void *WCLiquidGlassWCGlassLongPressSourcePointKey =
-    &WCLiquidGlassWCGlassLongPressSourcePointKey;
+static const void *WCLiquidGlassWCGlassLongPressStateKey =
+    &WCLiquidGlassWCGlassLongPressStateKey;
 static void (*WCLiquidGlassOriginalVisualEffectDidMoveToWindow)(UIVisualEffectView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalVisualEffectSetEffect)(UIVisualEffectView *, SEL, UIVisualEffect *) = NULL;
 static void (*WCLiquidGlassOriginalApplicationSendEvent)(UIApplication *, SEL, UIEvent *) = NULL;
 static void (*WCLiquidGlassOriginalWindowSetHidden)(UIWindow *, SEL, BOOL) = NULL;
-static void (*WCLiquidGlassOriginalMenuItemSetHighlighted)(UIControl *, SEL, BOOL) = NULL;
 static BOOL WCLiquidGlassWCGlassLongPressHooksInstalled = NO;
 static __weak UIWindow *WCLiquidGlassWCGlassLongPressTouchWindow = nil;
 static CGPoint WCLiquidGlassWCGlassLongPressTouchPoint;
 static CFTimeInterval WCLiquidGlassWCGlassLongPressTouchTime = 0.0;
+
+@interface WCLiquidGlassWCGlassLongPressState : NSObject
+@property(nonatomic, weak) UIWindow *menuWindow;
+@property(nonatomic, weak) UIView *hostView;
+@property(nonatomic, strong) UIVisualEffectView *glassContainer;
+@property(nonatomic, strong) UIVisualEffectView *morphGlassView;
+@property(nonatomic) CGRect sourceFrame;
+@property(nonatomic) CGRect targetFrame;
+@property(nonatomic) BOOL dismissing;
+@end
+
+@implementation WCLiquidGlassWCGlassLongPressState
+@end
 
 static SEL WCLiquidGlassWCGlassLongPressMarker(void) {
     return sel_registerName("WCLGApplyLongPressMenuGlass:");
@@ -35,270 +41,189 @@ static BOOL WCLiquidGlassIsWCGlassLongPressView(UIVisualEffectView *view) {
     return view && objc_getAssociatedObject(view, WCLiquidGlassWCGlassLongPressMarker()) != nil;
 }
 
-static BOOL WCLiquidGlassWCGlassLongPressHostMatches(UIVisualEffectView *view) {
-    UIView *hostView = view.superview;
-    return hostView &&
-        ![hostView isKindOfClass:UIWindow.class] &&
-        CGRectGetWidth(hostView.bounds) <= 520.0 &&
-        CGRectGetHeight(hostView.bounds) <= 760.0 &&
-        fabs(CGRectGetWidth(hostView.bounds) - CGRectGetWidth(view.bounds)) <= 4.0 &&
-        fabs(CGRectGetHeight(hostView.bounds) - CGRectGetHeight(view.bounds)) <= 4.0;
+static UIView *WCLiquidGlassWCGlassLongPressMenuContentView(UIView *hostView) {
+    for (UIView *view = hostView.superview; view; view = view.superview) {
+        if ([NSStringFromClass(view.class) isEqualToString:@"MMMenuContentView"]) {
+            return view;
+        }
+        if ([view isKindOfClass:UIWindow.class]) {
+            break;
+        }
+    }
+    return nil;
 }
 
-static void WCLiquidGlassClearWCGlassLongPressButtonShadows(UIView *view,
-                                                            BOOL insideMenuItem) {
-    BOOL isMenuItem = [NSStringFromClass(view.class) isEqualToString:@"MMMenuItemView"];
-    BOOL shouldClear = insideMenuItem || isMenuItem;
-    if (shouldClear) {
-        view.layer.shadowOpacity = 0.0;
-        view.layer.shadowRadius = 0.0;
-        view.layer.shadowOffset = CGSizeZero;
-        view.layer.shadowColor = UIColor.clearColor.CGColor;
-    }
-    for (UIView *subview in view.subviews) {
-        WCLiquidGlassClearWCGlassLongPressButtonShadows(subview, shouldClear);
-    }
-}
-
-static UIVisualEffectView *WCLiquidGlassWCGlassLongPressReplacement(UIVisualEffectView *view,
-                                                                    BOOL create) {
-    UIVisualEffectView *replacement =
-        objc_getAssociatedObject(view, WCLiquidGlassWCGlassLongPressReplacementKey);
-    UIView *hostView = view.superview;
-    if (!replacement && create && WCLiquidGlassWCGlassLongPressHostMatches(view)) {
-        replacement = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassEffect()];
-        replacement.userInteractionEnabled = NO;
-        replacement.opaque = NO;
-        replacement.backgroundColor = UIColor.clearColor;
-        replacement.contentView.backgroundColor = UIColor.clearColor;
-        replacement.frame = view.frame;
-        replacement.autoresizingMask =
-            UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        replacement.clipsToBounds = YES;
-        replacement.layer.cornerRadius = view.layer.cornerRadius;
-        NSUInteger index = [hostView.subviews indexOfObjectIdenticalTo:view];
-        [hostView insertSubview:replacement atIndex:index == NSNotFound ? 0 : index];
-        objc_setAssociatedObject(view,
-                                 WCLiquidGlassWCGlassLongPressReplacementKey,
-                                 replacement,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(hostView,
-                                 WCLiquidGlassWCGlassLongPressHostKey,
-                                 view,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    return replacement;
-}
-
-static void WCLiquidGlassApplyWCGlassLongPressMaterial(UIVisualEffectView *view) {
-    if (!WCLiquidGlassIsWCGlassLongPressView(view)) {
-        return;
-    }
-    UIVisualEffectView *replacement =
-        WCLiquidGlassWCGlassLongPressReplacement(view, YES);
-    if (!replacement) {
-        return;
-    }
-    replacement.frame = view.frame;
-    replacement.layer.cornerRadius = view.layer.cornerRadius;
-    replacement.effect = WCLiquidGlassCurrentGlassEffect();
-    view.hidden = YES;
-    view.alpha = 0.0;
-    UIView *hostView = view.superview;
-    hostView.opaque = NO;
-    hostView.backgroundColor = UIColor.clearColor;
-    hostView.layer.backgroundColor = UIColor.clearColor.CGColor;
-    hostView.clipsToBounds = YES;
-    hostView.layer.cornerRadius = 25.0;
-    replacement.layer.cornerRadius = 25.0;
-    WCLiquidGlassClearWCGlassLongPressButtonShadows(hostView, NO);
-}
-
-static CGPoint WCLiquidGlassWCGlassLongPressSourcePointInScreen(UIView *hostView) {
+static CGRect WCLiquidGlassWCGlassLongPressSourceFrame(UIView *menuContentView) {
+    CGPoint sourcePoint;
     CFTimeInterval age = CACurrentMediaTime() - WCLiquidGlassWCGlassLongPressTouchTime;
     if (WCLiquidGlassWCGlassLongPressTouchWindow &&
         age >= 0.0 &&
         age <= 2.0 &&
         isfinite(WCLiquidGlassWCGlassLongPressTouchPoint.x) &&
         isfinite(WCLiquidGlassWCGlassLongPressTouchPoint.y)) {
-        return [WCLiquidGlassWCGlassLongPressTouchWindow
-            convertPoint:WCLiquidGlassWCGlassLongPressTouchPoint
-               toWindow:nil];
+        CGPoint screenPoint =
+            [WCLiquidGlassWCGlassLongPressTouchWindow
+                convertPoint:WCLiquidGlassWCGlassLongPressTouchPoint
+                   toWindow:nil];
+        CGPoint menuWindowPoint =
+            [menuContentView.window convertPoint:screenPoint fromWindow:nil];
+        sourcePoint = [menuContentView convertPoint:menuWindowPoint
+                                          fromView:menuContentView.window];
+    } else {
+        sourcePoint = CGPointMake(CGRectGetMidX(menuContentView.bounds),
+                                  CGRectGetMidY(menuContentView.bounds));
     }
-    CGRect frameInScreen = [hostView.window convertRect:[hostView convertRect:hostView.bounds
-                                                                       toView:hostView.window]
-                                               toWindow:nil];
-    return CGPointMake(CGRectGetMidX(frameInScreen), CGRectGetMidY(frameInScreen));
+    return CGRectMake(sourcePoint.x - 22.0,
+                      sourcePoint.y - 22.0,
+                      44.0,
+                      44.0);
 }
 
-static NSArray *WCLiquidGlassWCGlassLongPressMorphPaths(UIView *view,
-                                                        CGPoint sourcePointInScreen,
-                                                        BOOL reversed) {
-    CGPoint pointInWindow = [view.window convertPoint:sourcePointInScreen fromWindow:nil];
-    CGPoint sourcePoint = [view convertPoint:pointInWindow fromView:view.window];
-    CGRect finalBounds = view.bounds;
-    CGFloat diameter = MIN(44.0, MIN(CGRectGetWidth(finalBounds), CGRectGetHeight(finalBounds)));
-    CGRect sourceRect = CGRectMake(sourcePoint.x - diameter * 0.5,
-                                   sourcePoint.y - diameter * 0.5,
-                                   diameter,
-                                   diameter);
-    NSArray<NSNumber *> *progress = @[@0.0, @0.10, @0.34, @0.68, @0.92, @1.0];
-    NSMutableArray *paths = [NSMutableArray arrayWithCapacity:progress.count];
-    CGFloat finalRadius = view.layer.cornerRadius > 0.0 ? view.layer.cornerRadius : 25.0;
-    for (NSNumber *value in progress) {
-        CGFloat amount = value.doubleValue;
-        CGRect rect = CGRectMake(CGRectGetMinX(sourceRect) +
-                                     (CGRectGetMinX(finalBounds) - CGRectGetMinX(sourceRect)) * amount,
-                                 CGRectGetMinY(sourceRect) +
-                                     (CGRectGetMinY(finalBounds) - CGRectGetMinY(sourceRect)) * amount,
-                                 CGRectGetWidth(sourceRect) +
-                                     (CGRectGetWidth(finalBounds) - CGRectGetWidth(sourceRect)) * amount,
-                                 CGRectGetHeight(sourceRect) +
-                                     (CGRectGetHeight(finalBounds) - CGRectGetHeight(sourceRect)) * amount);
-        CGFloat radius = diameter * 0.5 + (finalRadius - diameter * 0.5) * amount;
-        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:rect
-                                                        cornerRadius:MAX(0.0, radius)];
-        [paths addObject:(__bridge id)path.CGPath];
+static void WCLiquidGlassWCGlassLongPressHideWCGlassViews(UIView *view,
+                                                          NSUInteger depth) {
+    if (!view || depth > 12) {
+        return;
     }
-    return reversed ? [[paths reverseObjectEnumerator] allObjects] : paths;
+    if ([view isKindOfClass:UIVisualEffectView.class] &&
+        WCLiquidGlassIsWCGlassLongPressView((UIVisualEffectView *)view)) {
+        view.hidden = YES;
+        view.alpha = 0.0;
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassWCGlassLongPressHideWCGlassViews(subview, depth + 1);
+    }
 }
 
-static void WCLiquidGlassAnimateWCGlassLongPressContent(UIVisualEffectView *glassView,
-                                                        CFTimeInterval beginTime,
-                                                        CFTimeInterval duration) {
-    UIView *hostView = glassView.superview;
+static void WCLiquidGlassWCGlassLongPressApplyTransparentHost(UIView *hostView) {
+    hostView.opaque = NO;
+    hostView.backgroundColor = UIColor.clearColor;
+    hostView.layer.backgroundColor = UIColor.clearColor.CGColor;
+    hostView.layer.cornerRadius = 25.0;
+    WCLiquidGlassWCGlassLongPressHideWCGlassViews(hostView, 0);
+}
+
+static void WCLiquidGlassWCGlassLongPressFinishAppearance(
+    WCLiquidGlassWCGlassLongPressState *state) {
+    if (!state.hostView.window || state.dismissing) {
+        return;
+    }
+    state.hostView.alpha = 1.0;
+    state.morphGlassView.frame = state.targetFrame;
+    state.morphGlassView.layer.cornerRadius = 25.0;
+}
+
+static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassView) {
+    UIView *hostView = wcGlassView.superview;
+    UIView *menuContentView = WCLiquidGlassWCGlassLongPressMenuContentView(hostView);
+    UIWindow *menuWindow = hostView.window;
     if (!hostView ||
-        [hostView isKindOfClass:UIWindow.class] ||
-        CGRectGetWidth(hostView.bounds) > 520.0 ||
-        CGRectGetHeight(hostView.bounds) > 760.0 ||
-        fabs(CGRectGetWidth(hostView.bounds) - CGRectGetWidth(glassView.bounds)) > 4.0 ||
-        fabs(CGRectGetHeight(hostView.bounds) - CGRectGetHeight(glassView.bounds)) > 4.0) {
+        !menuContentView ||
+        ![NSStringFromClass(menuWindow.class) isEqualToString:@"MMMenuWindow"] ||
+        CGRectIsEmpty(hostView.bounds)) {
         return;
     }
-    for (UIView *subview in hostView.subviews) {
-        if (subview == glassView ||
-            subview == WCLiquidGlassWCGlassLongPressReplacement(glassView, NO) ||
-            subview.hidden ||
-            subview.alpha <= 0.01) {
-            continue;
-        }
-        CAKeyframeAnimation *contentAnimation = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
-        contentAnimation.values = @[@0.0, @0.0, @0.72, @1.0];
-        contentAnimation.keyTimes = @[@0.0, @0.22, @0.64, @1.0];
-        contentAnimation.duration = duration;
-        contentAnimation.beginTime = beginTime;
-        contentAnimation.fillMode = kCAFillModeBackwards;
-        contentAnimation.removedOnCompletion = YES;
-        [subview.layer addAnimation:contentAnimation
-                            forKey:@"WCLiquidGlass.WCGlassLongPress.ContentReveal"];
+
+    WCLiquidGlassWCGlassLongPressState *existingState =
+        objc_getAssociatedObject(menuWindow, WCLiquidGlassWCGlassLongPressStateKey);
+    if (existingState && existingState.hostView == hostView) {
+        existingState.morphGlassView.effect = WCLiquidGlassCurrentGlassEffect();
+        WCLiquidGlassWCGlassLongPressApplyTransparentHost(hostView);
+        return;
     }
+
+    WCLiquidGlassWCGlassLongPressState *state =
+        [[WCLiquidGlassWCGlassLongPressState alloc] init];
+    state.menuWindow = menuWindow;
+    state.hostView = hostView;
+    state.sourceFrame = WCLiquidGlassWCGlassLongPressSourceFrame(menuContentView);
+    state.targetFrame = [menuContentView convertRect:hostView.bounds
+                                            fromView:hostView];
+
+    UIVisualEffectView *glassContainer =
+        [[UIVisualEffectView alloc]
+            initWithEffect:WCLiquidGlassCurrentGlassContainerEffect()];
+    glassContainer.frame = menuContentView.bounds;
+    glassContainer.autoresizingMask =
+        UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    glassContainer.userInteractionEnabled = NO;
+    glassContainer.opaque = NO;
+    glassContainer.backgroundColor = UIColor.clearColor;
+    glassContainer.contentView.backgroundColor = UIColor.clearColor;
+
+    UIVisualEffectView *morphGlassView =
+        [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassEffect()];
+    morphGlassView.frame = state.sourceFrame;
+    morphGlassView.userInteractionEnabled = NO;
+    morphGlassView.opaque = NO;
+    morphGlassView.backgroundColor = UIColor.clearColor;
+    morphGlassView.contentView.backgroundColor = UIColor.clearColor;
+    morphGlassView.clipsToBounds = YES;
+    morphGlassView.layer.cornerRadius = 22.0;
+    [glassContainer.contentView addSubview:morphGlassView];
+    [menuContentView insertSubview:glassContainer atIndex:0];
+
+    state.glassContainer = glassContainer;
+    state.morphGlassView = morphGlassView;
+    objc_setAssociatedObject(menuWindow,
+                             WCLiquidGlassWCGlassLongPressStateKey,
+                             state,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    WCLiquidGlassWCGlassLongPressApplyTransparentHost(hostView);
+    hostView.alpha = UIAccessibilityIsReduceMotionEnabled() ? 1.0 : 0.0;
+
+    if (UIAccessibilityIsReduceMotionEnabled()) {
+        WCLiquidGlassWCGlassLongPressFinishAppearance(state);
+        return;
+    }
+
+    UIViewPropertyAnimator *animator =
+        [[UIViewPropertyAnimator alloc] initWithDuration:0.48
+                                           dampingRatio:0.82
+                                             animations:^{
+        morphGlassView.frame = state.targetFrame;
+        morphGlassView.layer.cornerRadius = 25.0;
+        hostView.alpha = 1.0;
+    }];
+    [animator addCompletion:^(__unused UIViewAnimatingPosition position) {
+        WCLiquidGlassWCGlassLongPressFinishAppearance(state);
+    }];
+    [animator startAnimation];
 }
 
-static void WCLiquidGlassAnimateWCGlassLongPressAppearance(UIVisualEffectView *view) {
-    if (!view.window ||
-        UIAccessibilityIsReduceMotionEnabled() ||
-        MIN(CGRectGetWidth(view.bounds), CGRectGetHeight(view.bounds)) < 24.0 ||
-        MAX(CGRectGetWidth(view.bounds), CGRectGetHeight(view.bounds)) < 56.0) {
+static void WCLiquidGlassWCGlassLongPressScheduleTakeOver(
+    UIVisualEffectView *wcGlassView) {
+    if (!wcGlassView.window || !WCLiquidGlassIsWCGlassLongPressView(wcGlassView)) {
         return;
     }
-    UIView *hostView = view.superview;
-    CGPoint sourcePoint = WCLiquidGlassWCGlassLongPressSourcePointInScreen(hostView);
-    objc_setAssociatedObject(hostView,
-                             WCLiquidGlassWCGlassLongPressSourcePointKey,
-                             [NSValue valueWithCGPoint:sourcePoint],
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    NSArray *paths = WCLiquidGlassWCGlassLongPressMorphPaths(hostView, sourcePoint, NO);
-    CAShapeLayer *maskLayer = [CAShapeLayer layer];
-    maskLayer.frame = hostView.bounds;
-    maskLayer.fillColor = UIColor.blackColor.CGColor;
-    maskLayer.path = (__bridge CGPathRef)paths.lastObject;
-    hostView.layer.mask = maskLayer;
-    CAKeyframeAnimation *pathAnimation = [CAKeyframeAnimation animationWithKeyPath:@"path"];
-    pathAnimation.values = paths;
-    pathAnimation.keyTimes = @[@0.0, @0.10, @0.32, @0.62, @0.84, @1.0];
-    pathAnimation.timingFunctions = @[
-        [CAMediaTimingFunction functionWithControlPoints:0.16 :0.70 :0.22 :1.0],
-        [CAMediaTimingFunction functionWithControlPoints:0.16 :0.86 :0.24 :1.0],
-        [CAMediaTimingFunction functionWithControlPoints:0.20 :0.82 :0.28 :1.0],
-        [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut],
-        [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut]
-    ];
-    CFTimeInterval beginTime = CACurrentMediaTime();
-    CFTimeInterval duration = 0.40;
-    pathAnimation.duration = duration;
-    pathAnimation.beginTime = beginTime;
-    pathAnimation.fillMode = kCAFillModeBackwards;
-    pathAnimation.removedOnCompletion = YES;
-    [maskLayer addAnimation:pathAnimation
-                     forKey:@"WCLiquidGlass.WCGlassLongPress.HostMorph"];
-    WCLiquidGlassAnimateWCGlassLongPressContent(view, beginTime + 0.035, duration - 0.035);
-    __weak UIView *weakHostView = hostView;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(duration * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        UIView *strongHostView = weakHostView;
-        if (strongHostView.layer.mask == maskLayer) {
-            strongHostView.layer.mask = nil;
-        }
-    });
-}
-
-static void WCLiquidGlassScheduleWCGlassLongPressAppearance(UIVisualEffectView *view) {
-    if (!view.window || !WCLiquidGlassIsWCGlassLongPressView(view)) {
-        return;
-    }
-    if ([objc_getAssociatedObject(view, WCLiquidGlassWCGlassLongPressAnimatedKey) boolValue]) {
-        return;
-    }
-    objc_setAssociatedObject(view,
-                             WCLiquidGlassWCGlassLongPressAnimatedKey,
-                             @YES,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    __weak UIVisualEffectView *weakView = view;
+    __weak UIVisualEffectView *weakView = wcGlassView;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIVisualEffectView *strongView = weakView;
-        if (!strongView.window || !WCLiquidGlassIsWCGlassLongPressView(strongView)) {
-            return;
+        if (strongView.window && WCLiquidGlassIsWCGlassLongPressView(strongView)) {
+            WCLiquidGlassWCGlassLongPressTakeOver(strongView);
         }
-        WCLiquidGlassApplyWCGlassLongPressMaterial(strongView);
-        WCLiquidGlassAnimateWCGlassLongPressAppearance(strongView);
-        __weak UIView *weakHostView = strongView.superview;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.55 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            UIView *hostView = weakHostView;
-            if (hostView.window) {
-                WCLiquidGlassClearWCGlassLongPressButtonShadows(hostView, NO);
-            }
-        });
     });
 }
 
-static void WCLiquidGlassWCGlassLongPressDidMoveToWindow(UIVisualEffectView *self, SEL selector) {
+static void WCLiquidGlassWCGlassLongPressDidMoveToWindow(UIVisualEffectView *self,
+                                                         SEL selector) {
     if (WCLiquidGlassOriginalVisualEffectDidMoveToWindow) {
         WCLiquidGlassOriginalVisualEffectDidMoveToWindow(self, selector);
     }
-    if (!self.window) {
-        objc_setAssociatedObject(self,
-                                 WCLiquidGlassWCGlassLongPressAnimatedKey,
-                                 nil,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        return;
-    }
-    if (WCLiquidGlassIsWCGlassLongPressView(self)) {
-        WCLiquidGlassApplyWCGlassLongPressMaterial(self);
-        WCLiquidGlassScheduleWCGlassLongPressAppearance(self);
+    if (self.window && WCLiquidGlassIsWCGlassLongPressView(self)) {
+        self.hidden = YES;
+        self.alpha = 0.0;
+        WCLiquidGlassWCGlassLongPressScheduleTakeOver(self);
     }
 }
 
 static void WCLiquidGlassWCGlassLongPressSetEffect(UIVisualEffectView *self,
                                                    SEL selector,
                                                    UIVisualEffect *effect) {
-    BOOL isWCGlassLongPressView = WCLiquidGlassIsWCGlassLongPressView(self);
-    if (isWCGlassLongPressView) {
-        WCLiquidGlassApplyWCGlassLongPressMaterial(self);
-        if (!WCLiquidGlassWCGlassLongPressReplacement(self, NO) &&
-            WCLiquidGlassOriginalVisualEffectSetEffect) {
-            WCLiquidGlassOriginalVisualEffectSetEffect(self, selector, effect);
-        }
+    if (WCLiquidGlassIsWCGlassLongPressView(self)) {
+        self.hidden = YES;
+        self.alpha = 0.0;
+        WCLiquidGlassWCGlassLongPressScheduleTakeOver(self);
         return;
     }
     if (WCLiquidGlassOriginalVisualEffectSetEffect) {
@@ -328,141 +253,62 @@ static void WCLiquidGlassWCGlassLongPressSendEvent(UIApplication *self,
     }
 }
 
-static UIView *WCLiquidGlassWCGlassLongPressHostInView(UIView *view,
-                                                       NSUInteger depth) {
-    if (!view || depth > 24) {
-        return nil;
-    }
-    if (objc_getAssociatedObject(view, WCLiquidGlassWCGlassLongPressHostKey)) {
-        return view;
-    }
-    for (UIView *subview in view.subviews) {
-        UIView *hostView =
-            WCLiquidGlassWCGlassLongPressHostInView(subview, depth + 1);
-        if (hostView) {
-            return hostView;
-        }
-    }
-    return nil;
-}
-
-static UIWindow *WCLiquidGlassWCGlassLongPressDismissalWindow(UIWindow *menuWindow) {
-    UIWindowScene *scene = menuWindow.windowScene;
-    UIWindow *sourceWindow = WCLiquidGlassWCGlassLongPressTouchWindow;
-    if (sourceWindow &&
-        sourceWindow.windowScene == scene &&
-        !sourceWindow.hidden &&
-        sourceWindow.alpha > 0.01) {
-        return sourceWindow;
-    }
-    for (UIWindow *window in [scene.windows reverseObjectEnumerator]) {
-        if (window != menuWindow &&
-            !window.hidden &&
-            window.alpha > 0.01 &&
-            ![NSStringFromClass(window.class) isEqualToString:@"MMMenuWindow"]) {
-            return window;
-        }
-    }
-    return nil;
-}
-
-static void WCLiquidGlassAnimateWCGlassLongPressDismissal(UIWindow *menuWindow) {
-    UIView *hostView = WCLiquidGlassWCGlassLongPressHostInView(menuWindow, 0);
-    NSValue *sourceValue =
-        objc_getAssociatedObject(hostView, WCLiquidGlassWCGlassLongPressSourcePointKey);
-    UIWindow *targetWindow =
-        WCLiquidGlassWCGlassLongPressDismissalWindow(menuWindow);
-    if (!hostView ||
-        !sourceValue ||
-        !targetWindow ||
-        UIAccessibilityIsReduceMotionEnabled()) {
+static void WCLiquidGlassWCGlassLongPressCompleteDismissal(
+    WCLiquidGlassWCGlassLongPressState *state) {
+    UIWindow *menuWindow = state.menuWindow;
+    if (!menuWindow) {
         return;
     }
-    UIView *snapshot = [hostView snapshotViewAfterScreenUpdates:NO];
-    if (!snapshot) {
+    objc_setAssociatedObject(menuWindow,
+                             WCLiquidGlassWCGlassLongPressStateKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [state.glassContainer removeFromSuperview];
+    if (WCLiquidGlassOriginalWindowSetHidden) {
+        WCLiquidGlassOriginalWindowSetHidden(menuWindow,
+                                             @selector(setHidden:),
+                                             YES);
+    }
+}
+
+static void WCLiquidGlassWCGlassLongPressDismiss(
+    WCLiquidGlassWCGlassLongPressState *state) {
+    if (state.dismissing) {
         return;
     }
-    CGRect frameInScreen = [menuWindow convertRect:[hostView convertRect:hostView.bounds
-                                                                   toView:menuWindow]
-                                          toWindow:nil];
-    snapshot.frame = [targetWindow convertRect:frameInScreen fromWindow:nil];
-    snapshot.userInteractionEnabled = NO;
-    [targetWindow addSubview:snapshot];
+    state.dismissing = YES;
+    if (UIAccessibilityIsReduceMotionEnabled() ||
+        !state.hostView.window ||
+        !state.morphGlassView.window) {
+        WCLiquidGlassWCGlassLongPressCompleteDismissal(state);
+        return;
+    }
 
-    NSArray *paths =
-        WCLiquidGlassWCGlassLongPressMorphPaths(snapshot,
-                                                sourceValue.CGPointValue,
-                                                YES);
-    CAShapeLayer *maskLayer = [CAShapeLayer layer];
-    maskLayer.frame = snapshot.bounds;
-    maskLayer.fillColor = UIColor.blackColor.CGColor;
-    maskLayer.path = (__bridge CGPathRef)paths.lastObject;
-    snapshot.layer.mask = maskLayer;
-    CAKeyframeAnimation *pathAnimation = [CAKeyframeAnimation animationWithKeyPath:@"path"];
-    pathAnimation.values = paths;
-    pathAnimation.keyTimes = @[@0.0, @0.16, @0.38, @0.68, @0.90, @1.0];
-    pathAnimation.duration = 0.26;
-    pathAnimation.timingFunction =
-        [CAMediaTimingFunction functionWithControlPoints:0.34 :0.0 :0.76 :0.22];
-    [maskLayer addAnimation:pathAnimation
-                     forKey:@"WCLiquidGlass.WCGlassLongPress.HostDismiss"];
-    CABasicAnimation *opacityAnimation = [CABasicAnimation animationWithKeyPath:@"opacity"];
-    opacityAnimation.fromValue = @1.0;
-    opacityAnimation.toValue = @0.0;
-    opacityAnimation.duration = 0.26;
-    opacityAnimation.timingFunction =
-        [CAMediaTimingFunction functionWithControlPoints:0.40 :0.0 :0.72 :0.24];
-    snapshot.layer.opacity = 0.0;
-    [snapshot.layer addAnimation:opacityAnimation
-                          forKey:@"WCLiquidGlass.WCGlassLongPress.DismissOpacity"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.26 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [snapshot removeFromSuperview];
-    });
+    UIViewPropertyAnimator *animator =
+        [[UIViewPropertyAnimator alloc] initWithDuration:0.34
+                                           dampingRatio:1.0
+                                             animations:^{
+        state.hostView.alpha = 0.0;
+        state.morphGlassView.frame = state.sourceFrame;
+        state.morphGlassView.layer.cornerRadius = 22.0;
+    }];
+    [animator addCompletion:^(__unused UIViewAnimatingPosition position) {
+        WCLiquidGlassWCGlassLongPressCompleteDismissal(state);
+    }];
+    [animator startAnimation];
 }
 
 static void WCLiquidGlassWCGlassLongPressWindowSetHidden(UIWindow *self,
                                                          SEL selector,
                                                          BOOL hidden) {
-    if (hidden &&
-        [NSStringFromClass(self.class) isEqualToString:@"MMMenuWindow"]) {
-        WCLiquidGlassAnimateWCGlassLongPressDismissal(self);
+    WCLiquidGlassWCGlassLongPressState *state =
+        objc_getAssociatedObject(self, WCLiquidGlassWCGlassLongPressStateKey);
+    if (hidden && state) {
+        WCLiquidGlassWCGlassLongPressDismiss(state);
+        return;
     }
     if (WCLiquidGlassOriginalWindowSetHidden) {
         WCLiquidGlassOriginalWindowSetHidden(self, selector, hidden);
-    }
-}
-
-static BOOL WCLiquidGlassWCGlassLongPressViewBelongsToHost(UIView *view) {
-    for (NSUInteger depth = 0; view && depth < 12; depth += 1, view = view.superview) {
-        if (objc_getAssociatedObject(view, WCLiquidGlassWCGlassLongPressHostKey)) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-static void WCLiquidGlassWCGlassLongPressMenuItemSetHighlighted(UIControl *self,
-                                                                SEL selector,
-                                                                BOOL highlighted) {
-    if (WCLiquidGlassOriginalMenuItemSetHighlighted) {
-        WCLiquidGlassOriginalMenuItemSetHighlighted(self, selector, highlighted);
-    }
-    if (WCLiquidGlassWCGlassLongPressViewBelongsToHost(self)) {
-        WCLiquidGlassClearWCGlassLongPressButtonShadows(self, YES);
-    }
-}
-
-static void WCLiquidGlassRefreshWCGlassLongPressViewsInView(UIView *view, NSUInteger depth) {
-    if (!view || depth > 48) {
-        return;
-    }
-    if ([view isKindOfClass:UIVisualEffectView.class] &&
-        WCLiquidGlassIsWCGlassLongPressView((UIVisualEffectView *)view)) {
-        WCLiquidGlassApplyWCGlassLongPressMaterial((UIVisualEffectView *)view);
-    }
-    for (UIView *subview in view.subviews) {
-        WCLiquidGlassRefreshWCGlassLongPressViewsInView(subview, depth + 1);
     }
 }
 
@@ -472,7 +318,12 @@ static void WCLiquidGlassRefreshVisibleWCGlassLongPressViews(void) {
             continue;
         }
         for (UIWindow *window in ((UIWindowScene *)scene).windows) {
-            WCLiquidGlassRefreshWCGlassLongPressViewsInView(window, 0);
+            WCLiquidGlassWCGlassLongPressState *state =
+                objc_getAssociatedObject(window, WCLiquidGlassWCGlassLongPressStateKey);
+            if (state) {
+                state.morphGlassView.effect = WCLiquidGlassCurrentGlassEffect();
+                WCLiquidGlassWCGlassLongPressApplyTransparentHost(state.hostView);
+            }
         }
     }
 }
@@ -498,13 +349,6 @@ void WCLiquidGlassInstallWCGlassLongPressHooks(void) {
                     @selector(setHidden:),
                     (IMP)&WCLiquidGlassWCGlassLongPressWindowSetHidden,
                     (IMP *)&WCLiquidGlassOriginalWindowSetHidden);
-    Class menuItemClass = NSClassFromString(@"MMMenuItemView");
-    if (menuItemClass) {
-        MSHookMessageEx(menuItemClass,
-                        @selector(setHighlighted:),
-                        (IMP)&WCLiquidGlassWCGlassLongPressMenuItemSetHighlighted,
-                        (IMP *)&WCLiquidGlassOriginalMenuItemSetHighlighted);
-    }
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                     object:nil
                                                      queue:NSOperationQueue.mainQueue
