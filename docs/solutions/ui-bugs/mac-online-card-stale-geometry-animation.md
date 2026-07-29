@@ -43,7 +43,7 @@ if (isMacOnlineCard) {
 
 辅助函数会递归检查 `CAAnimationGroup`，只移除 key path 为 `position`、`position.*`、`bounds` 或 `bounds.*` 的动画。该修复已随 1.7.7 真机验证。
 
-问题定位完成后，专用的 Mac 在线几何采样已删除；通用的崩溃和当前页面层级诊断保留。
+问题定位完成后，专用的 Mac 在线几何采样已在 1.7.8 删除；通用的崩溃和当前页面层级诊断保留。
 
 ## Why This Works
 
