@@ -14,8 +14,11 @@ static const void *WCLiquidGlassWCGlassLongPressStateKey =
 static void (*WCLiquidGlassOriginalVisualEffectDidMoveToWindow)(UIVisualEffectView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalVisualEffectSetEffect)(UIVisualEffectView *, SEL, UIVisualEffect *) = NULL;
 static void (*WCLiquidGlassOriginalApplicationSendEvent)(UIApplication *, SEL, UIEvent *) = NULL;
+static BOOL (*WCLiquidGlassOriginalApplicationSendAction)(UIApplication *, SEL, SEL, id, id, UIEvent *) = NULL;
 static void (*WCLiquidGlassOriginalWindowSetHidden)(UIWindow *, SEL, BOOL) = NULL;
+static void (*WCLiquidGlassOriginalMenuControllerOnTouchAtNoneMenuArea)(id, SEL) = NULL;
 static BOOL WCLiquidGlassWCGlassLongPressHooksInstalled = NO;
+static BOOL WCLiquidGlassWCGlassLongPressMenuControllerHookInstalled = NO;
 static __weak UIWindow *WCLiquidGlassWCGlassLongPressTouchWindow = nil;
 static CGPoint WCLiquidGlassWCGlassLongPressTouchPoint;
 static CFTimeInterval WCLiquidGlassWCGlassLongPressTouchTime = 0.0;
@@ -24,6 +27,7 @@ static CFTimeInterval WCLiquidGlassWCGlassLongPressTouchTime = 0.0;
 @property(nonatomic, weak) UIWindow *menuWindow;
 @property(nonatomic, weak) UIView *hostView;
 @property(nonatomic, strong) UIVisualEffectView *glassContainer;
+@property(nonatomic, strong) UIVisualEffectView *sourceGlassView;
 @property(nonatomic, strong) UIVisualEffectView *morphGlassView;
 @property(nonatomic) CGRect sourceFrame;
 @property(nonatomic) CGRect targetFrame;
@@ -108,9 +112,27 @@ static void WCLiquidGlassWCGlassLongPressFinishAppearance(
         return;
     }
     state.hostView.alpha = 1.0;
+    state.sourceGlassView.alpha = 0.0;
+    state.sourceGlassView.transform = CGAffineTransformMakeScale(0.72, 0.72);
     state.morphGlassView.frame = state.targetFrame;
     state.morphGlassView.layer.cornerRadius = 25.0;
 }
+
+static UIVisualEffectView *WCLiquidGlassWCGlassLongPressGlassView(CGRect frame) {
+    UIVisualEffectView *glassView =
+        [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassEffect()];
+    glassView.frame = frame;
+    glassView.userInteractionEnabled = NO;
+    glassView.opaque = NO;
+    glassView.backgroundColor = UIColor.clearColor;
+    glassView.contentView.backgroundColor = UIColor.clearColor;
+    glassView.clipsToBounds = YES;
+    glassView.layer.cornerRadius = 22.0;
+    glassView.layer.cornerCurve = kCACornerCurveContinuous;
+    return glassView;
+}
+
+static void WCLiquidGlassInstallWCGlassLongPressMenuControllerHook(void);
 
 static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassView) {
     UIView *hostView = wcGlassView.superview;
@@ -126,6 +148,7 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
     WCLiquidGlassWCGlassLongPressState *existingState =
         objc_getAssociatedObject(menuWindow, WCLiquidGlassWCGlassLongPressStateKey);
     if (existingState && existingState.hostView == hostView) {
+        existingState.sourceGlassView.effect = WCLiquidGlassCurrentGlassEffect();
         existingState.morphGlassView.effect = WCLiquidGlassCurrentGlassEffect();
         WCLiquidGlassWCGlassLongPressApplyTransparentHost(hostView);
         return;
@@ -150,19 +173,16 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
     glassContainer.backgroundColor = UIColor.clearColor;
     glassContainer.contentView.backgroundColor = UIColor.clearColor;
 
+    UIVisualEffectView *sourceGlassView =
+        WCLiquidGlassWCGlassLongPressGlassView(state.sourceFrame);
     UIVisualEffectView *morphGlassView =
-        [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassEffect()];
-    morphGlassView.frame = state.sourceFrame;
-    morphGlassView.userInteractionEnabled = NO;
-    morphGlassView.opaque = NO;
-    morphGlassView.backgroundColor = UIColor.clearColor;
-    morphGlassView.contentView.backgroundColor = UIColor.clearColor;
-    morphGlassView.clipsToBounds = YES;
-    morphGlassView.layer.cornerRadius = 22.0;
+        WCLiquidGlassWCGlassLongPressGlassView(state.sourceFrame);
+    [glassContainer.contentView addSubview:sourceGlassView];
     [glassContainer.contentView addSubview:morphGlassView];
     [menuContentView insertSubview:glassContainer atIndex:0];
 
     state.glassContainer = glassContainer;
+    state.sourceGlassView = sourceGlassView;
     state.morphGlassView = morphGlassView;
     objc_setAssociatedObject(menuWindow,
                              WCLiquidGlassWCGlassLongPressStateKey,
@@ -171,24 +191,38 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
 
     WCLiquidGlassWCGlassLongPressApplyTransparentHost(hostView);
     hostView.alpha = UIAccessibilityIsReduceMotionEnabled() ? 1.0 : 0.0;
+    WCLiquidGlassInstallWCGlassLongPressMenuControllerHook();
 
     if (UIAccessibilityIsReduceMotionEnabled()) {
         WCLiquidGlassWCGlassLongPressFinishAppearance(state);
         return;
     }
 
-    UIViewPropertyAnimator *animator =
-        [[UIViewPropertyAnimator alloc] initWithDuration:0.48
-                                           dampingRatio:0.82
-                                             animations:^{
+    [UIView animateWithDuration:0.50
+                          delay:0.0
+         usingSpringWithDamping:0.78
+          initialSpringVelocity:0.15
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction |
+                                UIViewAnimationOptionCurveEaseOut
+                     animations:^{
         morphGlassView.frame = state.targetFrame;
         morphGlassView.layer.cornerRadius = 25.0;
-        hostView.alpha = 1.0;
-    }];
-    [animator addCompletion:^(__unused UIViewAnimatingPosition position) {
+    }
+                     completion:^(__unused BOOL finished) {
         WCLiquidGlassWCGlassLongPressFinishAppearance(state);
     }];
-    [animator startAnimation];
+    [UIView animateWithDuration:0.24
+                          delay:0.08
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction |
+                                UIViewAnimationOptionCurveEaseOut
+                     animations:^{
+        sourceGlassView.alpha = 0.0;
+        sourceGlassView.transform = CGAffineTransformMakeScale(0.72, 0.72);
+        hostView.alpha = 1.0;
+    }
+                     completion:nil];
 }
 
 static void WCLiquidGlassWCGlassLongPressScheduleTakeOver(
@@ -253,26 +287,27 @@ static void WCLiquidGlassWCGlassLongPressSendEvent(UIApplication *self,
     }
 }
 
+typedef void (^WCLiquidGlassWCGlassLongPressNativeDismissal)(void);
+
 static void WCLiquidGlassWCGlassLongPressCompleteDismissal(
-    WCLiquidGlassWCGlassLongPressState *state) {
+    WCLiquidGlassWCGlassLongPressState *state,
+    WCLiquidGlassWCGlassLongPressNativeDismissal nativeDismissal) {
     UIWindow *menuWindow = state.menuWindow;
-    if (!menuWindow) {
-        return;
+    if (menuWindow) {
+        objc_setAssociatedObject(menuWindow,
+                                 WCLiquidGlassWCGlassLongPressStateKey,
+                                 nil,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    objc_setAssociatedObject(menuWindow,
-                             WCLiquidGlassWCGlassLongPressStateKey,
-                             nil,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (nativeDismissal) {
+        nativeDismissal();
+    }
     [state.glassContainer removeFromSuperview];
-    if (WCLiquidGlassOriginalWindowSetHidden) {
-        WCLiquidGlassOriginalWindowSetHidden(menuWindow,
-                                             @selector(setHidden:),
-                                             YES);
-    }
 }
 
 static void WCLiquidGlassWCGlassLongPressDismiss(
-    WCLiquidGlassWCGlassLongPressState *state) {
+    WCLiquidGlassWCGlassLongPressState *state,
+    WCLiquidGlassWCGlassLongPressNativeDismissal nativeDismissal) {
     if (state.dismissing) {
         return;
     }
@@ -280,22 +315,123 @@ static void WCLiquidGlassWCGlassLongPressDismiss(
     if (UIAccessibilityIsReduceMotionEnabled() ||
         !state.hostView.window ||
         !state.morphGlassView.window) {
-        WCLiquidGlassWCGlassLongPressCompleteDismissal(state);
+        WCLiquidGlassWCGlassLongPressCompleteDismissal(state, nativeDismissal);
         return;
     }
 
-    UIViewPropertyAnimator *animator =
-        [[UIViewPropertyAnimator alloc] initWithDuration:0.34
-                                           dampingRatio:1.0
-                                             animations:^{
-        state.hostView.alpha = 0.0;
+    [UIView animateWithDuration:0.32
+                          delay:0.0
+         usingSpringWithDamping:0.88
+          initialSpringVelocity:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction |
+                                UIViewAnimationOptionCurveEaseIn
+                     animations:^{
         state.morphGlassView.frame = state.sourceFrame;
         state.morphGlassView.layer.cornerRadius = 22.0;
+        state.sourceGlassView.alpha = 1.0;
+        state.sourceGlassView.transform = CGAffineTransformIdentity;
+    }
+                     completion:^(__unused BOOL finished) {
+        WCLiquidGlassWCGlassLongPressCompleteDismissal(state, nativeDismissal);
     }];
-    [animator addCompletion:^(__unused UIViewAnimatingPosition position) {
-        WCLiquidGlassWCGlassLongPressCompleteDismissal(state);
-    }];
-    [animator startAnimation];
+    [UIView animateWithDuration:0.16
+                          delay:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction |
+                                UIViewAnimationOptionCurveEaseIn
+                     animations:^{
+        state.hostView.alpha = 0.0;
+    }
+                     completion:nil];
+}
+
+static UIWindow *WCLiquidGlassWCGlassLongPressWindowForObject(id object) {
+    if ([object isKindOfClass:UIView.class]) {
+        return ((UIView *)object).window;
+    }
+    if ([object isKindOfClass:UIGestureRecognizer.class]) {
+        return ((UIGestureRecognizer *)object).view.window;
+    }
+    if ([object isKindOfClass:UIViewController.class]) {
+        return ((UIViewController *)object).viewIfLoaded.window;
+    }
+    return nil;
+}
+
+static BOOL WCLiquidGlassWCGlassLongPressSendAction(UIApplication *self,
+                                                    SEL selector,
+                                                    SEL action,
+                                                    id target,
+                                                    id sender,
+                                                    UIEvent *event) {
+    if (action == sel_registerName("onItemButtonClick:")) {
+        UIWindow *menuWindow =
+            WCLiquidGlassWCGlassLongPressWindowForObject(sender) ?:
+            WCLiquidGlassWCGlassLongPressWindowForObject(target);
+        WCLiquidGlassWCGlassLongPressState *state =
+            objc_getAssociatedObject(menuWindow, WCLiquidGlassWCGlassLongPressStateKey);
+        if (state) {
+            if (!state.dismissing) {
+                WCLiquidGlassWCGlassLongPressDismiss(state, ^{
+                    if (WCLiquidGlassOriginalApplicationSendAction) {
+                        WCLiquidGlassOriginalApplicationSendAction(self,
+                                                                   selector,
+                                                                   action,
+                                                                   target,
+                                                                   sender,
+                                                                   event);
+                    }
+                });
+            }
+            return YES;
+        }
+    }
+    return WCLiquidGlassOriginalApplicationSendAction
+        ? WCLiquidGlassOriginalApplicationSendAction(self,
+                                                     selector,
+                                                     action,
+                                                     target,
+                                                     sender,
+                                                     event)
+        : NO;
+}
+
+static void WCLiquidGlassWCGlassLongPressMenuControllerOnTouchAtNoneMenuArea(
+    id self,
+    SEL selector) {
+    UIWindow *menuWindow = WCLiquidGlassWCGlassLongPressWindowForObject(self);
+    WCLiquidGlassWCGlassLongPressState *state =
+        objc_getAssociatedObject(menuWindow, WCLiquidGlassWCGlassLongPressStateKey);
+    if (state) {
+        if (!state.dismissing) {
+            WCLiquidGlassWCGlassLongPressDismiss(state, ^{
+                if (WCLiquidGlassOriginalMenuControllerOnTouchAtNoneMenuArea) {
+                    WCLiquidGlassOriginalMenuControllerOnTouchAtNoneMenuArea(self, selector);
+                }
+            });
+        }
+        return;
+    }
+    if (WCLiquidGlassOriginalMenuControllerOnTouchAtNoneMenuArea) {
+        WCLiquidGlassOriginalMenuControllerOnTouchAtNoneMenuArea(self, selector);
+    }
+}
+
+static void WCLiquidGlassInstallWCGlassLongPressMenuControllerHook(void) {
+    if (WCLiquidGlassWCGlassLongPressMenuControllerHookInstalled) {
+        return;
+    }
+    Class menuControllerClass = NSClassFromString(@"MMMenuController");
+    SEL selector = sel_registerName("onTouchAtNoneMenuArea");
+    if (!menuControllerClass || !class_getInstanceMethod(menuControllerClass, selector)) {
+        return;
+    }
+    WCLiquidGlassWCGlassLongPressMenuControllerHookInstalled = YES;
+    MSHookMessageEx(menuControllerClass,
+                    selector,
+                    (IMP)&WCLiquidGlassWCGlassLongPressMenuControllerOnTouchAtNoneMenuArea,
+                    (IMP *)&WCLiquidGlassOriginalMenuControllerOnTouchAtNoneMenuArea);
 }
 
 static void WCLiquidGlassWCGlassLongPressWindowSetHidden(UIWindow *self,
@@ -304,7 +440,13 @@ static void WCLiquidGlassWCGlassLongPressWindowSetHidden(UIWindow *self,
     WCLiquidGlassWCGlassLongPressState *state =
         objc_getAssociatedObject(self, WCLiquidGlassWCGlassLongPressStateKey);
     if (hidden && state) {
-        WCLiquidGlassWCGlassLongPressDismiss(state);
+        if (!state.dismissing) {
+            WCLiquidGlassWCGlassLongPressDismiss(state, ^{
+                if (WCLiquidGlassOriginalWindowSetHidden) {
+                    WCLiquidGlassOriginalWindowSetHidden(self, selector, hidden);
+                }
+            });
+        }
         return;
     }
     if (WCLiquidGlassOriginalWindowSetHidden) {
@@ -321,6 +463,7 @@ static void WCLiquidGlassRefreshVisibleWCGlassLongPressViews(void) {
             WCLiquidGlassWCGlassLongPressState *state =
                 objc_getAssociatedObject(window, WCLiquidGlassWCGlassLongPressStateKey);
             if (state) {
+                state.sourceGlassView.effect = WCLiquidGlassCurrentGlassEffect();
                 state.morphGlassView.effect = WCLiquidGlassCurrentGlassEffect();
                 WCLiquidGlassWCGlassLongPressApplyTransparentHost(state.hostView);
             }
@@ -345,10 +488,15 @@ void WCLiquidGlassInstallWCGlassLongPressHooks(void) {
                     @selector(sendEvent:),
                     (IMP)&WCLiquidGlassWCGlassLongPressSendEvent,
                     (IMP *)&WCLiquidGlassOriginalApplicationSendEvent);
+    MSHookMessageEx(UIApplication.class,
+                    @selector(sendAction:to:from:forEvent:),
+                    (IMP)&WCLiquidGlassWCGlassLongPressSendAction,
+                    (IMP *)&WCLiquidGlassOriginalApplicationSendAction);
     MSHookMessageEx(UIWindow.class,
                     @selector(setHidden:),
                     (IMP)&WCLiquidGlassWCGlassLongPressWindowSetHidden,
                     (IMP *)&WCLiquidGlassOriginalWindowSetHidden);
+    WCLiquidGlassInstallWCGlassLongPressMenuControllerHook();
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                     object:nil
                                                      queue:NSOperationQueue.mainQueue
