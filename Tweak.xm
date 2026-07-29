@@ -10,6 +10,7 @@
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
+#import "WCLiquidGlassWCGlassLongPress.h"
 
 #ifndef WCLIQUIDGLASS_VERSION
 #define WCLIQUIDGLASS_VERSION "Unknown"
@@ -436,6 +437,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
         dispatch_async(dispatch_get_main_queue(), ^{
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
+            WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();
             WCLiquidGlassInstallHomeCornersHooks();
             [WCLiquidGlassManager.sharedManager start];
