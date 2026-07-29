@@ -529,7 +529,7 @@ static CGFloat WCLiquidGlassHomeCornerOriginalHeightForController(id controller,
 static CGFloat WCLiquidGlassHomeCornerRadiusForCell(WCLiquidGlassHomeCornerTableRole role,
                                                      NSIndexPath *indexPath) {
     if (role == WCLiquidGlassHomeCornerTableRoleHome) {
-        return indexPath.section == 0 ? 20.0 : WCLiquidGlassPreferences.homeCornerRadius;
+        return indexPath.section == 0 ? 24.0 : WCLiquidGlassPreferences.homeCornerRadius;
     }
     return 26.0;
 }
@@ -635,8 +635,13 @@ static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
     CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
     CGFloat gap = WCLiquidGlassHomeCornerGapForCell(role, indexPath);
     CGRect targetFrame = baseFrame;
+    CGFloat tableWidth = CGRectGetWidth(tableView.bounds);
+    if (role == WCLiquidGlassHomeCornerTableRoleHome && indexPath.section == 0 &&
+        CGRectGetWidth(tableView.window.bounds) > 0.0) {
+        tableWidth = CGRectGetWidth(tableView.window.bounds);
+    }
     targetFrame.origin.x = inset;
-    targetFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - inset * 2.0);
+    targetFrame.size.width = MAX(0.0, tableWidth - inset * 2.0);
     if (gap > 0.0) {
         targetFrame.origin.y += gap * 0.5;
         targetFrame.size.height = MAX(0.0, targetFrame.size.height - gap);
