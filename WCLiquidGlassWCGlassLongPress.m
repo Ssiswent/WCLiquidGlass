@@ -74,21 +74,10 @@ static void WCLiquidGlassWCGlassLongPressSetMenuContentHidden(UIView *view,
 }
 
 static CGRect WCLiquidGlassWCGlassLongPressCollapsedFrame(CGRect targetFrame) {
-    CGFloat height = MIN(CGRectGetHeight(targetFrame),
-                         MAX(76.0, CGRectGetHeight(targetFrame) * 0.62));
     CGFloat width = MIN(CGRectGetWidth(targetFrame),
-                        MAX(92.0, height * 1.16));
-    return CGRectMake(CGRectGetMidX(targetFrame) - width * 0.5,
-                      CGRectGetMidY(targetFrame) - height * 0.5,
-                      width,
-                      height);
-}
-
-static CGRect WCLiquidGlassWCGlassLongPressCenteredFrame(CGRect targetFrame,
-                                                          CGFloat widthScale,
-                                                          CGFloat heightScale) {
-    CGFloat width = CGRectGetWidth(targetFrame) * widthScale;
-    CGFloat height = CGRectGetHeight(targetFrame) * heightScale;
+                        MAX(80.0, CGRectGetWidth(targetFrame) * 0.40));
+    CGFloat height = MIN(CGRectGetHeight(targetFrame),
+                         MAX(60.0, CGRectGetHeight(targetFrame) * 0.46));
     return CGRectMake(CGRectGetMidX(targetFrame) - width * 0.5,
                       CGRectGetMidY(targetFrame) - height * 0.5,
                       width,
@@ -241,8 +230,8 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
     menuContentView.hidden = NO;
     menuContentView.transform = UIAccessibilityIsReduceMotionEnabled()
         ? state.originalMenuTransform
-        : CGAffineTransformScale(state.originalMenuTransform, 0.56, 0.66);
-    morphGlassView.alpha = UIAccessibilityIsReduceMotionEnabled() ? 1.0 : 0.72;
+        : CGAffineTransformScale(state.originalMenuTransform, 0.84, 0.84);
+    morphGlassView.alpha = 1.0;
     hostView.hidden = NO;
     hostView.alpha = 1.0;
     WCLiquidGlassInstallWCGlassLongPressMenuControllerHook();
@@ -252,69 +241,22 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
         return;
     }
 
-    CGRect stretchedFrame =
-        WCLiquidGlassWCGlassLongPressCenteredFrame(state.targetFrame, 1.025, 0.975);
-    CGRect reboundFrame =
-        WCLiquidGlassWCGlassLongPressCenteredFrame(state.targetFrame, 0.985, 1.015);
-    [UIView animateWithDuration:0.46
+    [UIView animateWithDuration:0.70
                           delay:0.0
-         usingSpringWithDamping:0.54
-          initialSpringVelocity:0.38
+         usingSpringWithDamping:0.56
+          initialSpringVelocity:0.30
                         options:UIViewAnimationOptionBeginFromCurrentState |
                                 UIViewAnimationOptionAllowUserInteraction |
                                 UIViewAnimationOptionCurveEaseOut
                      animations:^{
-        menuContentView.transform =
-            CGAffineTransformScale(state.originalMenuTransform, 1.035, 0.965);
-        revealMaskView.frame = stretchedFrame;
-        revealMaskView.layer.cornerRadius = 31.0;
-        morphGlassView.frame = stretchedFrame;
-        morphGlassView.layer.cornerRadius = 31.0;
-        morphGlassView.alpha = 1.0;
+        menuContentView.transform = state.originalMenuTransform;
+        revealMaskView.frame = state.targetFrame;
+        revealMaskView.layer.cornerRadius = 25.0;
+        morphGlassView.frame = state.targetFrame;
+        morphGlassView.layer.cornerRadius = 25.0;
     }
                      completion:^(__unused BOOL finished) {
-        if (state.dismissing) {
-            return;
-        }
-        [UIView animateWithDuration:0.24
-                              delay:0.0
-             usingSpringWithDamping:0.60
-              initialSpringVelocity:0.22
-                            options:UIViewAnimationOptionBeginFromCurrentState |
-                                    UIViewAnimationOptionAllowUserInteraction |
-                                    UIViewAnimationOptionCurveEaseInOut
-                         animations:^{
-            menuContentView.transform =
-                CGAffineTransformScale(state.originalMenuTransform, 0.982, 1.018);
-            revealMaskView.frame = reboundFrame;
-            revealMaskView.layer.cornerRadius = 22.0;
-            morphGlassView.frame = reboundFrame;
-            morphGlassView.layer.cornerRadius = 22.0;
-            morphGlassView.alpha = 0.94;
-        }
-                         completion:^(__unused BOOL reboundFinished) {
-            if (state.dismissing) {
-                return;
-            }
-            [UIView animateWithDuration:0.28
-                                  delay:0.0
-                 usingSpringWithDamping:0.70
-                  initialSpringVelocity:0.18
-                                options:UIViewAnimationOptionBeginFromCurrentState |
-                                        UIViewAnimationOptionAllowUserInteraction |
-                                        UIViewAnimationOptionCurveEaseOut
-                             animations:^{
-                menuContentView.transform = state.originalMenuTransform;
-                revealMaskView.frame = state.targetFrame;
-                revealMaskView.layer.cornerRadius = 25.0;
-                morphGlassView.frame = state.targetFrame;
-                morphGlassView.layer.cornerRadius = 25.0;
-                morphGlassView.alpha = 1.0;
-            }
-                             completion:^(__unused BOOL settleFinished) {
-                WCLiquidGlassWCGlassLongPressFinishAppearance(state);
-            }];
-        }];
+        WCLiquidGlassWCGlassLongPressFinishAppearance(state);
     }];
 }
 
@@ -401,86 +343,35 @@ static void WCLiquidGlassWCGlassLongPressDismiss(
         return;
     }
 
-    CGRect stretchedFrame =
-        WCLiquidGlassWCGlassLongPressCenteredFrame(state.targetFrame, 1.018, 0.982);
-    CGRect compressedFrame =
-        WCLiquidGlassWCGlassLongPressCenteredFrame(state.targetFrame, 0.62, 0.78);
-    CGRect terminalFrame =
-        WCLiquidGlassWCGlassLongPressCenteredFrame(state.targetFrame, 0.08, 0.10);
-    [UIView animateWithDuration:0.15
+    CGFloat closingCornerRadius = CGRectGetHeight(state.targetFrame) * 0.5;
+    [UIView animateWithDuration:0.52
                           delay:0.0
-         usingSpringWithDamping:0.52
-          initialSpringVelocity:0.28
+         usingSpringWithDamping:0.62
+          initialSpringVelocity:0.32
                         options:UIViewAnimationOptionBeginFromCurrentState |
                                 UIViewAnimationOptionAllowUserInteraction |
-                                UIViewAnimationOptionCurveEaseOut
+                                UIViewAnimationOptionCurveEaseIn
                      animations:^{
         state.menuContentView.transform =
-            CGAffineTransformScale(state.originalMenuTransform, 1.018, 0.982);
-        state.revealMaskView.frame = stretchedFrame;
-        state.revealMaskView.layer.cornerRadius = 22.0;
-        state.morphGlassView.frame = stretchedFrame;
-        state.morphGlassView.layer.cornerRadius = 22.0;
+            CGAffineTransformScale(state.originalMenuTransform, 0.12, 0.15);
+        state.revealMaskView.layer.cornerRadius = closingCornerRadius;
+        state.morphGlassView.layer.cornerRadius = closingCornerRadius;
+        state.morphGlassView.alpha = 0.72;
     }
                      completion:^(__unused BOOL finished) {
-        [UIView animateWithDuration:0.34
+        [UIView animateWithDuration:0.08
                               delay:0.0
-             usingSpringWithDamping:0.54
-              initialSpringVelocity:0.34
                             options:UIViewAnimationOptionBeginFromCurrentState |
                                     UIViewAnimationOptionAllowUserInteraction |
-                                    UIViewAnimationOptionCurveEaseInOut
+                                    UIViewAnimationOptionCurveEaseIn
                          animations:^{
             state.menuContentView.transform =
-                CGAffineTransformScale(state.originalMenuTransform, 0.57, 0.70);
-            state.revealMaskView.frame = compressedFrame;
-            state.revealMaskView.layer.cornerRadius =
-                WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(compressedFrame);
-            state.morphGlassView.frame = compressedFrame;
-            state.morphGlassView.layer.cornerRadius =
-                WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(compressedFrame);
+                CGAffineTransformScale(state.originalMenuTransform, 0.001, 0.001);
+            state.morphGlassView.alpha = 0.0;
         }
-                         completion:^(__unused BOOL compressedFinished) {
-            [UIView animateWithDuration:0.26
-                                  delay:0.0
-                 usingSpringWithDamping:0.68
-                  initialSpringVelocity:0.24
-                                options:UIViewAnimationOptionBeginFromCurrentState |
-                                        UIViewAnimationOptionAllowUserInteraction |
-                                        UIViewAnimationOptionCurveEaseIn
-                             animations:^{
-                state.menuContentView.transform =
-                    CGAffineTransformScale(state.originalMenuTransform, 0.14, 0.18);
-                state.revealMaskView.frame = state.collapsedFrame;
-                state.revealMaskView.layer.cornerRadius =
-                    WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(state.collapsedFrame);
-                state.morphGlassView.frame = state.collapsedFrame;
-                state.morphGlassView.layer.cornerRadius =
-                    WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(state.collapsedFrame);
-                state.morphGlassView.alpha = 0.82;
-            }
-                             completion:^(__unused BOOL collapsedFinished) {
-                [UIView animateWithDuration:0.10
-                                      delay:0.0
-                                    options:UIViewAnimationOptionBeginFromCurrentState |
-                                            UIViewAnimationOptionAllowUserInteraction |
-                                            UIViewAnimationOptionCurveEaseIn
-                                 animations:^{
-                    state.menuContentView.transform =
-                        CGAffineTransformScale(state.originalMenuTransform, 0.001, 0.001);
-                    state.revealMaskView.frame = terminalFrame;
-                    state.revealMaskView.layer.cornerRadius =
-                        WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(terminalFrame);
-                    state.morphGlassView.frame = terminalFrame;
-                    state.morphGlassView.layer.cornerRadius =
-                        WCLiquidGlassWCGlassLongPressCollapsedCornerRadius(terminalFrame);
-                    state.morphGlassView.alpha = 0.0;
-                }
-                                 completion:^(__unused BOOL terminalFinished) {
-                    WCLiquidGlassWCGlassLongPressCompleteDismissal(state,
-                                                                   nativeDismissal);
-                }];
-            }];
+                         completion:^(__unused BOOL terminalFinished) {
+            WCLiquidGlassWCGlassLongPressCompleteDismissal(state,
+                                                           nativeDismissal);
         }];
     }];
 }
