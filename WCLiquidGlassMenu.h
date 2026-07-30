@@ -30,7 +30,6 @@ BOOL WCLiquidGlassCurrentChatInputHasText(void);
 BOOL WCLiquidGlassShouldReportManualTextEdit(void);
 void WCLiquidGlassRefreshDoutuConfiguration(void);
 void WCLiquidGlassUpdateDoutuButtonVisibility(id inputToolView);
-void WCLiquidGlassRestoreVoiceTranscriptionControlVisibility(id inputToolView);
 extern NSString *const WCLiquidGlassManualTextEditNotification;
 
 #ifdef __cplusplus

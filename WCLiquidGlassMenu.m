@@ -1328,35 +1328,13 @@ static UIControl *WCLiquidGlassVoiceTranscriptionControl(void) {
     return score >= 260 && control.isEnabled ? control : nil;
 }
 
-static NSArray<NSString *> *WCLiquidGlassVoiceTranscriptionSelectorNames(void) {
-    return @[@"onVoiceInputButtonClicked:"];
-}
-
-static BOOL WCLiquidGlassCanTriggerVoiceTranscription(void) {
-    return WCLiquidGlassVoiceTranscriptionControl() ||
-        WCLiquidGlassActionTarget(WCLiquidGlassVoiceTranscriptionSelectorNames()) != nil;
-}
-
 static BOOL WCLiquidGlassTriggerVoiceTranscription(void) {
     UIControl *control = WCLiquidGlassVoiceTranscriptionControl();
-    if (control) {
-        [control sendActionsForControlEvents:UIControlEventTouchUpInside];
-        return YES;
+    if (!control) {
+        return NO;
     }
-    return WCLiquidGlassInvokeActionSelectors(WCLiquidGlassVoiceTranscriptionSelectorNames());
-}
-
-void WCLiquidGlassRestoreVoiceTranscriptionControlVisibility(id inputToolView) {
-    if (![inputToolView isKindOfClass:UIView.class]) {
-        return;
-    }
-    UIControl *control = nil;
-    NSInteger score = NSIntegerMin;
-    WCLiquidGlassFindVoiceTranscriptionControlInView(inputToolView, &control, &score);
-    if (score >= 260 && control) {
-        control.hidden = NO;
-        control.enabled = YES;
-    }
+    [control sendActionsForControlEvents:UIControlEventTouchUpInside];
+    return YES;
 }
 
 static BOOL WCLiquidGlassViewBelongsToChatInput(UIView *view) {
@@ -1659,7 +1637,7 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
-            if (WCLiquidGlassCanTriggerVoiceTranscription()) {
+            if (WCLiquidGlassVoiceTranscriptionControl()) {
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]) {
@@ -3153,13 +3131,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         return;
     }
 
-    if (!WCLiquidGlassTriggerVoiceTranscription()) {
+    UIControl *control = WCLiquidGlassVoiceTranscriptionControl();
+    if (!control) {
         [self closeMenuSelectingIndex:NSNotFound];
         WCLiquidGlassShowActionError(@"当前页面没有找到微信原生的语音转述按钮。");
         return;
     }
 
     BOOL wasActive = self.voiceTranscriptionActive;
+    [control sendActionsForControlEvents:UIControlEventTouchUpInside];
     self.voiceTranscriptionActive = !wasActive;
     [orb setToggleActiveAppearance:self.voiceTranscriptionActive];
     [self wc_emitSelectionFeedback];
