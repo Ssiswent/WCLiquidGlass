@@ -1,59 +1,5 @@
 # 更新日志
 
-## [1.7.26] - 2026-07-30
-
-### 修复
-
-- 修复 1.7.25“当前页面层级诊断”卡死：该版本错误地在主线程遍历了 WeChat 进程全部运行时 class 与 method。现在仅检查与独立系统 Glass 启动直接相关的少量 UIKit/Foundation/微信候选类，页面诊断不再进行全量反射。
-- 精确记录这些候选 method 的 WCGlass 二进制实现偏移，用于离线分析 `NSBundle`、`NSUserDefaults`、`UISwitch`、`UIView` 和导航/标签栏入口的真实行为；不读取或记录消息、联系人、可见文字或参数。
-- 本版本继续只做诊断，不修改页面、菜单、主页连续会话、首页卡片或通讯录效果。完成定位后会移除全部临时 WCGlass 勘测。
-
-## [1.7.25] - 2026-07-30
-
-### 诊断
-
-- 1.7.24 真机确认：两项 Glass 环境变量即使在纯 C 初始化阶段写入，UIKit 仍保持旧版开关、导航栏与标签栏；环境变量时机不是独立启用系统 Liquid Glass 的缺失环节。
-- “当前页面层级诊断”新增全局 WCGlass Hook Surface：仅在 WCGlass 同时注入时，扫描外部运行时类中实现地址属于 `WCGlass*.dylib` 的 instance/class method，并记录类名、method 类型与 selector；不记录消息、联系人、可见文字或任何参数。
-- 本版本不修改任何页面、菜单、主页连续会话、首页卡片或通讯录效果；用于定位 WCGlass 额外的早期 UIKit/AppDelegate 私有启动调用，完成后会移除该诊断。
-
-## [1.7.24] - 2026-07-30
-
-### 修复
-
-- 根据设置页对照确认，WCGlass 影响的是 UIKit 的进程级设计模式：同一普通 `UISwitch` 仅在注入 WCGlass 时由系统创建 `_UILiquidLensView`，并非 WCLiquidGlass 的页面或 selector 被单独替换。
-- 将独立 Glass 兼容所需的两项环境变量从依赖 `NSBundle` 的 `%ctor` 前移到纯 C dylib constructor；该初始化在 Foundation、UIKit 和任何 Objective-C 运行时访问之前执行，以匹配 WCGlass 的启动时机。
-- 不增加 selector 接管、不修改菜单、主页连续会话、首页卡片或通讯录现有实现。本版本用于验证独立注入时 UIKit 是否会原生创建液态开关、浮动导航栏及标签栏；若仍未出现，将改为定位 WCGlass 的额外早期私有调用。
-
-## [1.7.23] - 2026-07-30
-
-### 诊断
-
-- 1.7.22 对照确认 `UIGlassEffect` 的类、工厂结果和四项兼容状态在“有/无 WCGlass”时均相同；此前只复制环境变量并不能使微信旧界面自动迁移为 Liquid Glass。
-- 通过“当前页面层级诊断”额外记录 WCGlass 实际替换到微信导航栏、标签栏、输入区和消息视图类的 selector，不记录聊天内容、联系人、可见文字或 selector 参数。
-- 该版本不改变现有材质、菜单、主页连续会话、首页卡片或通讯录实现；只用于确定可独立复现的最小 WCGlass 接管范围。
-
-## [1.7.22] - 2026-07-30
-
-### 诊断
-
-- 为独立系统 Glass 兼容问题加入一次性运行时诊断：通过“当前页面层级诊断”记录允许的环境变量、微信 `Info.plist` 兼容标志、`UIGlassEffect` / `UIGlassContainerEffect` 的类与工厂结果，以及 WCGlass 类是否存在；不记录聊天内容、联系人、可见文字或无关环境变量。
-- 该版本只用于比较“仅 WCLiquidGlass”与“同时注入 WCGlass”两种真实进程状态，现有材质、菜单、主页连续会话、首页卡片和通讯录实现不变。
-
-## [1.7.21] - 2026-07-30
-
-### 修复
-
-- 修正独立启用系统 Glass 的写入层：WCGlass 实际通过进程环境变量 `UIDesignSwiftUIDesignIgnoreCheck=1` 与 `UIDesignSwiftUIDesignEnableGlass=1` 开启兼容能力；WCLiquidGlass 现于微信加载时使用同一 `setenv` 路径，不再把这些键误写入 `NSUserDefaults`。
-- 因此未注入 WCGlass 时，WCLiquidGlass 创建的 `UIGlassEffect` / `UIGlassContainerEffect` 可正常启用；主页连续会话、首页卡片、通讯录、材质设置和长按菜单的既有逻辑不变，未增加运行时诊断。
-
-## [1.7.20] - 2026-07-30
-
-### 优化
-
-- WCLiquidGlass 现在在微信启动的最早阶段自行启用 iOS 27 系统 Glass 能力，不再要求 WCGlass 提供该进程级兼容开关；清透、均衡、着色、首页与时间条等现有材质可在仅注入 WCLiquidGlass 时继续使用真实 `UIGlassEffect`。
-- 长按菜单液态改为双通道接管：检测到 WCGlass 标记时继续复用原有路径；没有 WCGlass 时由微信原生 `MMMenuWindow` / `MMMenuContentView` 触发，保留微信动态生成的菜单内容、图标、布局、点击、长按和外部关闭行为。
-- 原生路径只临时隐藏覆盖整个菜单的原生背景并在关闭后恢复，避免与 WCGlass 重复接管；未增加运行时诊断，主页连续会话、首页卡片和通讯录实现不变。
-
 ## [1.7.19] - 2026-07-30
 
 ### 调整

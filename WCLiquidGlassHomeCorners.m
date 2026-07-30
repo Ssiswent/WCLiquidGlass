@@ -3,9 +3,7 @@
 #import <CydiaSubstrate.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
-#import <dlfcn.h>
 #import <objc/runtime.h>
-#import <stdlib.h>
 
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassCrashLogger.h"
@@ -1550,95 +1548,6 @@ static void WCLiquidGlassHomeCornersAppendTableDiagnostics(NSMutableString *repo
     }
 }
 
-static NSString *WCLiquidGlassHomeCornersDiagnosticEnvironmentValue(const char *key) {
-    const char *value = getenv(key);
-    return value ? [NSString stringWithUTF8String:value] : @"unset";
-}
-
-static void WCLiquidGlassHomeCornersAppendSystemGlassDiagnostics(NSMutableString *report) {
-    Class glassClass = NSClassFromString(@"UIGlassEffect");
-    Class containerClass = NSClassFromString(@"UIGlassContainerEffect");
-    SEL factorySelector = NSSelectorFromString(@"effectWithStyle:");
-    UIVisualEffect *glassEffect = WCLiquidGlassCurrentGlassEffect();
-    UIVisualEffect *containerEffect = WCLiquidGlassCurrentGlassContainerEffect();
-    [report appendFormat:@"\nSystem Glass Runtime\nUIDesignSwiftUIDesignIgnoreCheck=%@\nUIDesignSwiftUIDesignEnableGlass=%@\nUIDesignRequiresCompatibility=%@\ncom.apple.SwiftUI.IgnoreSolariumLinkedOnCheck=%@\nInfo UIDesignRequiresCompatibility=%@\nUIGlassEffect class=%@ factory=%@ result=%@\nUIGlassContainerEffect class=%@ result=%@\nWCGlass classes settings=%@ background=%@\n",
-     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("UIDesignSwiftUIDesignIgnoreCheck"),
-     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("UIDesignSwiftUIDesignEnableGlass"),
-     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("UIDesignRequiresCompatibility"),
-     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("com.apple.SwiftUI.IgnoreSolariumLinkedOnCheck"),
-     [NSBundle.mainBundle objectForInfoDictionaryKey:@"UIDesignRequiresCompatibility"] ?: @"unset",
-     glassClass ? NSStringFromClass(glassClass) : @"nil",
-     glassClass && [glassClass respondsToSelector:factorySelector] ? @"YES" : @"NO",
-     glassEffect ? NSStringFromClass(glassEffect.class) : @"nil",
-     containerClass ? NSStringFromClass(containerClass) : @"nil",
-     containerEffect ? NSStringFromClass(containerEffect.class) : @"nil",
-     NSClassFromString(@"WCLGSettingsViewController") ? @"YES" : @"NO",
-     NSClassFromString(@"WCLGGlassBackgroundView") ? @"YES" : @"NO"];
-}
-
-static void WCLiquidGlassHomeCornersAppendWCGlassHookDiagnostics(NSMutableString *report) {
-    NSArray<NSString *> *classNames = @[
-        @"MMInputToolView",
-        @"CommonMessageCellView",
-        @"MMNewMsgContentNavBar",
-        @"MMMsgContentNavBar",
-        @"MMMsgCommonTipsView",
-        @"MMUINavigationBar",
-        @"MMTabBar",
-        @"UITabBar",
-        @"ThemeBoxTabBar",
-        @"MainFrameLeftBarView",
-        @"NSBundle",
-        @"NSUserDefaults",
-        @"UIApplication",
-        @"UIDevice",
-        @"UISwitch",
-        @"UIView",
-        @"UIVisualEffectView",
-        @"_UIBarBackground",
-        @"_UINavigationBarPlatterItemView"
-    ];
-    [report appendString:@"\nWCGlass Hook Surface\n"];
-    NSUInteger hookCount = 0;
-    for (NSString *className in classNames) {
-        Class cls = NSClassFromString(className);
-        if (!cls) {
-            continue;
-        }
-        unsigned int methodCount = 0;
-        Method *methods = class_copyMethodList(cls, &methodCount);
-        for (unsigned int index = 0; index < methodCount; index++) {
-            Dl_info imageInfo = {0};
-            IMP implementation = method_getImplementation(methods[index]);
-            if (!implementation || !dladdr((const void *)implementation, &imageInfo)) {
-                continue;
-            }
-            NSString *imageName = imageInfo.dli_fname ? [NSString stringWithUTF8String:imageInfo.dli_fname] : @"";
-            if (![imageName.lastPathComponent containsString:@"WCGlass"]) {
-                continue;
-            }
-            uintptr_t implementationOffset = (uintptr_t)implementation - (uintptr_t)imageInfo.dli_fbase;
-            [report appendFormat:@"%@ %@ -> %@ offset=0x%llx\n",
-             className,
-             NSStringFromSelector(method_getName(methods[index])),
-             imageName.lastPathComponent,
-             (unsigned long long)implementationOffset];
-            hookCount += 1;
-            if (hookCount >= 64) {
-                break;
-            }
-        }
-        free(methods);
-        if (hookCount >= 64) {
-            break;
-        }
-    }
-    if (hookCount == 0) {
-        [report appendString:@"none\n"];
-    }
-
-}
-
 static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread(void) {
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"Privacy: this report intentionally excludes visible text, message content, contact names, and accessibility labels.\n\n"];
@@ -1649,8 +1558,6 @@ static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMain
      WCLiquidGlassPreferences.homeCornerRadius,
      WCLiquidGlassPreferences.homeCardGap,
      (long)WCLiquidGlassPreferences.glassAppearance];
-    WCLiquidGlassHomeCornersAppendSystemGlassDiagnostics(report);
-    WCLiquidGlassHomeCornersAppendWCGlassHookDiagnostics(report);
 
     NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {

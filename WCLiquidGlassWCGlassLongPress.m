@@ -27,16 +27,9 @@ static BOOL WCLiquidGlassWCGlassLongPressMenuControllerHookInstalled = NO;
 @property(nonatomic, strong) UIVisualEffectView *morphGlassView;
 @property(nonatomic, strong) UIView *originalMaskView;
 @property(nonatomic, strong) UIView *revealMaskView;
-@property(nonatomic, strong) UIColor *originalHostBackgroundColor;
-@property(nonatomic, copy) NSArray<UIView *> *nativeBackgroundViews;
-@property(nonatomic, copy) NSArray<NSNumber *> *nativeBackgroundHiddenStates;
-@property(nonatomic, copy) NSArray<NSNumber *> *nativeBackgroundAlphas;
 @property(nonatomic) CGRect collapsedFrame;
 @property(nonatomic) CGRect targetFrame;
 @property(nonatomic) CGAffineTransform originalMenuTransform;
-@property(nonatomic) BOOL originalHostOpaque;
-@property(nonatomic) CGFloat originalHostCornerRadius;
-@property(nonatomic) BOOL usesNativeMenuHost;
 @property(nonatomic) BOOL dismissing;
 @end
 
@@ -58,24 +51,6 @@ static UIView *WCLiquidGlassWCGlassLongPressMenuContentView(UIView *hostView) {
         }
         if ([view isKindOfClass:UIWindow.class]) {
             break;
-        }
-    }
-    return nil;
-}
-
-static UIView *WCLiquidGlassWCGlassLongPressFindMenuContentView(UIView *view,
-                                                                 NSUInteger depth) {
-    if (!view || depth > 12) {
-        return nil;
-    }
-    if ([NSStringFromClass(view.class) isEqualToString:@"MMMenuContentView"]) {
-        return view;
-    }
-    for (UIView *subview in view.subviews) {
-        UIView *menuContentView =
-            WCLiquidGlassWCGlassLongPressFindMenuContentView(subview, depth + 1);
-        if (menuContentView) {
-            return menuContentView;
         }
     }
     return nil;
@@ -128,68 +103,12 @@ static void WCLiquidGlassWCGlassLongPressHideWCGlassViews(UIView *view,
     }
 }
 
-static BOOL WCLiquidGlassWCGlassLongPressContainsWCGlassView(UIView *view,
-                                                              NSUInteger depth) {
-    if (!view || depth > 12) {
-        return NO;
-    }
-    if ([view isKindOfClass:UIVisualEffectView.class] &&
-        WCLiquidGlassIsWCGlassLongPressView((UIVisualEffectView *)view)) {
-        return YES;
-    }
-    for (UIView *subview in view.subviews) {
-        if (WCLiquidGlassWCGlassLongPressContainsWCGlassView(subview, depth + 1)) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
 static void WCLiquidGlassWCGlassLongPressApplyTransparentHost(UIView *hostView) {
     hostView.opaque = NO;
     hostView.backgroundColor = UIColor.clearColor;
     hostView.layer.backgroundColor = UIColor.clearColor.CGColor;
     hostView.layer.cornerRadius = 25.0;
     WCLiquidGlassWCGlassLongPressHideWCGlassViews(hostView, 0);
-}
-
-static void WCLiquidGlassWCGlassLongPressCaptureNativeBackgrounds(
-    WCLiquidGlassWCGlassLongPressState *state) {
-    if (!state.usesNativeMenuHost) {
-        return;
-    }
-    NSMutableArray<UIView *> *backgroundViews = [NSMutableArray array];
-    NSMutableArray<NSNumber *> *hiddenStates = [NSMutableArray array];
-    NSMutableArray<NSNumber *> *alphas = [NSMutableArray array];
-    CGRect contentBounds = state.menuContentView.bounds;
-    for (UIView *view in state.menuContentView.subviews) {
-        if (![view isKindOfClass:UIVisualEffectView.class] ||
-            WCLiquidGlassIsWCGlassLongPressView((UIVisualEffectView *)view)) {
-            continue;
-        }
-        CGRect frame = [state.menuContentView convertRect:view.bounds fromView:view];
-        if (CGRectGetWidth(frame) < CGRectGetWidth(contentBounds) - 2.0 ||
-            CGRectGetHeight(frame) < CGRectGetHeight(contentBounds) - 2.0) {
-            continue;
-        }
-        [backgroundViews addObject:view];
-        [hiddenStates addObject:@(view.hidden)];
-        [alphas addObject:@(view.alpha)];
-        view.hidden = YES;
-        view.alpha = 0.0;
-    }
-    state.nativeBackgroundViews = backgroundViews.copy;
-    state.nativeBackgroundHiddenStates = hiddenStates.copy;
-    state.nativeBackgroundAlphas = alphas.copy;
-}
-
-static void WCLiquidGlassWCGlassLongPressRestoreNativeBackgrounds(
-    WCLiquidGlassWCGlassLongPressState *state) {
-    for (NSUInteger index = 0; index < state.nativeBackgroundViews.count; index++) {
-        UIView *view = state.nativeBackgroundViews[index];
-        view.hidden = state.nativeBackgroundHiddenStates[index].boolValue;
-        view.alpha = state.nativeBackgroundAlphas[index].doubleValue;
-    }
 }
 
 static void WCLiquidGlassWCGlassLongPressFinishAppearance(
@@ -222,10 +141,13 @@ static UIVisualEffectView *WCLiquidGlassWCGlassLongPressGlassView(CGRect frame) 
 
 static void WCLiquidGlassInstallWCGlassLongPressMenuControllerHook(void);
 
-static void WCLiquidGlassWCGlassLongPressTakeOver(UIWindow *menuWindow,
-                                                   UIView *menuContentView,
-                                                   UIView *hostView,
-                                                   BOOL usesNativeMenuHost) {
+static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassView) {
+    if (!WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled) {
+        return;
+    }
+    UIView *hostView = wcGlassView.superview;
+    UIView *menuContentView = WCLiquidGlassWCGlassLongPressMenuContentView(hostView);
+    UIWindow *menuWindow = hostView.window;
     if (!hostView ||
         !menuContentView ||
         ![NSStringFromClass(menuWindow.class) isEqualToString:@"MMMenuWindow"] ||
@@ -259,26 +181,17 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIWindow *menuWindow,
         WCLiquidGlassWCGlassLongPressApplyTransparentHost(hostView);
         return;
     }
-    if (existingState) {
-        return;
-    }
 
     WCLiquidGlassWCGlassLongPressState *state =
         [[WCLiquidGlassWCGlassLongPressState alloc] init];
     state.menuWindow = menuWindow;
     state.hostView = hostView;
     state.menuContentView = menuContentView;
-    state.usesNativeMenuHost = usesNativeMenuHost;
     state.originalMenuTransform = menuContentView.transform;
-    state.originalHostBackgroundColor = hostView.backgroundColor;
-    state.originalHostOpaque = hostView.opaque;
-    state.originalHostCornerRadius = hostView.layer.cornerRadius;
     state.targetFrame = [menuContentView convertRect:hostView.bounds
                                             fromView:hostView];
     state.collapsedFrame =
         WCLiquidGlassWCGlassLongPressCollapsedFrame(state.targetFrame);
-
-    WCLiquidGlassWCGlassLongPressCaptureNativeBackgrounds(state);
 
     UIVisualEffectView *glassContainer =
         [[UIVisualEffectView alloc]
@@ -348,37 +261,6 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIWindow *menuWindow,
     }];
 }
 
-static void WCLiquidGlassWCGlassLongPressTakeOverWCGlassView(
-    UIVisualEffectView *wcGlassView) {
-    if (!WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled) {
-        return;
-    }
-    UIView *hostView = wcGlassView.superview;
-    UIView *menuContentView = WCLiquidGlassWCGlassLongPressMenuContentView(hostView);
-    WCLiquidGlassWCGlassLongPressTakeOver(wcGlassView.window,
-                                          menuContentView,
-                                          hostView,
-                                          NO);
-}
-
-static void WCLiquidGlassWCGlassLongPressTakeOverNativeMenu(UIWindow *menuWindow) {
-    if (!WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled ||
-        ![NSStringFromClass(menuWindow.class) isEqualToString:@"MMMenuWindow"]) {
-        return;
-    }
-    UIView *menuContentView =
-        WCLiquidGlassWCGlassLongPressFindMenuContentView(menuWindow, 0);
-    if (!menuContentView ||
-        CGRectIsEmpty(menuContentView.bounds) ||
-        WCLiquidGlassWCGlassLongPressContainsWCGlassView(menuContentView, 0)) {
-        return;
-    }
-    WCLiquidGlassWCGlassLongPressTakeOver(menuWindow,
-                                          menuContentView,
-                                          menuContentView,
-                                          YES);
-}
-
 static void WCLiquidGlassWCGlassLongPressScheduleTakeOver(
     UIVisualEffectView *wcGlassView) {
     if (!WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled ||
@@ -392,25 +274,8 @@ static void WCLiquidGlassWCGlassLongPressScheduleTakeOver(
         if (WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled &&
             strongView.window &&
             WCLiquidGlassIsWCGlassLongPressView(strongView)) {
-            WCLiquidGlassWCGlassLongPressTakeOverWCGlassView(strongView);
+            WCLiquidGlassWCGlassLongPressTakeOver(strongView);
         }
-    });
-}
-
-static void WCLiquidGlassWCGlassLongPressScheduleNativeTakeOver(UIWindow *menuWindow) {
-    if (!WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled || !menuWindow) {
-        return;
-    }
-    __weak UIWindow *weakWindow = menuWindow;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIWindow *strongWindow = weakWindow;
-            if (WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled &&
-                strongWindow &&
-                !strongWindow.hidden) {
-                WCLiquidGlassWCGlassLongPressTakeOverNativeMenu(strongWindow);
-            }
-        });
     });
 }
 
@@ -467,12 +332,6 @@ static void WCLiquidGlassWCGlassLongPressCompleteDismissal(
     hostView.alpha = 1.0;
     hostView.hidden = YES;
     [state.glassContainer removeFromSuperview];
-    if (state.usesNativeMenuHost) {
-        WCLiquidGlassWCGlassLongPressRestoreNativeBackgrounds(state);
-        hostView.backgroundColor = state.originalHostBackgroundColor;
-        hostView.opaque = state.originalHostOpaque;
-        hostView.layer.cornerRadius = state.originalHostCornerRadius;
-    }
     if (nativeDismissal) {
         nativeDismissal();
     }
@@ -610,11 +469,6 @@ static void WCLiquidGlassWCGlassLongPressWindowSetHidden(UIWindow *self,
                                  nil,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         WCLiquidGlassWCGlassLongPressSetMenuContentHidden(self, NO, 0);
-        if (WCLiquidGlassOriginalWindowSetHidden) {
-            WCLiquidGlassOriginalWindowSetHidden(self, selector, hidden);
-        }
-        WCLiquidGlassWCGlassLongPressScheduleNativeTakeOver(self);
-        return;
     }
     WCLiquidGlassWCGlassLongPressState *state =
         objc_getAssociatedObject(self, WCLiquidGlassWCGlassLongPressStateKey);
