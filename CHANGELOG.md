@@ -1,5 +1,12 @@
 # 更新日志
 
+## [1.7.27~layouttest2] - 2026-07-30
+
+### 临时兼容
+
+- 兼容 WCGlass 3.x 强制隐藏微信“语音转述”入口：WCLiquidGlass 现固定关闭 `flg_hide_voice_transcribe_icon`，并拦截 `WCLGConfig.hideVoiceTranscribeIconEnabled` 使其始终返回关闭状态。
+- 仅在检测到 WCGlass 配置类时生效；恢复微信原生语音转述控件，使环形菜单能够正常检测并调用该动作。
+
 ## [1.7.27~layouttest1] - 2026-07-30
 
 ### 临时测试

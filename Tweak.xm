@@ -30,11 +30,36 @@ static NSUInteger WCLiquidGlassWCGlassHookInstallAttempts = 0;
 static NSUInteger WCLiquidGlassWCGlassBlockedRowRequestCount = 0;
 static NSUInteger WCLiquidGlassWCGlassBlockedRectRequestCount = 0;
 static BOOL WCLiquidGlassWCGlassFallbackGuardLogged = NO;
+static BOOL WCLiquidGlassWCGlassVoiceTranscribeHookInstalled = NO;
+static BOOL (*WCLiquidGlassOriginalWCGlassHideVoiceTranscribeIconEnabled)(id, SEL) = NULL;
 static UIViewController *(*WCLiquidGlassOriginalNavigationPopViewController)(UINavigationController *, SEL, BOOL) = NULL;
 static void (*WCLiquidGlassOriginalMainFrameViewWillAppear)(id, SEL, BOOL) = NULL;
 static NSInteger (*WCLiquidGlassOriginalTableViewNumberOfRows)(UITableView *, SEL, NSInteger) = NULL;
 static CGRect (*WCLiquidGlassOriginalTableViewRectForSection)(UITableView *, SEL, NSInteger) = NULL;
 static BOOL WCLiquidGlassIsAffectedChatController(UIViewController *viewController);
+
+static BOOL WCLiquidGlassWCGlassHideVoiceTranscribeIconDisabled(id self, SEL selector) {
+    return NO;
+}
+
+static void WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility(void) {
+    if (WCLiquidGlassWCGlassVoiceTranscribeHookInstalled) {
+        return;
+    }
+    Class configClass = NSClassFromString(@"WCLGConfig");
+    SEL selector = NSSelectorFromString(@"hideVoiceTranscribeIconEnabled");
+    if (configClass == Nil || class_getInstanceMethod(configClass, selector) == NULL) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"flg_hide_voice_transcribe_icon"];
+    MSHookMessageEx(configClass,
+                    selector,
+                    (IMP)&WCLiquidGlassWCGlassHideVoiceTranscribeIconDisabled,
+                    (IMP *)&WCLiquidGlassOriginalWCGlassHideVoiceTranscribeIconEnabled);
+    WCLiquidGlassWCGlassVoiceTranscribeHookInstalled = YES;
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:
+        @"WCGlass voice transcribe icon force-disabled"];
+}
 
 static UIViewController *WCLiquidGlassStableNavigationPopViewController(UINavigationController *self,
                                                                         SEL selector,
@@ -436,6 +461,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         [WCLiquidGlassPreferences registerDefaults];
 
         dispatch_async(dispatch_get_main_queue(), ^{
+            WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility();
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();
