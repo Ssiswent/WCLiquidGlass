@@ -409,6 +409,81 @@ static NSInteger WCLiquidGlassCurrentTabIndex(id tabController) {
     return 0;
 }
 
+static id WCLiquidGlassObjectFromIndexSelector(id target,
+                                                NSString *selectorName,
+                                                NSInteger index) {
+    SEL selector = NSSelectorFromString(selectorName);
+    if (!target || ![target respondsToSelector:selector]) {
+        return nil;
+    }
+    NSMethodSignature *signature = [target methodSignatureForSelector:selector];
+    if (signature.numberOfArguments != 3 || signature.methodReturnType[0] != '@') {
+        return nil;
+    }
+    @try {
+        return ((id (*)(id, SEL, NSInteger))objc_msgSend)(target, selector, index);
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
+static UIViewController *WCLiquidGlassCurrentTabRootController(id tabController) {
+    NSInteger selectedIndex = WCLiquidGlassCurrentTabIndex(tabController);
+    for (NSString *selectorName in @[@"getTabBarBaseViewController:",
+                                     @"viewControllerAtIndex:",
+                                     @"tabBarBaseViewControllerAtIndex:"]) {
+        id controller = WCLiquidGlassObjectFromIndexSelector(tabController, selectorName, selectedIndex);
+        if ([controller isKindOfClass:UIViewController.class]) {
+            return controller;
+        }
+    }
+
+    id selectedController = WCLiquidGlassObjectFromSelector(tabController, @"selectedViewController");
+    if ([selectedController isKindOfClass:UIViewController.class]) {
+        return selectedController;
+    }
+
+    id controllers = WCLiquidGlassObjectFromSelector(tabController, @"viewControllers");
+    if ([controllers isKindOfClass:NSArray.class] &&
+        selectedIndex >= 0 && selectedIndex < (NSInteger)[controllers count]) {
+        id controller = controllers[selectedIndex];
+        if ([controller isKindOfClass:UIViewController.class]) {
+            return controller;
+        }
+    }
+    return nil;
+}
+
+static BOOL WCLiquidGlassControllerIsDescendantOf(UIViewController *controller,
+                                                   UIViewController *ancestor) {
+    for (UIViewController *candidate = controller;
+         candidate;
+         candidate = candidate.parentViewController) {
+        if (candidate == ancestor) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL WCLiquidGlassIsAtCurrentTabRoot(id tabController) {
+    UIViewController *visibleController =
+        WCLiquidGlassVisibleControllerFrom(WCLiquidGlassApplicationWindow().rootViewController);
+    UIViewController *tabRootController = WCLiquidGlassCurrentTabRootController(tabController);
+    if (!visibleController || !tabRootController || tabRootController.presentedViewController) {
+        return NO;
+    }
+    if ([tabRootController isKindOfClass:UINavigationController.class]) {
+        UINavigationController *navigationController = (UINavigationController *)tabRootController;
+        UIViewController *rootController = navigationController.viewControllers.firstObject;
+        return navigationController.topViewController == rootController &&
+            (visibleController == rootController ||
+             WCLiquidGlassControllerIsDescendantOf(visibleController, rootController));
+    }
+    return visibleController == tabRootController ||
+        WCLiquidGlassControllerIsDescendantOf(visibleController, tabRootController);
+}
+
 static UIImageView *WCLiquidGlassNativeImageViewInView(UIView *view) {
     if (!view) {
         return nil;
@@ -1516,7 +1591,8 @@ static BOOL WCLiquidGlassCanSelectTab(id tabController, NSInteger index) {
 }
 
 static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
-    NSArray<NSDictionary<NSString *, id> *> *items) {
+    NSArray<NSDictionary<NSString *, id> *> *items,
+    BOOL showsTabActions) {
     UIViewController *visibleController = WCLiquidGlassVisibleController();
     UINavigationController *navigationController = [visibleController isKindOfClass:UINavigationController.class]
         ? (UINavigationController *)visibleController
@@ -1535,7 +1611,8 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
         }
         if ([actionIdentifier hasPrefix:@"tab."]) {
             NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
-            if (WCLiquidGlassCanSelectTab(tabController, index)) {
+            if (showsTabActions &&
+                WCLiquidGlassCanSelectTab(tabController, index)) {
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionSettings]) {
@@ -1609,6 +1686,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             ((void (*)(id, SEL, NSInteger))objc_msgSend)(tabController,
                                                         setSelectedIndexSelector,
                                                         index);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [WCLiquidGlassManager.sharedManager reload];
+            });
             return;
         }
         WCLiquidGlassShowActionError(@"当前微信版本没有找到对应的标签页。");
@@ -2062,11 +2142,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (NSArray<NSDictionary<NSString *, id> *> *)wc_currentVisibleItems {
     NSMutableArray<NSDictionary<NSString *, id> *> *visibleItems = [NSMutableArray array];
     id tabController = WCLiquidGlassCurrentTabController();
-    NSString *currentTabAction = tabController
+    BOOL showsTabActions = WCLiquidGlassIsAtCurrentTabRoot(tabController);
+    NSString *currentTabAction = showsTabActions
         ? [NSString stringWithFormat:@"tab.%ld", (long)WCLiquidGlassCurrentTabIndex(tabController)]
         : nil;
     NSArray<NSDictionary<NSString *, id> *> *buttonItems = WCLiquidGlassPreferences.buttonItems;
-    NSSet<NSString *> *availableActions = WCLiquidGlassAvailableActionIdentifiers(buttonItems);
+    NSSet<NSString *> *availableActions = WCLiquidGlassAvailableActionIdentifiers(buttonItems,
+                                                                                   showsTabActions);
     BOOL manualChatInputHidesVoiceAction = [self wc_hasManualChatInput];
     for (NSDictionary<NSString *, id> *item in buttonItems) {
         NSString *actionIdentifier = item[@"action"];

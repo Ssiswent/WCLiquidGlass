@@ -851,6 +851,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     NSSet<NSString *> *currentActions = [self wc_currentActionIdentifiers];
     NSArray<NSString *> *navigationActions = @[
         WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
+        WCLiquidGlassActionChats, WCLiquidGlassActionContacts,
+        WCLiquidGlassActionDiscover, WCLiquidGlassActionMe,
         WCLiquidGlassActionPageHierarchyDiagnostics,
         WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
@@ -879,6 +881,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (NSInteger)wc_availableSectionForAction:(NSString *)actionIdentifier {
     NSArray<NSString *> *navigationActions = @[
         WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
+        WCLiquidGlassActionChats, WCLiquidGlassActionContacts,
+        WCLiquidGlassActionDiscover, WCLiquidGlassActionMe,
         WCLiquidGlassActionPageHierarchyDiagnostics,
         WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels

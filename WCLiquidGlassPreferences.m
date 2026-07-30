@@ -5,6 +5,10 @@ NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification 
 
 NSString *const WCLiquidGlassActionSettings = @"wcliquidglass_settings";
 NSString *const WCLiquidGlassActionWCGlassSettings = @"wcglass_settings";
+NSString *const WCLiquidGlassActionChats = @"tab.0";
+NSString *const WCLiquidGlassActionContacts = @"tab.1";
+NSString *const WCLiquidGlassActionDiscover = @"tab.2";
+NSString *const WCLiquidGlassActionMe = @"tab.3";
 NSString *const WCLiquidGlassActionPlugins = @"plugins";
 NSString *const WCLiquidGlassActionDoutuAssistant = @"doutu_assistant";
 NSString *const WCLiquidGlassActionMoments = @"moments";
@@ -64,8 +68,7 @@ static BOOL WCLiquidGlassActionWasRemoved(NSString *actionIdentifier) {
     static NSSet<NSString *> *removedActions;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        removedActions = [NSSet setWithArray:@[@"tab.0", @"tab.1", @"tab.2", @"tab.3",
-                                               @"paste", @"emoji_search", @"search"]];
+        removedActions = [NSSet setWithArray:@[@"paste", @"emoji_search", @"search"]];
     });
     return [removedActions containsObject:actionIdentifier];
 }
@@ -111,6 +114,10 @@ NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void
         catalog = @[
             @{@"identifier": WCLiquidGlassActionSettings, @"title": @"WCLiquidGlass", @"symbol": @"circle.grid.cross.fill"},
             @{@"identifier": WCLiquidGlassActionWCGlassSettings, @"title": @"WCGlass", @"symbol": @"drop.fill"},
+            @{@"identifier": WCLiquidGlassActionChats, @"title": @"微信", @"symbol": @"message.fill"},
+            @{@"identifier": WCLiquidGlassActionContacts, @"title": @"通讯录", @"symbol": @"person.2.fill"},
+            @{@"identifier": WCLiquidGlassActionDiscover, @"title": @"发现", @"symbol": @"safari.fill"},
+            @{@"identifier": WCLiquidGlassActionMe, @"title": @"我", @"symbol": @"person.crop.circle.fill"},
             @{@"identifier": WCLiquidGlassActionPageHierarchyDiagnostics, @"title": @"当前页面层级诊断", @"symbol": @"rectangle.3.group.bubble.left"},
             @{@"identifier": WCLiquidGlassActionPlugins, @"title": @"插件列表", @"symbol": @"shippingbox.fill"},
             @{@"identifier": WCLiquidGlassActionDoutuAssistant, @"title": @"斗图助手", @"symbol": @"face.smiling"},

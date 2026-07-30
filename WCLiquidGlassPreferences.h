@@ -8,6 +8,10 @@ extern NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotifi
 
 extern NSString *const WCLiquidGlassActionSettings;
 extern NSString *const WCLiquidGlassActionWCGlassSettings;
+extern NSString *const WCLiquidGlassActionChats;
+extern NSString *const WCLiquidGlassActionContacts;
+extern NSString *const WCLiquidGlassActionDiscover;
+extern NSString *const WCLiquidGlassActionMe;
 extern NSString *const WCLiquidGlassActionPlugins;
 extern NSString *const WCLiquidGlassActionDoutuAssistant;
 extern NSString *const WCLiquidGlassActionMoments;
