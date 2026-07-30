@@ -3,6 +3,7 @@
 #import <CydiaSubstrate.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
+#import <dlfcn.h>
 #import <objc/runtime.h>
 #import <stdlib.h>
 
@@ -1575,6 +1576,57 @@ static void WCLiquidGlassHomeCornersAppendSystemGlassDiagnostics(NSMutableString
      NSClassFromString(@"WCLGGlassBackgroundView") ? @"YES" : @"NO"];
 }
 
+static void WCLiquidGlassHomeCornersAppendWCGlassHookDiagnostics(NSMutableString *report) {
+    NSArray<NSString *> *classNames = @[
+        @"MMInputToolView",
+        @"CommonMessageCellView",
+        @"MMNewMsgContentNavBar",
+        @"MMMsgContentNavBar",
+        @"MMMsgCommonTipsView",
+        @"MMUINavigationBar",
+        @"MMTabBar",
+        @"UITabBar",
+        @"ThemeBoxTabBar",
+        @"MainFrameLeftBarView"
+    ];
+    [report appendString:@"\nWCGlass Hook Surface\n"];
+    NSUInteger hookCount = 0;
+    for (NSString *className in classNames) {
+        Class cls = NSClassFromString(className);
+        if (!cls) {
+            continue;
+        }
+        unsigned int methodCount = 0;
+        Method *methods = class_copyMethodList(cls, &methodCount);
+        for (unsigned int index = 0; index < methodCount; index++) {
+            Dl_info imageInfo = {0};
+            IMP implementation = method_getImplementation(methods[index]);
+            if (!implementation || !dladdr((const void *)implementation, &imageInfo)) {
+                continue;
+            }
+            NSString *imageName = imageInfo.dli_fname ? [NSString stringWithUTF8String:imageInfo.dli_fname] : @"";
+            if (![imageName.lastPathComponent containsString:@"WCGlass"]) {
+                continue;
+            }
+            [report appendFormat:@"%@ %@ -> %@\n",
+             className,
+             NSStringFromSelector(method_getName(methods[index])),
+             imageName.lastPathComponent];
+            hookCount += 1;
+            if (hookCount >= 64) {
+                break;
+            }
+        }
+        free(methods);
+        if (hookCount >= 64) {
+            break;
+        }
+    }
+    if (hookCount == 0) {
+        [report appendString:@"none\n"];
+    }
+}
+
 static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread(void) {
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"Privacy: this report intentionally excludes visible text, message content, contact names, and accessibility labels.\n\n"];
@@ -1586,6 +1638,7 @@ static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMain
      WCLiquidGlassPreferences.homeCardGap,
      (long)WCLiquidGlassPreferences.glassAppearance];
     WCLiquidGlassHomeCornersAppendSystemGlassDiagnostics(report);
+    WCLiquidGlassHomeCornersAppendWCGlassHookDiagnostics(report);
 
     NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
