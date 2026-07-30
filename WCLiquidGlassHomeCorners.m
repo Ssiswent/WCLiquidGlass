@@ -4,6 +4,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <stdlib.h>
 
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassCrashLogger.h"
@@ -1548,6 +1549,32 @@ static void WCLiquidGlassHomeCornersAppendTableDiagnostics(NSMutableString *repo
     }
 }
 
+static NSString *WCLiquidGlassHomeCornersDiagnosticEnvironmentValue(const char *key) {
+    const char *value = getenv(key);
+    return value ? [NSString stringWithUTF8String:value] : @"unset";
+}
+
+static void WCLiquidGlassHomeCornersAppendSystemGlassDiagnostics(NSMutableString *report) {
+    Class glassClass = NSClassFromString(@"UIGlassEffect");
+    Class containerClass = NSClassFromString(@"UIGlassContainerEffect");
+    SEL factorySelector = NSSelectorFromString(@"effectWithStyle:");
+    UIVisualEffect *glassEffect = WCLiquidGlassCurrentGlassEffect();
+    UIVisualEffect *containerEffect = WCLiquidGlassCurrentGlassContainerEffect();
+    [report appendFormat:@"\nSystem Glass Runtime\nUIDesignSwiftUIDesignIgnoreCheck=%@\nUIDesignSwiftUIDesignEnableGlass=%@\nUIDesignRequiresCompatibility=%@\ncom.apple.SwiftUI.IgnoreSolariumLinkedOnCheck=%@\nInfo UIDesignRequiresCompatibility=%@\nUIGlassEffect class=%@ factory=%@ result=%@\nUIGlassContainerEffect class=%@ result=%@\nWCGlass classes settings=%@ background=%@\n",
+     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("UIDesignSwiftUIDesignIgnoreCheck"),
+     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("UIDesignSwiftUIDesignEnableGlass"),
+     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("UIDesignRequiresCompatibility"),
+     WCLiquidGlassHomeCornersDiagnosticEnvironmentValue("com.apple.SwiftUI.IgnoreSolariumLinkedOnCheck"),
+     [NSBundle.mainBundle objectForInfoDictionaryKey:@"UIDesignRequiresCompatibility"] ?: @"unset",
+     glassClass ? NSStringFromClass(glassClass) : @"nil",
+     glassClass && [glassClass respondsToSelector:factorySelector] ? @"YES" : @"NO",
+     glassEffect ? NSStringFromClass(glassEffect.class) : @"nil",
+     containerClass ? NSStringFromClass(containerClass) : @"nil",
+     containerEffect ? NSStringFromClass(containerEffect.class) : @"nil",
+     NSClassFromString(@"WCLGSettingsViewController") ? @"YES" : @"NO",
+     NSClassFromString(@"WCLGGlassBackgroundView") ? @"YES" : @"NO"];
+}
+
 static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread(void) {
     NSMutableString *report = [NSMutableString string];
     [report appendString:@"Privacy: this report intentionally excludes visible text, message content, contact names, and accessibility labels.\n\n"];
@@ -1558,6 +1585,7 @@ static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMain
      WCLiquidGlassPreferences.homeCornerRadius,
      WCLiquidGlassPreferences.homeCardGap,
      (long)WCLiquidGlassPreferences.glassAppearance];
+    WCLiquidGlassHomeCornersAppendSystemGlassDiagnostics(report);
 
     NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
