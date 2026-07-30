@@ -31,7 +31,10 @@ static NSUInteger WCLiquidGlassWCGlassBlockedRowRequestCount = 0;
 static NSUInteger WCLiquidGlassWCGlassBlockedRectRequestCount = 0;
 static BOOL WCLiquidGlassWCGlassFallbackGuardLogged = NO;
 static BOOL WCLiquidGlassWCGlassVoiceTranscribeHookInstalled = NO;
+static BOOL WCLiquidGlassWCGlassVoiceTranscribeHookInstallRetryScheduled = NO;
+static NSUInteger WCLiquidGlassWCGlassVoiceTranscribeHookInstallAttempts = 0;
 static BOOL (*WCLiquidGlassOriginalWCGlassHideVoiceTranscribeIconEnabled)(id, SEL) = NULL;
+static BOOL (*WCLiquidGlassOriginalWCGlassShouldForceTrueForUserDefaultsKey)(id, SEL, NSString *) = NULL;
 static UIViewController *(*WCLiquidGlassOriginalNavigationPopViewController)(UINavigationController *, SEL, BOOL) = NULL;
 static void (*WCLiquidGlassOriginalMainFrameViewWillAppear)(id, SEL, BOOL) = NULL;
 static NSInteger (*WCLiquidGlassOriginalTableViewNumberOfRows)(UITableView *, SEL, NSInteger) = NULL;
@@ -42,20 +45,48 @@ static BOOL WCLiquidGlassWCGlassHideVoiceTranscribeIconDisabled(id self, SEL sel
     return NO;
 }
 
+static BOOL WCLiquidGlassWCGlassShouldForceTrueForUserDefaultsKey(id self,
+                                                                   SEL selector,
+                                                                   NSString *key) {
+    if ([key isEqualToString:@"flg_hide_voice_transcribe_icon"]) {
+        return NO;
+    }
+    return WCLiquidGlassOriginalWCGlassShouldForceTrueForUserDefaultsKey
+        ? WCLiquidGlassOriginalWCGlassShouldForceTrueForUserDefaultsKey(self, selector, key)
+        : NO;
+}
+
 static void WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility(void) {
     if (WCLiquidGlassWCGlassVoiceTranscribeHookInstalled) {
         return;
     }
+    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"flg_hide_voice_transcribe_icon"];
     Class configClass = NSClassFromString(@"WCLGConfig");
-    SEL selector = NSSelectorFromString(@"hideVoiceTranscribeIconEnabled");
-    if (configClass == Nil || class_getInstanceMethod(configClass, selector) == NULL) {
+    SEL hideVoiceSelector = NSSelectorFromString(@"hideVoiceTranscribeIconEnabled");
+    SEL forceTrueSelector = NSSelectorFromString(@"shouldForceTrueForUserDefaultsKey:");
+    if (configClass == Nil ||
+        class_getInstanceMethod(configClass, hideVoiceSelector) == NULL ||
+        class_getInstanceMethod(configClass, forceTrueSelector) == NULL) {
+        if (!WCLiquidGlassWCGlassVoiceTranscribeHookInstallRetryScheduled &&
+            WCLiquidGlassWCGlassVoiceTranscribeHookInstallAttempts < 10) {
+            WCLiquidGlassWCGlassVoiceTranscribeHookInstallRetryScheduled = YES;
+            WCLiquidGlassWCGlassVoiceTranscribeHookInstallAttempts += 1;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                WCLiquidGlassWCGlassVoiceTranscribeHookInstallRetryScheduled = NO;
+                WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility();
+            });
+        }
         return;
     }
-    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"flg_hide_voice_transcribe_icon"];
     MSHookMessageEx(configClass,
-                    selector,
+                    hideVoiceSelector,
                     (IMP)&WCLiquidGlassWCGlassHideVoiceTranscribeIconDisabled,
                     (IMP *)&WCLiquidGlassOriginalWCGlassHideVoiceTranscribeIconEnabled);
+    MSHookMessageEx(configClass,
+                    forceTrueSelector,
+                    (IMP)&WCLiquidGlassWCGlassShouldForceTrueForUserDefaultsKey,
+                    (IMP *)&WCLiquidGlassOriginalWCGlassShouldForceTrueForUserDefaultsKey);
     WCLiquidGlassWCGlassVoiceTranscribeHookInstalled = YES;
     [WCLiquidGlassCrashLogger.sharedLogger recordEvent:
         @"WCGlass voice transcribe icon force-disabled"];
@@ -410,6 +441,9 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        WCLiquidGlassRestoreVoiceTranscriptionControlVisibility(self);
+    });
 }
 
 %end

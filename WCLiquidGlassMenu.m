@@ -1337,6 +1337,19 @@ static BOOL WCLiquidGlassTriggerVoiceTranscription(void) {
     return YES;
 }
 
+void WCLiquidGlassRestoreVoiceTranscriptionControlVisibility(id inputToolView) {
+    if (![inputToolView isKindOfClass:UIView.class]) {
+        return;
+    }
+    UIControl *control = nil;
+    NSInteger score = NSIntegerMin;
+    WCLiquidGlassFindVoiceTranscriptionControlInView(inputToolView, &control, &score);
+    if (score >= 260 && control) {
+        control.hidden = NO;
+        control.enabled = YES;
+    }
+}
+
 static BOOL WCLiquidGlassViewBelongsToChatInput(UIView *view) {
     for (UIView *ancestor = view.superview; ancestor; ancestor = ancestor.superview) {
         NSString *className = NSStringFromClass(ancestor.class);
@@ -1612,9 +1625,7 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
         if (![actionIdentifier isKindOfClass:NSString.class]) {
             continue;
         }
-        if ([actionIdentifier hasPrefix:@"layout_test."]) {
-            [availableActions addObject:actionIdentifier];
-        } else if ([actionIdentifier hasPrefix:@"tab."]) {
+        if ([actionIdentifier hasPrefix:@"tab."]) {
             NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
             if (showsTabActions &&
                 WCLiquidGlassCanSelectTab(tabController, index)) {
@@ -1680,9 +1691,6 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
 
 static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     id tabController = WCLiquidGlassCurrentTabController();
-    if ([actionIdentifier hasPrefix:@"layout_test."]) {
-        return;
-    }
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
         WCLiquidGlassCaptureCurrentPageHierarchyDiagnostics();
         return;

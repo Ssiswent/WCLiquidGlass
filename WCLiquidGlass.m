@@ -4,13 +4,7 @@
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 
-static const NSUInteger WCLiquidGlassMaximumButtonCount = 20;
-
-static NSArray<NSString *> *WCLiquidGlassLayoutTestActions(void) {
-    return @[@"layout_test.01", @"layout_test.02", @"layout_test.03", @"layout_test.04", @"layout_test.05",
-             @"layout_test.06", @"layout_test.07", @"layout_test.08", @"layout_test.09", @"layout_test.10",
-             @"layout_test.11", @"layout_test.12", @"layout_test.13", @"layout_test.14", @"layout_test.15"];
-}
+static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
@@ -855,14 +849,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_rebuildAvailableActions {
     NSSet<NSString *> *currentActions = [self wc_currentActionIdentifiers];
-    NSArray<NSString *> *navigationActions = [@[
+    NSArray<NSString *> *navigationActions = @[
         WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
         WCLiquidGlassActionChats, WCLiquidGlassActionContacts,
         WCLiquidGlassActionDiscover, WCLiquidGlassActionMe,
         WCLiquidGlassActionPageHierarchyDiagnostics,
         WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
-    ] arrayByAddingObjectsFromArray:WCLiquidGlassLayoutTestActions()];
+    ];
     NSArray<NSString *> *chatActions = @[
         WCLiquidGlassActionDoutuAssistant, WCLiquidGlassActionSearchRecords,
         WCLiquidGlassActionAlbum, WCLiquidGlassActionCamera, WCLiquidGlassActionVideoCall,
@@ -885,14 +879,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSInteger)wc_availableSectionForAction:(NSString *)actionIdentifier {
-    NSArray<NSString *> *navigationActions = [@[
+    NSArray<NSString *> *navigationActions = @[
         WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
         WCLiquidGlassActionChats, WCLiquidGlassActionContacts,
         WCLiquidGlassActionDiscover, WCLiquidGlassActionMe,
         WCLiquidGlassActionPageHierarchyDiagnostics,
         WCLiquidGlassActionPlugins,
         WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
-    ] arrayByAddingObjectsFromArray:WCLiquidGlassLayoutTestActions()];
+    ];
     return [navigationActions containsObject:actionIdentifier] ? 1 : 2;
 }
 
@@ -942,7 +936,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterLabel(@"最多可添加 20 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。");
+        return WCLiquidGlassFooterLabel(@"最多可添加 16 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。");
@@ -952,7 +946,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterHeight(@"最多可添加 20 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。", 54.0);
+        return WCLiquidGlassFooterHeight(@"最多可添加 16 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。", 54.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。", 54.0);
