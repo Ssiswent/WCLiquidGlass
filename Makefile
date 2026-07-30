@@ -23,7 +23,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = WCLiquidGlass
 
-WCLiquidGlass_FILES = Tweak.xm WCLiquidGlassMenu.m WCLiquidGlassPreferences.m WCLiquidGlassCrashLogger.m WCLiquidGlassChatTime.m WCLiquidGlassHomeCorners.m WCLiquidGlassWCGlassLongPress.m WCLiquidGlass.m WCLiquidGlassIconAssets.c
+WCLiquidGlass_FILES = WCLiquidGlassBootstrap.c Tweak.xm WCLiquidGlassMenu.m WCLiquidGlassPreferences.m WCLiquidGlassCrashLogger.m WCLiquidGlassChatTime.m WCLiquidGlassHomeCorners.m WCLiquidGlassWCGlassLongPress.m WCLiquidGlass.m WCLiquidGlassIconAssets.c
 WCLiquidGlass_CFLAGS = -fobjc-arc -DWCLIQUIDGLASS_VERSION=\"$(WCLIQUIDGLASS_VERSION)\" -DPLCRASHREPORTER_PREFIX=WCLG_ -I$(THEOS_PROJECT_DIR)/Vendor/PLCrashReporter/Headers
 WCLiquidGlass_FRAMEWORKS = Foundation UIKit QuartzCore
 WCLiquidGlass_LDFLAGS = $(THEOS_PROJECT_DIR)/Vendor/PLCrashReporter/CrashReporter

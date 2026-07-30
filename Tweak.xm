@@ -3,7 +3,6 @@
 #import <CydiaSubstrate.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
-#import <stdlib.h>
 
 #import "WCLiquidGlass.h"
 #import "WCLiquidGlassChatTime.h"
@@ -36,14 +35,6 @@ static void (*WCLiquidGlassOriginalMainFrameViewWillAppear)(id, SEL, BOOL) = NUL
 static NSInteger (*WCLiquidGlassOriginalTableViewNumberOfRows)(UITableView *, SEL, NSInteger) = NULL;
 static CGRect (*WCLiquidGlassOriginalTableViewRectForSection)(UITableView *, SEL, NSInteger) = NULL;
 static BOOL WCLiquidGlassIsAffectedChatController(UIViewController *viewController);
-
-static void WCLiquidGlassEnableSystemGlass(void) {
-    if (NSProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26) {
-        return;
-    }
-    setenv("UIDesignSwiftUIDesignIgnoreCheck", "1", 1);
-    setenv("UIDesignSwiftUIDesignEnableGlass", "1", 1);
-}
 
 static UIViewController *WCLiquidGlassStableNavigationPopViewController(UINavigationController *self,
                                                                         SEL selector,
@@ -441,7 +432,6 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             return;
         }
 
-        WCLiquidGlassEnableSystemGlass();
         [WCLiquidGlassCrashLogger.sharedLogger start];
         [WCLiquidGlassPreferences registerDefaults];
 

@@ -1,5 +1,13 @@
 # 更新日志
 
+## [1.7.24] - 2026-07-30
+
+### 修复
+
+- 根据设置页对照确认，WCGlass 影响的是 UIKit 的进程级设计模式：同一普通 `UISwitch` 仅在注入 WCGlass 时由系统创建 `_UILiquidLensView`，并非 WCLiquidGlass 的页面或 selector 被单独替换。
+- 将独立 Glass 兼容所需的两项环境变量从依赖 `NSBundle` 的 `%ctor` 前移到纯 C dylib constructor；该初始化在 Foundation、UIKit 和任何 Objective-C 运行时访问之前执行，以匹配 WCGlass 的启动时机。
+- 不增加 selector 接管、不修改菜单、主页连续会话、首页卡片或通讯录现有实现。本版本用于验证独立注入时 UIKit 是否会原生创建液态开关、浮动导航栏及标签栏；若仍未出现，将改为定位 WCGlass 的额外早期私有调用。
+
 ## [1.7.23] - 2026-07-30
 
 ### 诊断
