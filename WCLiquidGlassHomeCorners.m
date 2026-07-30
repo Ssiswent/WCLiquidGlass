@@ -104,6 +104,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassHomeCornerTableRole) {
 
 static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView);
 static void WCLiquidGlassInstallHomeCornerStandardTabCellLayoutHook(void);
+static void WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook(void);
+static void WCLiquidGlassInstallHomeCornerContactsCellLayoutHook(void);
+static void WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook(void);
 static NSString *WCLiquidGlassHomeCornersDiagnosticRect(CGRect rect);
 static CGRect WCLiquidGlassHomeCornerTargetFrame(UITableView *tableView,
                                                   NSIndexPath *indexPath,
@@ -610,7 +613,6 @@ static void WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook(void) {
 static void WCLiquidGlassHomeCornerInstallNativeHeightHooks(void) {
     WCLiquidGlassHomeCornerInstallHeightHookForClass(NSClassFromString(@"NewMainFrameViewController"),
                                                      &WCLiquidGlassOriginalHomeHeightForRow);
-    WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
 }
 
 static void WCLiquidGlassHomeCornerRequestNativeHeightUpdate(UITableView *tableView) {
@@ -1074,6 +1076,11 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
     if (role == WCLiquidGlassHomeCornerTableRoleNone && !wasStyled) {
         return;
     }
+    if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        WCLiquidGlassHomeCornerInstallContactsHeaderHeightHook();
+        WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
+        WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
+    }
     if (role != WCLiquidGlassHomeCornerTableRoleNone) {
         WCLiquidGlassHomeCornerInstallNativeHeightHooks();
         if (role == WCLiquidGlassHomeCornerTableRoleFindFriend ||
@@ -1085,9 +1092,19 @@ static void WCLiquidGlassHomeCornersUpdateTable(UITableView *tableView) {
                                  WCLiquidGlassHomeCornerTableStyledKey,
                                  @YES,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (role == WCLiquidGlassHomeCornerTableRoleHome ||
-            role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+        if (role == WCLiquidGlassHomeCornerTableRoleHome) {
             WCLiquidGlassHomeCornerRequestNativeHeightUpdate(tableView);
+        } else if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
+            NSNumber *epoch = objc_getAssociatedObject(tableView,
+                                                       WCLiquidGlassHomeCornerNativeHeightEpochKey);
+            if (epoch) {
+                WCLiquidGlassHomeCornerRequestNativeHeightUpdate(tableView);
+            } else {
+                objc_setAssociatedObject(tableView,
+                                         WCLiquidGlassHomeCornerNativeHeightEpochKey,
+                                         @(WCLiquidGlassHomeCornersConfigurationEpoch),
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
         }
     }
     for (UITableViewCell *cell in tableView.visibleCells) {
@@ -1378,16 +1395,12 @@ static void WCLiquidGlassInstallHomeCornerTableLayoutHook(void) {
 void WCLiquidGlassInstallHomeCornersHooks(void) {
     if (WCLiquidGlassHomeCornersHooksInstalled) {
         WCLiquidGlassInstallHomeCornerCellLayoutHook();
-        WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
-        WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
         WCLiquidGlassInstallHomeCornerTableLayoutHook();
         return;
     }
     WCLiquidGlassHomeCornersHooksInstalled = YES;
     WCLiquidGlassHomeCornerInstallNativeHeightHooks();
     WCLiquidGlassInstallHomeCornerCellLayoutHook();
-    WCLiquidGlassInstallHomeCornerContactsCellLayoutHook();
-    WCLiquidGlassInstallHomeCornerContactsAvatarLayoutHook();
     WCLiquidGlassInstallHomeCornerTableLayoutHook();
     [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassPreferencesDidChangeNotification
                                                       object:nil
