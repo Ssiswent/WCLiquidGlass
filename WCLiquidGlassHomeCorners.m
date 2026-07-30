@@ -1625,6 +1625,59 @@ static void WCLiquidGlassHomeCornersAppendWCGlassHookDiagnostics(NSMutableString
     if (hookCount == 0) {
         [report appendString:@"none\n"];
     }
+
+    [report appendString:@"\nWCGlass Global Hook Surface\n"];
+    unsigned int classCount = 0;
+    Class *classes = objc_copyClassList(&classCount);
+    NSMutableArray<NSString *> *globalHooks = [NSMutableArray array];
+    for (unsigned int classIndex = 0; classes && classIndex < classCount; classIndex += 1) {
+        Class cls = classes[classIndex];
+        NSString *classImageName = class_getImageName(cls) ? [NSString stringWithUTF8String:class_getImageName(cls)] : @"";
+        if ([classImageName.lastPathComponent containsString:@"WCGlass"]) {
+            continue;
+        }
+        for (NSUInteger methodKind = 0; methodKind < 2; methodKind += 1) {
+            Class methodClass = methodKind == 0 ? cls : object_getClass(cls);
+            unsigned int methodCount = 0;
+            Method *methods = class_copyMethodList(methodClass, &methodCount);
+            for (unsigned int methodIndex = 0; methodIndex < methodCount; methodIndex += 1) {
+                Dl_info imageInfo = {0};
+                IMP implementation = method_getImplementation(methods[methodIndex]);
+                if (!implementation || !dladdr((const void *)implementation, &imageInfo)) {
+                    continue;
+                }
+                NSString *imageName = imageInfo.dli_fname ? [NSString stringWithUTF8String:imageInfo.dli_fname] : @"";
+                if (![imageName.lastPathComponent containsString:@"WCGlass"]) {
+                    continue;
+                }
+                [globalHooks addObject:[NSString stringWithFormat:@"%@ %@ %@ -> %@",
+                                        NSStringFromClass(cls),
+                                        methodKind == 0 ? @"-" : @"+",
+                                        NSStringFromSelector(method_getName(methods[methodIndex])),
+                                        imageName.lastPathComponent]];
+                if (globalHooks.count >= 256) {
+                    break;
+                }
+            }
+            free(methods);
+            if (globalHooks.count >= 256) {
+                break;
+            }
+        }
+        if (globalHooks.count >= 256) {
+            break;
+        }
+    }
+    free(classes);
+    [globalHooks sortUsingSelector:@selector(compare:)];
+    for (NSString *hook in globalHooks) {
+        [report appendFormat:@"%@\n", hook];
+    }
+    if (globalHooks.count == 0) {
+        [report appendString:@"none\n"];
+    } else if (globalHooks.count >= 256) {
+        [report appendString:@"truncated at 256 hooks\n"];
+    }
 }
 
 static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMainThread(void) {
