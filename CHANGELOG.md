@@ -1,5 +1,12 @@
 # 更新日志
 
+## [1.7.21] - 2026-07-30
+
+### 修复
+
+- 修正独立启用系统 Glass 的写入层：WCGlass 实际通过进程环境变量 `UIDesignSwiftUIDesignIgnoreCheck=1` 与 `UIDesignSwiftUIDesignEnableGlass=1` 开启兼容能力；WCLiquidGlass 现于微信加载时使用同一 `setenv` 路径，不再把这些键误写入 `NSUserDefaults`。
+- 因此未注入 WCGlass 时，WCLiquidGlass 创建的 `UIGlassEffect` / `UIGlassContainerEffect` 可正常启用；主页连续会话、首页卡片、通讯录、材质设置和长按菜单的既有逻辑不变，未增加运行时诊断。
+
 ## [1.7.20] - 2026-07-30
 
 ### 优化

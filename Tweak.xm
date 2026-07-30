@@ -3,6 +3,7 @@
 #import <CydiaSubstrate.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <stdlib.h>
 
 #import "WCLiquidGlass.h"
 #import "WCLiquidGlassChatTime.h"
@@ -40,11 +41,8 @@ static void WCLiquidGlassEnableSystemGlass(void) {
     if (NSProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26) {
         return;
     }
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    [defaults setBool:YES forKey:@"UIDesignSwiftUIDesignIgnoreCheck"];
-    [defaults setBool:YES forKey:@"UIDesignSwiftUIDesignEnableGlass"];
-    [defaults setBool:NO forKey:@"UIDesignRequiresCompatibility"];
-    [defaults setBool:YES forKey:@"com.apple.SwiftUI.IgnoreSolariumLinkedOnCheck"];
+    setenv("UIDesignSwiftUIDesignIgnoreCheck", "1", 1);
+    setenv("UIDesignSwiftUIDesignEnableGlass", "1", 1);
 }
 
 static UIViewController *WCLiquidGlassStableNavigationPopViewController(UINavigationController *self,
