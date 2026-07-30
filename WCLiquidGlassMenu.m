@@ -366,7 +366,7 @@ static id WCLiquidGlassMMTabController(void) {
     return nil;
 }
 
-static id WCLiquidGlassCurrentTabController(void) {
+id WCLiquidGlassCurrentTabController(void) {
     id tabController = WCLiquidGlassMMTabController();
     return tabController ?: WCLiquidGlassFindTabController(WCLiquidGlassApplicationWindow().rootViewController);
 }
