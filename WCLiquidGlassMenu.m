@@ -1328,13 +1328,22 @@ static UIControl *WCLiquidGlassVoiceTranscriptionControl(void) {
     return score >= 260 && control.isEnabled ? control : nil;
 }
 
+static NSArray<NSString *> *WCLiquidGlassVoiceTranscriptionSelectorNames(void) {
+    return @[@"onVoiceInputButtonClicked:"];
+}
+
+static BOOL WCLiquidGlassCanTriggerVoiceTranscription(void) {
+    return WCLiquidGlassVoiceTranscriptionControl() ||
+        WCLiquidGlassActionTarget(WCLiquidGlassVoiceTranscriptionSelectorNames()) != nil;
+}
+
 static BOOL WCLiquidGlassTriggerVoiceTranscription(void) {
     UIControl *control = WCLiquidGlassVoiceTranscriptionControl();
-    if (!control) {
-        return NO;
+    if (control) {
+        [control sendActionsForControlEvents:UIControlEventTouchUpInside];
+        return YES;
     }
-    [control sendActionsForControlEvents:UIControlEventTouchUpInside];
-    return YES;
+    return WCLiquidGlassInvokeActionSelectors(WCLiquidGlassVoiceTranscriptionSelectorNames());
 }
 
 void WCLiquidGlassRestoreVoiceTranscriptionControlVisibility(id inputToolView) {
@@ -1650,7 +1659,7 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
-            if (WCLiquidGlassVoiceTranscriptionControl()) {
+            if (WCLiquidGlassCanTriggerVoiceTranscription()) {
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]) {
@@ -3144,15 +3153,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         return;
     }
 
-    UIControl *control = WCLiquidGlassVoiceTranscriptionControl();
-    if (!control) {
+    if (!WCLiquidGlassTriggerVoiceTranscription()) {
         [self closeMenuSelectingIndex:NSNotFound];
         WCLiquidGlassShowActionError(@"当前页面没有找到微信原生的语音转述按钮。");
         return;
     }
 
     BOOL wasActive = self.voiceTranscriptionActive;
-    [control sendActionsForControlEvents:UIControlEventTouchUpInside];
     self.voiceTranscriptionActive = !wasActive;
     [orb setToggleActiveAppearance:self.voiceTranscriptionActive];
     [self wc_emitSelectionFeedback];

@@ -60,7 +60,6 @@ static void WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility(void) {
     if (WCLiquidGlassWCGlassVoiceTranscribeHookInstalled) {
         return;
     }
-    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"flg_hide_voice_transcribe_icon"];
     Class configClass = NSClassFromString(@"WCLGConfig");
     SEL hideVoiceSelector = NSSelectorFromString(@"hideVoiceTranscribeIconEnabled");
     SEL forceTrueSelector = NSSelectorFromString(@"shouldForceTrueForUserDefaultsKey:");
@@ -493,9 +492,10 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
         [WCLiquidGlassCrashLogger.sharedLogger start];
         [WCLiquidGlassPreferences registerDefaults];
+        [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"flg_hide_voice_transcribe_icon"];
+        WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility();
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            WCLiquidGlassInstallWCGlassVoiceTranscribeCompatibility();
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();

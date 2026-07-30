@@ -107,25 +107,6 @@ static void WCLiquidGlassMigrateButtonItemsIfNeeded(void) {
     [defaults setBool:YES forKey:WCLiquidGlassSearchRecordsMigrationKey];
 }
 
-static void WCLiquidGlassRemoveLayoutTestButtonItems(void) {
-    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    NSArray *storedItems = [defaults arrayForKey:WCLiquidGlassButtonItemsKey];
-    if (![storedItems isKindOfClass:NSArray.class]) {
-        return;
-    }
-    NSMutableArray *remainingItems = [NSMutableArray arrayWithCapacity:storedItems.count];
-    for (id item in storedItems) {
-        NSString *actionIdentifier = [item isKindOfClass:NSDictionary.class] ? item[@"action"] : nil;
-        if (![actionIdentifier isKindOfClass:NSString.class] ||
-            ![actionIdentifier hasPrefix:@"layout_test."]) {
-            [remainingItems addObject:item];
-        }
-    }
-    if (remainingItems.count != storedItems.count) {
-        [defaults setObject:remainingItems.copy forKey:WCLiquidGlassButtonItemsKey];
-    }
-}
-
 NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void) {
     static NSArray<NSDictionary<NSString *, NSString *> *> *catalog;
     static dispatch_once_t onceToken;
@@ -235,7 +216,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassButtonItemsKey: WCLiquidGlassDefaultButtonItems()
     }];
     WCLiquidGlassMigrateButtonItemsIfNeeded();
-    WCLiquidGlassRemoveLayoutTestButtonItems();
 }
 
 + (BOOL)enabled {
