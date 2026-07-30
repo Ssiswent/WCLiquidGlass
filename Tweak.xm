@@ -36,6 +36,17 @@ static NSInteger (*WCLiquidGlassOriginalTableViewNumberOfRows)(UITableView *, SE
 static CGRect (*WCLiquidGlassOriginalTableViewRectForSection)(UITableView *, SEL, NSInteger) = NULL;
 static BOOL WCLiquidGlassIsAffectedChatController(UIViewController *viewController);
 
+static void WCLiquidGlassEnableSystemGlass(void) {
+    if (NSProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26) {
+        return;
+    }
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setBool:YES forKey:@"UIDesignSwiftUIDesignIgnoreCheck"];
+    [defaults setBool:YES forKey:@"UIDesignSwiftUIDesignEnableGlass"];
+    [defaults setBool:NO forKey:@"UIDesignRequiresCompatibility"];
+    [defaults setBool:YES forKey:@"com.apple.SwiftUI.IgnoreSolariumLinkedOnCheck"];
+}
+
 static UIViewController *WCLiquidGlassStableNavigationPopViewController(UINavigationController *self,
                                                                         SEL selector,
                                                                         BOOL animated) {
@@ -432,6 +443,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             return;
         }
 
+        WCLiquidGlassEnableSystemGlass();
         [WCLiquidGlassCrashLogger.sharedLogger start];
         [WCLiquidGlassPreferences registerDefaults];
 
