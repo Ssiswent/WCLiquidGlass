@@ -139,7 +139,22 @@ NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void
             @{@"identifier": WCLiquidGlassActionVoiceInput, @"title": @"语音转述", @"symbol": @"waveform"},
             @{@"identifier": WCLiquidGlassActionNewLine, @"title": @"换行", @"symbol": @"return"},
             @{@"identifier": WCLiquidGlassActionMention, @"title": @"艾特", @"symbol": @"at"},
-            @{@"identifier": WCLiquidGlassActionFullInput, @"title": @"全屏输入", @"symbol": @"arrow.up.left.and.arrow.down.right"}
+            @{@"identifier": WCLiquidGlassActionFullInput, @"title": @"全屏输入", @"symbol": @"arrow.up.left.and.arrow.down.right"},
+            @{@"identifier": @"layout_test.01", @"title": @"布局测试 01", @"symbol": @"circle.fill"},
+            @{@"identifier": @"layout_test.02", @"title": @"布局测试 02", @"symbol": @"square.fill"},
+            @{@"identifier": @"layout_test.03", @"title": @"布局测试 03", @"symbol": @"triangle.fill"},
+            @{@"identifier": @"layout_test.04", @"title": @"布局测试 04", @"symbol": @"diamond.fill"},
+            @{@"identifier": @"layout_test.05", @"title": @"布局测试 05", @"symbol": @"hexagon.fill"},
+            @{@"identifier": @"layout_test.06", @"title": @"布局测试 06", @"symbol": @"seal.fill"},
+            @{@"identifier": @"layout_test.07", @"title": @"布局测试 07", @"symbol": @"star.fill"},
+            @{@"identifier": @"layout_test.08", @"title": @"布局测试 08", @"symbol": @"heart.fill"},
+            @{@"identifier": @"layout_test.09", @"title": @"布局测试 09", @"symbol": @"bolt.fill"},
+            @{@"identifier": @"layout_test.10", @"title": @"布局测试 10", @"symbol": @"flame.fill"},
+            @{@"identifier": @"layout_test.11", @"title": @"布局测试 11", @"symbol": @"leaf.fill"},
+            @{@"identifier": @"layout_test.12", @"title": @"布局测试 12", @"symbol": @"moon.fill"},
+            @{@"identifier": @"layout_test.13", @"title": @"布局测试 13", @"symbol": @"sun.max.fill"},
+            @{@"identifier": @"layout_test.14", @"title": @"布局测试 14", @"symbol": @"cloud.fill"},
+            @{@"identifier": @"layout_test.15", @"title": @"布局测试 15", @"symbol": @"sparkles"}
         ];
     });
     return catalog;

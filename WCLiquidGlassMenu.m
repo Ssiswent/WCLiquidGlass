@@ -68,8 +68,8 @@ static CGPoint WCLiquidGlassFlowingSPoint(CGFloat progress) {
                                   CGPointMake(98.0, 132.0));
 }
 
-static void WCLiquidGlassEqualFlowingSPoints(NSUInteger count,
-                                              CGPoint output[12]) {
+static NSArray<NSValue *> *WCLiquidGlassEqualFlowingSPoints(NSUInteger count) {
+    NSMutableArray<NSValue *> *output = [NSMutableArray arrayWithCapacity:count];
     const NSUInteger sampleCount = 600;
     CGPoint sampledPoints[601];
     CGFloat cumulativeLengths[601];
@@ -92,20 +92,23 @@ static void WCLiquidGlassEqualFlowingSPoints(NSUInteger count,
         CGFloat segmentProgress = segmentLength > 0.0001
             ? (targetLength - cumulativeLengths[upper - 1]) / segmentLength
             : 0.0;
-        output[index] = CGPointMake(sampledPoints[upper - 1].x +
-                                        (sampledPoints[upper].x - sampledPoints[upper - 1].x) * segmentProgress,
-                                    sampledPoints[upper - 1].y +
-                                        (sampledPoints[upper].y - sampledPoints[upper - 1].y) * segmentProgress);
+        [output addObject:[NSValue valueWithCGPoint:CGPointMake(sampledPoints[upper - 1].x +
+                                                               (sampledPoints[upper].x - sampledPoints[upper - 1].x) * segmentProgress,
+                                                           sampledPoints[upper - 1].y +
+                                                               (sampledPoints[upper].y - sampledPoints[upper - 1].y) * segmentProgress)]];
     }
+    return output.copy;
 }
 
-static CGFloat WCLiquidGlassMinimumPointDistance(CGPoint points[12], NSUInteger count) {
+static CGFloat WCLiquidGlassMinimumPointDistance(NSArray<NSValue *> *points) {
     CGFloat minimumDistance = CGFLOAT_MAX;
-    for (NSUInteger first = 0; first < count; first += 1) {
-        for (NSUInteger second = first + 1; second < count; second += 1) {
+    for (NSUInteger first = 0; first < points.count; first += 1) {
+        for (NSUInteger second = first + 1; second < points.count; second += 1) {
+            CGPoint firstPoint = points[first].CGPointValue;
+            CGPoint secondPoint = points[second].CGPointValue;
             minimumDistance = MIN(minimumDistance,
-                                  hypot(points[first].x - points[second].x,
-                                        points[first].y - points[second].y));
+                                  hypot(firstPoint.x - secondPoint.x,
+                                        firstPoint.y - secondPoint.y));
         }
     }
     return minimumDistance;
@@ -146,13 +149,13 @@ static void WCLiquidGlassAppendFlowingSOffsets(NSMutableArray<NSValue *> *offset
                                                 NSUInteger count,
                                                 CGFloat anchorClearance,
                                                 CGFloat diameter) {
-    CGPoint referencePoints[12];
-    WCLiquidGlassEqualFlowingSPoints(count, referencePoints);
-    CGFloat referenceMinimumDistance = WCLiquidGlassMinimumPointDistance(referencePoints, count);
+    NSArray<NSValue *> *referencePoints = WCLiquidGlassEqualFlowingSPoints(count);
+    CGFloat referenceMinimumDistance = WCLiquidGlassMinimumPointDistance(referencePoints);
     CGFloat scale = (diameter + 10.0) / MAX(referenceMinimumDistance, 0.0001);
     for (NSUInteger index = 0; index < count; index += 1) {
-        CGPoint point = CGPointMake(referencePoints[index].x * scale,
-                                    referencePoints[index].y * scale);
+        CGPoint referencePoint = referencePoints[index].CGPointValue;
+        CGPoint point = CGPointMake(referencePoint.x * scale,
+                                    referencePoint.y * scale);
         [offsets addObject:[NSValue valueWithCGPoint:point]];
     }
     WCLiquidGlassAlignOffsetsToAnchorDistance(offsets, anchorClearance);
@@ -1609,7 +1612,9 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
         if (![actionIdentifier isKindOfClass:NSString.class]) {
             continue;
         }
-        if ([actionIdentifier hasPrefix:@"tab."]) {
+        if ([actionIdentifier hasPrefix:@"layout_test."]) {
+            [availableActions addObject:actionIdentifier];
+        } else if ([actionIdentifier hasPrefix:@"tab."]) {
             NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
             if (showsTabActions &&
                 WCLiquidGlassCanSelectTab(tabController, index)) {
@@ -1675,6 +1680,9 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
 
 static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     id tabController = WCLiquidGlassCurrentTabController();
+    if ([actionIdentifier hasPrefix:@"layout_test."]) {
+        return;
+    }
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
         WCLiquidGlassCaptureCurrentPageHierarchyDiagnostics();
         return;
