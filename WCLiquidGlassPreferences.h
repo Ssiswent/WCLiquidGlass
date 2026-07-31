@@ -84,6 +84,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (void)setWCGlassIOS27CompatibilityEnabled:(BOOL)enabled;
 + (BOOL)chatToolbarEnabled;
 + (void)setChatToolbarEnabled:(BOOL)enabled;
++ (BOOL)materialFileProtectionEnabled;
++ (void)setMaterialFileProtectionEnabled:(BOOL)enabled;
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems;
 + (void)setButtonItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
 + (void)restoreDefaultButtonItems;

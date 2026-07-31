@@ -1,7 +1,8 @@
 {
     Filter = {
         Bundles = (
-            "com.tencent.xin"
+            "com.tencent.xin",
+            "com.tencent.xin.sharetimeline"
         );
         Executables = (
             "WeChat"
