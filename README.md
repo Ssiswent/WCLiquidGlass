@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/design-previews/final-png/brand-approved-exact.png" width="132" alt="WCLiquidGlass 图标">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="Resources/Icons/Rendered/brand-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="Resources/Icons/Rendered/brand.png">
+    <img src="Resources/Icons/Rendered/brand.png" width="132" alt="WCLiquidGlass 图标">
+  </picture>
 </p>
 
 <h1 align="center">WCLiquidGlass</h1>
