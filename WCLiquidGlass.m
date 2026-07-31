@@ -1260,6 +1260,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *chatTimeGlassSwitch;
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
+@property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 
 @end
 
@@ -1414,7 +1415,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 0) {
         return 4;
     }
-    return section == 1 ? 4 : (section == 3 ? 2 : 1);
+    if (section == 1) {
+        return 4;
+    }
+    if (section == 2) {
+        return 2;
+    }
+    return section == 3 ? 2 : 1;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1434,7 +1441,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条和长按菜单液态均跟随本插件材质设置；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。");
     }
     if (section == 2) {
-        return WCLiquidGlassFooterLabel(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。");
+        return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
     }
     if (section == 3) {
         return WCLiquidGlassFooterLabel(@"基础诊断始终开启且不记录聊天内容。完整采集可获得原生线程与二进制镜像信息，重启微信后生效；系统强杀、Jetsam 与看门狗终止可能无法捕获。");
@@ -1450,7 +1457,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条和长按菜单液态均跟随本插件材质设置；首页圆角与液态可管理主页及微信分区的圆角、卡片和材质。", 88.0);
     }
     if (section == 2) {
-        return WCLiquidGlassFooterHeight(@"仅用于修复 iOS 27 与 WCGlass 横向胶囊分组、全屏分组的返回闪退。开关切换后立即生效。", 64.0);
+        return WCLiquidGlassFooterHeight(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。", 88.0);
     }
     return section == 3
         ? WCLiquidGlassFooterHeight(@"基础诊断始终开启且不记录聊天内容。完整采集可获得原生线程与二进制镜像信息，重启微信后生效；系统强杀、Jetsam 与看门狗终止可能无法捕获。", 92.0)
@@ -1509,13 +1516,21 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 2) {
+    } else if (indexPath.section == 2 && indexPath.row == 0) {
         WCLiquidGlassConfigureCell(cell, @"WCGlass iOS 27 兼容修复", @"修复带键盘返回时的闪退",
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompatibility, 32.0), UIColor.labelColor);
         UISwitch *wcGlassCompatibilitySwitch = [[UISwitch alloc] init];
         wcGlassCompatibilitySwitch.on = WCLiquidGlassPreferences.wcGlassIOS27CompatibilityEnabled;
         [wcGlassCompatibilitySwitch addTarget:self action:@selector(wc_wcGlassCompatibilityChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = wcGlassCompatibilitySwitch;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else if (indexPath.section == 2) {
+        WCLiquidGlassConfigureCell(cell, @"素材文件保护", @"保护未知素材，阻止删除与移动清理",
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompatibility, 32.0), UIColor.labelColor);
+        self.materialFileProtectionSwitch = [[UISwitch alloc] init];
+        self.materialFileProtectionSwitch.on = WCLiquidGlassPreferences.materialFileProtectionEnabled;
+        [self.materialFileProtectionSwitch addTarget:self action:@selector(wc_materialFileProtectionChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = self.materialFileProtectionSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 3 && indexPath.row == 0) {
         WCLiquidGlassConfigureCell(cell, @"完整崩溃采集", @"重启微信后生效",
@@ -1582,6 +1597,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_wcGlassCompatibilityChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setWCGlassIOS27CompatibilityEnabled:sender.isOn];
+}
+
+- (void)wc_materialFileProtectionChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setMaterialFileProtectionEnabled:sender.isOn];
 }
 
 - (NSString *)wc_sizeModeTitle {

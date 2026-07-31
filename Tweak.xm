@@ -8,6 +8,7 @@
 #import "WCLiquidGlassChatTime.h"
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassHomeCorners.h"
+#import "WCLiquidGlassMaterialFileProtection.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 #import "WCLiquidGlassWCGlassLongPress.h"
@@ -429,12 +430,20 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 %ctor {
     @autoreleasepool {
-        if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.tencent.xin"]) {
+        NSString *bundleIdentifier = NSBundle.mainBundle.bundleIdentifier;
+        BOOL isMainWeChatProcess = [bundleIdentifier isEqualToString:@"com.tencent.xin"];
+        BOOL isShareTimelineProcess = [bundleIdentifier isEqualToString:@"com.tencent.xin.sharetimeline"];
+        if (!isMainWeChatProcess && !isShareTimelineProcess) {
+            return;
+        }
+
+        [WCLiquidGlassPreferences registerDefaults];
+        WCLiquidGlassInstallMaterialFileProtectionHooks();
+        if (!isMainWeChatProcess) {
             return;
         }
 
         [WCLiquidGlassCrashLogger.sharedLogger start];
-        [WCLiquidGlassPreferences registerDefaults];
 
         dispatch_async(dispatch_get_main_queue(), ^{
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
