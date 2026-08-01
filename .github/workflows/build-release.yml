@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "可选：填写 vX.Y.Z 后创建或更新 GitHub Release；必须与 control 中版本一致"
+        description: "可选：填写与 control 映射一致的 tag，例如 1.8.2~beta.1 对应 v1.8.2-beta.1"
         required: false
         type: string
       release_notes:
@@ -63,11 +63,8 @@ jobs:
           set -euo pipefail
           release_tag="${INPUT_RELEASE_TAG:-${GITHUB_REF_NAME}}"
           package_version="$(sed -n 's/^Version:[[:space:]]*//p' control)"
-          expected_tag="v${package_version}"
-          if [ "$release_tag" != "$expected_tag" ]; then
-            echo "Release tag must be $expected_tag to match control version $package_version" >&2
-            exit 64
-          fi
+          scripts/release-version.sh --validate-tag "$package_version" "$release_tag"
+          release_channel="$(scripts/release-version.sh --channel "$package_version")"
 
           release_notes_file="$(mktemp)"
           trap 'rm -f "$release_notes_file"' EXIT
@@ -82,9 +79,15 @@ jobs:
           fi
 
           release_title="WCLiquidGlass $package_version"
+          release_state=()
+          if [ "$release_channel" = "prerelease" ]; then
+            release_state=(--prerelease)
+          else
+            release_state=(--latest)
+          fi
           if gh release view "$release_tag" >/dev/null 2>&1; then
             gh release upload "$release_tag" packages/*.deb --clobber
-            gh release edit "$release_tag" --title "$release_title" --notes-file "$release_notes_file"
+            gh release edit "$release_tag" --title "$release_title" --notes-file "$release_notes_file" "${release_state[@]}"
           else
-            gh release create "$release_tag" packages/*.deb --target "$GITHUB_SHA" --title "$release_title" --notes-file "$release_notes_file"
+            gh release create "$release_tag" packages/*.deb --target "$GITHUB_SHA" --title "$release_title" --notes-file "$release_notes_file" "${release_state[@]}"
           fi

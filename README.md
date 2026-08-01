@@ -165,3 +165,14 @@ WCLIQUIDGLASS_SKIP_UPLOAD=1 make clean package FINALPACKAGE=1
 ```
 
 普通构建默认沿用 `control` 中的版本号，不会自动改写版本文件；如需显式生成下一补丁版本，可额外传入 `WCLIQUIDGLASS_AUTO_BUMP=1`。项目输出 rootless `iphoneos-arm64` `.deb` 包，发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。
+
+### 版本与 Tag
+
+`control` 的 `Version` 是唯一包版本来源；GitHub tag 和 Release 状态由它自动推导，禁止手工拼接另一套版本名。
+
+| 发布类型 | `control` 中的版本 | Git tag | GitHub Release |
+| --- | --- | --- | --- |
+| 正式版 | `1.8.2` | `v1.8.2` | 正式发布 |
+| 预发布 | `1.8.2~project-polish.2` | `v1.8.2-project-polish.2` | Pre-release |
+
+`~` 是 Debian 预发布排序标记，确保预发布包低于同号正式版；Git tag 不包含 `~`，而是将它转换为一个连字符。预发布名称使用小写单词、连字符和点号计数，例如 `beta.1`、`layout-test.4`、`project-polish.2`。推送对应 tag 或在 Actions 手动输入对应 tag 后，工作流会验证映射、上传 `.deb` 并自动设置正确的 Release 状态。

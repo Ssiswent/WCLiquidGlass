@@ -21,6 +21,7 @@ architecture=$(control_value Architecture)
 [ "$package_id" = "com.ssiswent.wcliquidglass" ] || fail "unexpected package id: $package_id"
 [ -n "$version" ] || fail "control has no version"
 [ "$architecture" = "iphoneos-arm64" ] || fail "unexpected architecture: $architecture"
+scripts/release-version.sh --tag "$version" >/dev/null
 
 for source_file in ./*.m ./*.xm ./*.c; do
     [ -f "$source_file" ] || continue

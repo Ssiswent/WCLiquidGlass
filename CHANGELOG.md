@@ -1,5 +1,11 @@
 # 更新日志
 
+## [Unreleased]
+
+### 发布
+
+- 统一 Debian 包版本、Git tag 与 GitHub Release 状态的推导规则：正式版使用 `MAJOR.MINOR.PATCH` 与 `vMAJOR.MINOR.PATCH`，预发布使用 `MAJOR.MINOR.PATCH~PRERELEASE` 与 `vMAJOR.MINOR.PATCH-PRERELEASE`；预发布自动标记为 GitHub Pre-release。
+
 ## [1.8.2~projectpolish2] - 2026-08-01
 
 ### 性能与交互

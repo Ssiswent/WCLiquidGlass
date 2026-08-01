@@ -88,7 +88,7 @@ flowchart TD
 | 文件 | 契约 |
 | --- | --- |
 | [`Makefile`](../../../Makefile) | `arm64`、iOS 16 SDK 目标、rootless、ARC、全部源码单元和所需系统 framework；普通构建不自动改写版本 |
-| [`control`](../../../control) | 包名、插件名、版本、架构和依赖；当前稳定版本为 `1.8.1` |
+| [`control`](../../../control) | 包名、插件名、版本、架构和依赖；唯一的包版本来源 |
 | [`WCLiquidGlass.plist`](../../../WCLiquidGlass.plist) | 注入 `com.tencent.xin` 与 `com.tencent.xin.sharetimeline`；后者仅启用素材文件保护 |
 
 ### 3. 启动、注册和刷新生命周期
@@ -560,6 +560,9 @@ gmake clean package FINALPACKAGE=1
 发布前确认：
 
 - `control` 的 `Version` 是唯一版本来源。
+- 正式版使用 `MAJOR.MINOR.PATCH`，例如 `1.8.2`，并发布为 tag `v1.8.2`。
+- 预发布使用 `MAJOR.MINOR.PATCH~PRERELEASE`，例如 `1.8.2~project-polish.2`；发布 tag 自动映射为 `v1.8.2-project-polish.2`，并标记为 GitHub Pre-release。`~` 只用于 Debian 版本排序，不能出现在 Git tag 中。
+- 版本到 tag 的转换和校验只能通过 [`scripts/release-version.sh`](../../../scripts/release-version.sh) 执行；不得在工作流、本地发布命令或文档中复制第二套转换规则。
 - 插件列表右侧只显示裸版本号，由微信插件管理器负责格式。
 - 设置页品牌卡显示 `Version x.y.z`。
 - 产物架构为 `iphoneos-arm64`，package scheme 为 rootless。
