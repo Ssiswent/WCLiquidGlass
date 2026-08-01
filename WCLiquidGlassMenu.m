@@ -17,6 +17,10 @@ static BOOL WCLiquidGlassDoutuConfiguredCached = NO;
 static char WCLiquidGlassDoutuCachedButtonKey;
 static char WCLiquidGlassDoutuLastVisibilityKey;
 
+static BOOL WCLiquidGlassReduceMotionEnabled(void) {
+    return UIAccessibilityIsReduceMotionEnabled();
+}
+
 static void WCLiquidGlassAppendArcOffsets(NSMutableArray<NSValue *> *offsets,
                                            NSUInteger count,
                                            CGFloat radius,
@@ -69,6 +73,18 @@ static CGPoint WCLiquidGlassFlowingSPoint(CGFloat progress) {
 }
 
 static NSArray<NSValue *> *WCLiquidGlassEqualFlowingSPoints(NSUInteger count) {
+    static NSCache<NSNumber *, NSArray<NSValue *> *> *cache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        cache = [[NSCache alloc] init];
+        cache.countLimit = 16;
+    });
+    NSNumber *cacheKey = @(count);
+    NSArray<NSValue *> *cachedPoints = [cache objectForKey:cacheKey];
+    if (cachedPoints) {
+        return cachedPoints;
+    }
+
     NSMutableArray<NSValue *> *output = [NSMutableArray arrayWithCapacity:count];
     const NSUInteger sampleCount = 600;
     CGPoint sampledPoints[601];
@@ -97,7 +113,9 @@ static NSArray<NSValue *> *WCLiquidGlassEqualFlowingSPoints(NSUInteger count) {
                                                            sampledPoints[upper - 1].y +
                                                                (sampledPoints[upper].y - sampledPoints[upper - 1].y) * segmentProgress)]];
     }
-    return output.copy;
+    NSArray<NSValue *> *points = output.copy;
+    [cache setObject:points forKey:cacheKey];
+    return points;
 }
 
 static CGFloat WCLiquidGlassMinimumPointDistance(NSArray<NSValue *> *points) {
@@ -1053,7 +1071,7 @@ static UIImage *WCLiquidGlassCloseImage(void) {
     format.opaque = NO;
     UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(32.0, 32.0)
                                                                                 format:format];
-    image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+    image = [renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *context) {
         UIBezierPath *path = [UIBezierPath bezierPath];
         path.lineWidth = 3.5;
         path.lineCapStyle = kCGLineCapRound;
@@ -1902,7 +1920,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                                            : CGAffineTransformIdentity;
         self.layer.zPosition = selected ? 30.0 : 0.0;
     };
-    if (!animated) {
+    if (!animated || WCLiquidGlassReduceMotionEnabled()) {
         [self.layer removeAllAnimations];
         [self.iconView.layer removeAllAnimations];
         changes();
@@ -2198,8 +2216,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
     CGFloat optionDiameter = [self wc_optionDiameterForCount:newVisibleItems.count];
     BOOL voiceActionAvailable = [newVisibleItems indexOfObjectPassingTest:^BOOL(NSDictionary *item,
-                                                                                NSUInteger index,
-                                                                                BOOL *stop) {
+                                                                                __unused NSUInteger index,
+                                                                                __unused BOOL *stop) {
         return [item[@"action"] isEqualToString:WCLiquidGlassActionVoiceInput];
     }] != NSNotFound;
     if (!voiceActionAvailable) {
@@ -2212,8 +2230,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     for (NSDictionary<NSString *, id> *item in newVisibleItems) {
         NSString *actionIdentifier = item[@"action"];
         NSUInteger reusableIndex = [remainingOrbs indexOfObjectPassingTest:^BOOL(WCLiquidGlassOrbView *orb,
-                                                                                 NSUInteger index,
-                                                                                 BOOL *stop) {
+                                                                                 __unused NSUInteger index,
+                                                                                 __unused BOOL *stop) {
             return [orb.actionIdentifier isEqualToString:actionIdentifier];
         }];
         WCLiquidGlassOrbView *orb = nil;
@@ -2296,6 +2314,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)wc_animateForKeyboardNotification:(NSNotification *)notification
                                    changes:(void (^)(void))changes {
+    if (WCLiquidGlassReduceMotionEnabled()) {
+        changes();
+        return;
+    }
     NSDictionary *userInfo = notification.userInfo;
     NSTimeInterval duration = [userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
     UIViewAnimationCurve curve = [userInfo[UIKeyboardAnimationCurveUserInfoKey] integerValue];
@@ -2415,14 +2437,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (BOOL)wc_shouldRetryDoutuRefreshForInputHasText:(BOOL)inputHasText {
     BOOL hasDoutuAction = [WCLiquidGlassPreferences.buttonItems indexOfObjectPassingTest:
-        ^BOOL(NSDictionary<NSString *, id> *item, NSUInteger index, BOOL *stop) {
+        ^BOOL(NSDictionary<NSString *, id> *item, __unused NSUInteger index, __unused BOOL *stop) {
             return [item[@"action"] isEqualToString:WCLiquidGlassActionDoutuAssistant];
         }] != NSNotFound;
     if (!hasDoutuAction) {
         return NO;
     }
     BOOL doutuIsVisible = [self.visibleItems indexOfObjectPassingTest:
-        ^BOOL(NSDictionary<NSString *, id> *item, NSUInteger index, BOOL *stop) {
+        ^BOOL(NSDictionary<NSString *, id> *item, __unused NSUInteger index, __unused BOOL *stop) {
             return [item[@"action"] isEqualToString:WCLiquidGlassActionDoutuAssistant];
         }] != NSNotFound;
     return doutuIsVisible != inputHasText;
@@ -2498,6 +2520,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             return;
         }
         self.anchorIdleHidden = YES;
+        if (WCLiquidGlassReduceMotionEnabled()) {
+            [self wc_layoutAnchorFromPreferences];
+            return;
+        }
         [UIView animateWithDuration:0.36
                               delay:0
              usingSpringWithDamping:0.82
@@ -2516,7 +2542,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     void (^changes)(void) = ^{
         [self wc_layoutAnchorFromPreferences];
     };
-    if (!animated) {
+    if (!animated || WCLiquidGlassReduceMotionEnabled()) {
         changes();
         return;
     }
@@ -2819,9 +2845,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     CGFloat diameter = self.resolvedOptionDiameter > 0.0
         ? self.resolvedOptionDiameter
         : [self wc_optionDiameter];
+    BOOL shouldAnimate = animated && !WCLiquidGlassReduceMotionEnabled();
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    NSUInteger index,
-                                                   BOOL *stop) {
+                                                   __unused BOOL *stop) {
         if (index >= centers.count) {
             return;
         }
@@ -2830,11 +2857,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             orb.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
             orb.center = centers[index].CGPointValue;
             orb.alpha = 1.0;
-            orb.transform = index == self.highlightedIndex
+            orb.transform = (NSInteger)index == self.highlightedIndex
                 ? CGAffineTransformMakeScale(WCLiquidGlassSelectedScale, WCLiquidGlassSelectedScale)
                 : CGAffineTransformIdentity;
         };
-        if (animated) {
+        if (shouldAnimate) {
             [UIView animateWithDuration:0.48
                                   delay:index * 0.035
                  usingSpringWithDamping:0.54
@@ -2899,7 +2926,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         self.voiceTranscriptionActive = NO;
     }
 
+    BOOL reduceMotion = WCLiquidGlassReduceMotionEnabled();
     for (WCLiquidGlassOrbView *orb in removedOrbs) {
+        if (reduceMotion) {
+            [orb removeFromSuperview];
+            continue;
+        }
         [UIView animateWithDuration:0.24
                               delay:0
                             options:UIViewAnimationOptionBeginFromCurrentState |
@@ -2911,7 +2943,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             [orb removeFromSuperview];
         }];
     }
-    [self wc_layoutOptionOrbsAnimated:YES];
+    [self wc_layoutOptionOrbsAnimated:!reduceMotion];
 }
 
 - (void)openMenu {
@@ -2939,7 +2971,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         orb.alpha = 0.0;
         orb.transform = CGAffineTransformMakeScale(0.72, 0.72);
     }
-    [self wc_layoutOptionOrbsAnimated:YES];
+    [self wc_layoutOptionOrbsAnimated:!WCLiquidGlassReduceMotionEnabled()];
 }
 
 - (void)wc_resetMenuImmediately {
@@ -2954,8 +2986,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     [self.anchorOrb.layer removeAllAnimations];
     [self.anchorOrb.iconView.layer removeAllAnimations];
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
-                                                   NSUInteger index,
-                                                   BOOL *stop) {
+                                                   __unused NSUInteger index,
+                                                   __unused BOOL *stop) {
         [orb setSelectedAppearance:NO animated:NO];
         orb.center = self.anchorOrb.center;
         orb.alpha = 0.0;
@@ -2981,9 +3013,18 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     [self wc_setHighlightedIndex:NSNotFound];
     [self wc_updateAnchorVisual];
 
+    BOOL reduceMotion = WCLiquidGlassReduceMotionEnabled();
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    NSUInteger orbIndex,
-                                                   BOOL *stop) {
+                                                   __unused BOOL *stop) {
+        if (reduceMotion) {
+            [orb.layer removeAllAnimations];
+            orb.center = self.anchorOrb.center;
+            orb.alpha = 0.0;
+            orb.transform = CGAffineTransformMakeScale(0.72, 0.72);
+            orb.hidden = YES;
+            return;
+        }
         [UIView animateWithDuration:0.2
                               delay:orbIndex * 0.018
                             options:UIViewAnimationOptionBeginFromCurrentState
@@ -3002,9 +3043,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     if (actionIdentifier) {
         NSUInteger actionGeneration = self.contentRefreshGeneration;
         [self wc_emitSelectionFeedback];
-        NSTimeInterval actionDelay = [actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]
-            ? 0.25 + MAX(0, (NSInteger)self.optionOrbs.count - 1) * 0.018
-            : 0.22;
+        NSTimeInterval actionDelay = reduceMotion
+            ? 0.0
+            : ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]
+                ? 0.25 + MAX(0, (NSInteger)self.optionOrbs.count - 1) * 0.018
+                : 0.22);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(actionDelay * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             if (actionGeneration != self.contentRefreshGeneration ||
@@ -3071,6 +3114,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         self.anchorOnLeft = self.anchorOrb.center.x < CGRectGetMidX(self.bounds);
         CGFloat yFraction = self.anchorOrb.center.y / MAX(CGRectGetHeight(self.bounds), 1.0);
         [WCLiquidGlassPreferences setAnchorOnLeft:self.anchorOnLeft yFraction:yFraction];
+        if (WCLiquidGlassReduceMotionEnabled()) {
+            [self wc_layoutAnchorFromPreferences];
+            [self wc_scheduleIdleHide];
+            return;
+        }
         [UIView animateWithDuration:0.36
                               delay:0
              usingSpringWithDamping:0.72
@@ -3163,7 +3211,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     CGFloat threshold = self.anchorOrb.diameter * (magnetic ? 1.35 : 0.65);
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    NSUInteger index,
-                                                   BOOL *stop) {
+                                                   __unused BOOL *stop) {
         CGFloat distance = hypot(point.x - orb.center.x, point.y - orb.center.y);
         if (distance < nearestDistance && distance <= threshold) {
             nearestDistance = distance;

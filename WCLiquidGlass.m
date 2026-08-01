@@ -839,7 +839,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSSet<NSString *> *)wc_currentActionIdentifiers {
     NSMutableSet<NSString *> *actionIdentifiers = [NSMutableSet set];
-    [self.items enumerateObjectsUsingBlock:^(NSDictionary<NSString *, id> *item, NSUInteger index, BOOL *stop) {
+    [self.items enumerateObjectsUsingBlock:^(NSDictionary<NSString *, id> *item, __unused NSUInteger index, __unused BOOL *stop) {
         if ([item[@"action"] isKindOfClass:NSString.class]) {
             [actionIdentifiers addObject:item[@"action"]];
         }
@@ -867,7 +867,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassActionMention, WCLiquidGlassActionFullInput
     ];
     NSPredicate *availablePredicate = [NSPredicate predicateWithBlock:^BOOL(NSString *actionIdentifier,
-                                                                           NSDictionary *bindings) {
+                                                                           __unused NSDictionary *bindings) {
         return ![currentActions containsObject:actionIdentifier];
     }];
     self.availableNavigationActions = [navigationActions filteredArrayUsingPredicate:availablePredicate];
@@ -904,7 +904,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"恢复"
                                              style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *action) {
+                                           handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassPreferences restoreDefaultButtonItems];
         [self wc_reloadItems];
     }]];
@@ -998,7 +998,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                 NSIndexPath *destination = [NSIndexPath indexPathForRow:destinationRow inSection:destinationSection];
                 [tableView insertRowsAtIndexPaths:@[destination] withRowAnimation:UITableViewRowAnimationAutomatic];
             }
-        } completion:^(BOOL finished) {
+        } completion:^(__unused BOOL finished) {
             if (wasAtMaximum) {
                 [self wc_reloadAvailableSectionsWithoutAnimation];
             }
@@ -1023,7 +1023,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
         NSIndexPath *destination = [NSIndexPath indexPathForRow:destinationRow inSection:0];
         [tableView insertRowsAtIndexPaths:@[destination] withRowAnimation:UITableViewRowAnimationAutomatic];
-    } completion:^(BOOL finished) {
+    } completion:^(__unused BOOL finished) {
         if (reachedMaximum) {
             [self wc_reloadAvailableSectionsWithoutAnimation];
         }
@@ -1245,7 +1245,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"清空"
                                              style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *action) {
+                                           handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassCrashLogger.sharedLogger deleteAllLogs];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
@@ -1425,7 +1425,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    NSArray<NSString *> *titles = @[@"菜单", @"内容", @"兼容性", @"诊断", @"维护"];
+    NSArray<NSString *> *titles = @[@"菜单", @"内容", @"保护与兼容", @"诊断", @"维护"];
     return WCLiquidGlassSectionLabel(titles[section], UIColor.secondaryLabelColor);
 }
 
@@ -1636,10 +1636,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                                      message:nil
                                                               preferredStyle:UIAlertControllerStyleActionSheet];
     NSArray<NSString *> *titles = @[@"紧凑 · 53pt", @"标准 · 60pt", @"大 · 66pt"];
-    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, BOOL *stop) {
+    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
         UIAlertAction *action = [UIAlertAction actionWithTitle:title
                                                         style:UIAlertActionStyleDefault
-                                                      handler:^(UIAlertAction *selectedAction) {
+                                                      handler:^(__unused UIAlertAction *selectedAction) {
             [WCLiquidGlassPreferences setSizeMode:index];
         }];
         [picker addAction:action];
@@ -1655,10 +1655,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                                      message:@"菜单空间不足时自动采用；所有样式都会保留胶黏动画所需的按钮间距。"
                                                               preferredStyle:UIAlertControllerStyleActionSheet];
     NSArray<NSString *> *titles = @[@"双层月牙", @"流动 S 弧", @"宽扇形", @"花瓣环簇"];
-    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, BOOL *stop) {
+    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
         UIAlertAction *action = [UIAlertAction actionWithTitle:title
                                                         style:UIAlertActionStyleDefault
-                                                      handler:^(UIAlertAction *selectedAction) {
+                                                      handler:^(__unused UIAlertAction *selectedAction) {
             [WCLiquidGlassPreferences setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)index];
         }];
         [picker addAction:action];
@@ -1671,12 +1671,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_confirmRestore {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认设置？"
-                                                                   message:@"开关、按钮大小、紧凑布局、入口位置、按钮动作、兼容性和诊断选项都会恢复。"
+                                                                   message:@"开关、按钮大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"恢复"
                                              style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *action) {
+                                           handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassPreferences restoreDefaults];
         [self.tableView reloadData];
     }]];

@@ -2,6 +2,7 @@
 
 NSNotificationName const WCLiquidGlassPreferencesDidChangeNotification = @"WCLiquidGlass.PreferencesChanged";
 NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification = @"WCLiquidGlass.WCGlassCompatibilityChanged";
+NSString *const WCLiquidGlassMaterialFileProtectionDarwinNotification = @"com.ssiswent.wcliquidglass.material-file-protection-changed";
 
 NSString *const WCLiquidGlassActionSettings = @"wcliquidglass_settings";
 NSString *const WCLiquidGlassActionWCGlassSettings = @"wcglass_settings";
@@ -52,6 +53,19 @@ static NSString *const WCLiquidGlassMaterialFileProtectionEnabledKey = @"WCLiqui
 static NSString *const WCLiquidGlassButtonItemsKey = @"WCLiquidGlass.ButtonItems";
 static NSString *const WCLiquidGlassLegacySearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded";
 static NSString *const WCLiquidGlassSearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded.V2";
+
+static CFStringRef WCLiquidGlassMainPreferencesApplicationID(void) {
+    return CFSTR("com.tencent.xin");
+}
+
+static void WCLiquidGlassPostMaterialFileProtectionChanged(void) {
+    CFPreferencesAppSynchronize(WCLiquidGlassMainPreferencesApplicationID());
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                         (__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionDarwinNotification,
+                                         NULL,
+                                         NULL,
+                                         YES);
+}
 
 static NSArray<NSDictionary<NSString *, id> *> *WCLiquidGlassDefaultButtonItems(void) {
     static NSArray<NSDictionary<NSString *, id> *> *items;
@@ -376,11 +390,22 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 }
 
 + (BOOL)materialFileProtectionEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassMaterialFileProtectionEnabledKey];
+    CFPropertyListRef storedValue = CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionEnabledKey,
+        WCLiquidGlassMainPreferencesApplicationID());
+    if (!storedValue) {
+        return YES;
+    }
+    BOOL enabled = [(__bridge id)storedValue boolValue];
+    CFRelease(storedValue);
+    return enabled;
 }
 
 + (void)setMaterialFileProtectionEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMaterialFileProtectionEnabledKey];
+    CFPreferencesSetAppValue((__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionEnabledKey,
+                             (__bridge CFPropertyListRef)@(enabled),
+                             WCLiquidGlassMainPreferencesApplicationID());
+    WCLiquidGlassPostMaterialFileProtectionChanged();
     WCLiquidGlassNotifyPreferencesChanged();
 }
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems {
@@ -436,11 +461,14 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassAnchorYKey];
     [defaults removeObjectForKey:WCLiquidGlassFullCrashReportsEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassMaterialFileProtectionEnabledKey];
+    CFPreferencesSetAppValue((__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionEnabledKey,
+                             NULL,
+                             WCLiquidGlassMainPreferencesApplicationID());
     [defaults removeObjectForKey:WCLiquidGlassButtonItemsKey];
     [defaults removeObjectForKey:WCLiquidGlassLegacySearchRecordsMigrationKey];
     [defaults removeObjectForKey:WCLiquidGlassSearchRecordsMigrationKey];
     WCLiquidGlassNotifyPreferencesChanged();
+    WCLiquidGlassPostMaterialFileProtectionChanged();
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
                                                       object:nil];
 }

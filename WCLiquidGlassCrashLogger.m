@@ -234,7 +234,7 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
                                                         includingPropertiesForKeys:@[NSURLContentModificationDateKey, NSURLFileSizeKey]
                                                                            options:NSDirectoryEnumerationSkipsHiddenFiles
                                                                              error:nil] ?: @[];
-    NSPredicate *textFiles = [NSPredicate predicateWithBlock:^BOOL(NSURL *URL, NSDictionary *bindings) {
+    NSPredicate *textFiles = [NSPredicate predicateWithBlock:^BOOL(NSURL *URL, __unused NSDictionary *bindings) {
         return [URL.pathExtension.lowercaseString isEqualToString:@"txt"] ||
                [URL.pathExtension.lowercaseString isEqualToString:@"crash"];
     }];

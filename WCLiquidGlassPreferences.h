@@ -5,6 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 extern NSNotificationName const WCLiquidGlassPreferencesDidChangeNotification;
 extern NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification;
+extern NSString *const WCLiquidGlassMaterialFileProtectionDarwinNotification;
 
 extern NSString *const WCLiquidGlassActionSettings;
 extern NSString *const WCLiquidGlassActionWCGlassSettings;

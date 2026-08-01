@@ -25,6 +25,7 @@
 - [Liquid Glass 效果](#liquid-glass-效果)
 - [环形菜单与按钮动作](#环形菜单与按钮动作)
 - [设置与交互](#设置与交互)
+- [素材文件保护](#素材文件保护)
 - [WCGlass 共存与兼容](#wcglass-共存与兼容)
 - [诊断与隐私](#诊断与隐私)
 - [实现边界](#实现边界)
@@ -98,6 +99,7 @@ WCLiquidGlass 的目标不是给微信覆盖一层统一模糊，而是让每个
 - 悬浮入口支持拖动，松手后自动贴靠左侧或右侧边缘；空闲时半隐藏。
 - 支持点按展开，也支持长按后滑动选择动作、松手确认。
 - 可选 53 / 60 / 66pt 按钮尺寸，以及双月牙、S 曲线、宽扇形、花瓣簇四种紧凑布局。
+- 开启系统“减少动态效果”后，展开、收起、吸边和选择会直接落到最终状态，不再播放位移与弹簧动画。
 - 在“按钮与动作”页进入编辑模式即可新增、删除、排序或恢复默认动作。
 
 ### 插件设置页
@@ -107,7 +109,15 @@ WCLiquidGlass 的目标不是给微信覆盖一层统一模糊，而是让每个
 - 环形菜单开关、按钮尺寸、紧凑布局和 Liquid Glass 材质。
 - 聊天时间条液态、长按菜单液态、首页圆角与液态卡片。
 - 16 个动作以内的按钮管理与顺序调整。
-- WCGlass iOS 27 兼容修复、基础异常日志与可选完整原生崩溃采集。
+- 默认开启的素材文件保护、WCGlass iOS 27 兼容修复、基础异常日志与可选完整原生崩溃采集。
+
+## 素材文件保护
+
+微信会周期性扫描沙盒并清理未知文件。WCLiquidGlass 默认开启“素材文件保护”，完整沿用 ThemePro 已验证的处理方式：关闭微信磁盘扫描器的未知文件删除、删除上报与空文件夹清理，并拦截其规则覆盖的素材路径删除和移动操作。
+
+- 同时覆盖微信主进程与 `com.tencent.xin.sharetimeline`。
+- 开关关闭后立即恢复微信原有文件处理，不需要重启。
+- 保护规则只针对 ThemePro 原有的匹配路径，不会把微信沙盒内的所有文件操作一律拦截。
 
 ## WCGlass 共存与兼容
 
@@ -145,12 +155,13 @@ WCLiquidGlass 可以独立使用；安装 WCGlass 后，以下能力会自动在
 - [设置页 Liquid Glass UI](docs/solutions/design-patterns/liquid-glass-settings-ui.md)
 - [WCGlass iOS 27 返回兼容修复](docs/solutions/integration-issues/wcglass-ios-27-stale-section-return-crash.md)
 - [WCGlass 底栏搜索框切换黑屏修复](docs/solutions/integration-issues/wcglass-search-tab-bar-cold-start-black-screen.md)
+- [ThemePro 等价素材文件保护](docs/solutions/integration-issues/themepro-material-file-protection.md)
 
 ## 构建
 
 ```sh
 export THEOS="$HOME/theos"
-make clean package FINALPACKAGE=1
+WCLIQUIDGLASS_SKIP_UPLOAD=1 make clean package FINALPACKAGE=1
 ```
 
-项目输出 rootless `iphoneos-arm64` `.deb` 包。发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。
+普通构建默认沿用 `control` 中的版本号，不会自动改写版本文件；如需显式生成下一补丁版本，可额外传入 `WCLIQUIDGLASS_AUTO_BUMP=1`。项目输出 rootless `iphoneos-arm64` `.deb` 包，发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。

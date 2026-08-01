@@ -1,7 +1,7 @@
 ARCHS = arm64
 TARGET = iphone:clang:latest:16.0
 THEOS_PACKAGE_SCHEME = rootless
-WCLIQUIDGLASS_AUTO_BUMP ?= 1
+WCLIQUIDGLASS_AUTO_BUMP ?= 0
 
 ifeq ($(WCLIQUIDGLASS_AUTO_BUMP),1)
 ifeq ($(strip $(WCLIQUIDGLASS_BUILT_VERSION)),)
@@ -24,7 +24,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = WCLiquidGlass
 
 WCLiquidGlass_FILES = Tweak.xm WCLiquidGlassMenu.m WCLiquidGlassPreferences.m WCLiquidGlassCrashLogger.m WCLiquidGlassChatTime.m WCLiquidGlassHomeCorners.m WCLiquidGlassMaterialFileProtection.m WCLiquidGlassWCGlassLongPress.m WCLiquidGlassWCGlassSearchTabBar.m WCLiquidGlass.m WCLiquidGlassIconAssets.c
-WCLiquidGlass_CFLAGS = -fobjc-arc -DWCLIQUIDGLASS_VERSION=\"$(WCLIQUIDGLASS_VERSION)\" -DPLCRASHREPORTER_PREFIX=WCLG_ -I$(THEOS_PROJECT_DIR)/Vendor/PLCrashReporter/Headers
+WCLiquidGlass_CFLAGS = -fobjc-arc -Wall -Wextra -DWCLIQUIDGLASS_VERSION=\"$(WCLIQUIDGLASS_VERSION)\" -DPLCRASHREPORTER_PREFIX=WCLG_ -I$(THEOS_PROJECT_DIR)/Vendor/PLCrashReporter/Headers
 WCLiquidGlass_FRAMEWORKS = Foundation UIKit QuartzCore
 WCLiquidGlass_LDFLAGS = $(THEOS_PROJECT_DIR)/Vendor/PLCrashReporter/CrashReporter
 

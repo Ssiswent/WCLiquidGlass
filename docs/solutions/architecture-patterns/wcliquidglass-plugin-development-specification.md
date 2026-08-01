@@ -1,7 +1,7 @@
 ---
 title: WCLiquidGlass 插件架构与微信插件开发规范
 date: 2026-07-19
-last_updated: 2026-07-20
+last_updated: 2026-08-01
 category: architecture-patterns
 module: WCLiquidGlass
 problem_type: architecture_pattern
@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 1.4.16（2026-07-19）  
+> 当前基线：WCLiquidGlass 1.8.1（2026-08-01）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -68,7 +68,7 @@ flowchart TD
     L --> G
 ```
 
-架构按职责拆成四个源码单元：
+架构按职责拆成以下核心源码单元：
 
 | 文件 | 唯一职责 | 不应放入的内容 |
 | --- | --- | --- |
@@ -76,20 +76,26 @@ flowchart TD
 | [`WCLiquidGlassPreferences.m`](../../../WCLiquidGlassPreferences.m) | 动作元数据、默认配置、数据校验、迁移、持久化、变更通知 | 当前页面判断、视图布局 |
 | [`WCLiquidGlassMenu.m`](../../../WCLiquidGlassMenu.m) | 图标解析、页面能力判断、动作执行、overlay、环形菜单和手势 | 设置页表格和编辑器 |
 | [`WCLiquidGlass.m`](../../../WCLiquidGlass.m) | 主设置页、按钮编辑器、动作选择器、设置页视觉系统 | 全局窗口、进程入口 |
+| [`WCLiquidGlassChatTime.m`](../../../WCLiquidGlassChatTime.m) | 聊天时间条的玻璃材质与布局兼容 | 环形菜单动作路由 |
+| [`WCLiquidGlassHomeCorners.m`](../../../WCLiquidGlassHomeCorners.m) | 主页、发现、通讯录与我的连续 section / 独立卡片效果 | 全局导航栏外观 |
+| [`WCLiquidGlassWCGlassLongPress.m`](../../../WCLiquidGlassWCGlassLongPress.m) | WCGlass 长按消息菜单呈现层兼容 | 微信菜单业务和按钮内容 |
+| [`WCLiquidGlassWCGlassSearchTabBar.m`](../../../WCLiquidGlassWCGlassSearchTabBar.m) | WCGlass 底栏搜索框模式的安全 Tab 切换 | 普通页面导航业务 |
+| [`WCLiquidGlassMaterialFileProtection.m`](../../../WCLiquidGlassMaterialFileProtection.m) | ThemePro 等价的扫描配置与素材路径保护 | UI、素材目录重写或额外白名单 |
+| [`WCLiquidGlassCrashLogger.m`](../../../WCLiquidGlassCrashLogger.m) | 基础异常记录、可选完整崩溃采集与诊断文件管理 | 页面功能逻辑 |
 
 工程级文件：
 
 | 文件 | 契约 |
 | --- | --- |
-| [`Makefile`](../../../Makefile) | `arm64`、iOS 16 SDK 目标、rootless、ARC、四个源码单元和所需系统 framework |
-| [`control`](../../../control) | 包名、插件名、版本、架构和依赖；当前版本为 `1.4.16` |
-| [`WCLiquidGlass.plist`](../../../WCLiquidGlass.plist) | 只注入 `com.tencent.xin` / `WeChat` |
+| [`Makefile`](../../../Makefile) | `arm64`、iOS 16 SDK 目标、rootless、ARC、全部源码单元和所需系统 framework；普通构建不自动改写版本 |
+| [`control`](../../../control) | 包名、插件名、版本、架构和依赖；当前稳定版本为 `1.8.1` |
+| [`WCLiquidGlass.plist`](../../../WCLiquidGlass.plist) | 注入 `com.tencent.xin` 与 `com.tencent.xin.sharetimeline`；后者仅启用素材文件保护 |
 
 ### 3. 启动、注册和刷新生命周期
 
 #### 3.1 注入入口
 
-`%ctor` 必须先验证主 bundle identifier 为 `com.tencent.xin`，再在主线程执行以下两项工作：
+`%ctor` 必须先验证 bundle identifier 为 `com.tencent.xin` 或 `com.tencent.xin.sharetimeline`，注册偏好并安装素材保护 Hook。分享时间线进程随后立即返回；只有微信主进程在主线程执行以下两项工作：
 
 1. 启动 `WCLiquidGlassManager`，建立偏好监听和悬浮窗口。
 2. 尝试通过 `WCPluginsMgr.sharedInstance` 注册插件设置入口。
@@ -116,8 +122,11 @@ flowchart TD
 | --- | --- | --- | --- |
 | `Enabled` | Bool | `NO` | 关闭时隐藏插件窗口 |
 | `SizeMode` | Integer | `1` | 限制在 `0...2`，对应 53 / 60 / 66 pt |
+| `CompactLayoutStyle` | Integer | `0` | 限制在四种紧凑布局枚举内 |
+| `GlassAppearance` | Integer | `0` | 清透、均衡、着色三档材质 |
 | `Anchor.OnLeft` | Bool | `NO` | `NO` 表示右侧 |
 | `Anchor.YFraction` | Double | `0.62` | 限制在 `0.1...0.9` |
+| `MaterialFileProtectionEnabled` | Bool | `YES` | 关闭时所有扫描、删除与移动 Hook 原样转发 |
 | `ButtonItems` | Array<Dictionary> | 插件列表、搜索记录 | 过滤无效结构和已移除动作 |
 | `Migration.SearchRecordsAdded` | Bool | `NO` | 控制一次性默认按钮迁移 |
 
@@ -135,7 +144,7 @@ flowchart TD
 - `action` 是稳定动作标识符。
 - `hidden` 是用户配置状态，不是页面能力状态。
 - 新槽位使用 `slot.<UUID>`，不要用数组下标充当永久身份。
-- 编辑器当前最多允许 8 个槽位；若要提高上限，必须同时重新评估弧线布局、命中区域和小屏安全区。
+- 编辑器当前最多允许 16 个槽位；超过普通弧线容量时会使用用户选择的紧凑布局，并根据安全区、键盘和可用空间动态缩小按钮。
 
 #### 4.2 迁移规则
 
@@ -146,7 +155,7 @@ flowchart TD
 - **动作改名：** 读取旧 identifier 时转换成新 identifier；至少保留一个发布周期的兼容映射。
 - **恢复默认：** 同时清理业务键与相关 migration flag，使默认配置能够重新生成。
 
-当前已彻底移除的旧动作包括 `tab.0` 至 `tab.3`、粘贴、搜表情和旧搜索入口。不要在新代码里重新使用这些 identifier 表达别的功能。
+当前已彻底移除的旧动作包括粘贴、搜表情和旧搜索入口（`paste`、`emoji_search`、`search`）。`tab.0` 至 `tab.3` 已作为微信、通讯录、发现、我四个主页 Tab 的稳定 identifier 恢复使用，不得改作其它含义。
 
 ### 5. 动作系统
 
@@ -156,6 +165,13 @@ flowchart TD
 
 | 分组 | identifier | 展示名称 |
 | --- | --- | --- |
+| 页面与设置 | `wcliquidglass_settings` | WCLiquidGlass |
+| 页面与设置 | `wcglass_settings` | WCGlass |
+| 页面与设置 | `page_hierarchy_diagnostics` | 当前页面层级诊断 |
+| 主页导航 | `tab.0` | 微信 |
+| 主页导航 | `tab.1` | 通讯录 |
+| 主页导航 | `tab.2` | 发现 |
+| 主页导航 | `tab.3` | 我 |
 | 导航与入口 | `plugins` | 插件列表 |
 | 导航与入口 | `moments` | 朋友圈 |
 | 导航与入口 | `channels` | 视频号 |
@@ -172,10 +188,10 @@ flowchart TD
 | 聊天与工具 | `translate` | 翻译 |
 | 聊天与工具 | `scan` | 扫一扫 |
 | 聊天与工具 | `payment` | 收付款 |
-| 聊天与工具 | `contact_card` | 个人名片 |
+| 聊天与工具 | `contact_card` | 名片 |
 | 聊天与工具 | `voice_input` | 语音转述 |
-| 聊天与工具 | `newline` | 换行 |
-| 聊天与工具 | `mention` | @联系人 |
+| 聊天与工具 | `new_line` | 换行 |
+| 聊天与工具 | `mention` | 艾特 |
 | 聊天与工具 | `full_input` | 全屏输入 |
 
 动作的 identifier、标题、SF Symbol 兜底名和微信 asset 候选名集中维护。不要在 cell、orb 或执行分支里重复写展示元数据。
@@ -236,7 +252,7 @@ flowchart LR
 
 #### 5.5 故障复盘：区分语音转述写入与手动键盘编辑
 
-这次问题的表象是绿色激活描边与微信真实转述状态不同步。第一次从空输入框启动转述后，键盘手动输入能够正确取消描边；但输入框保留文字并第二次启动转述时，转述刚写入一个字，描边就会被错误取消。该问题已在 WCLiquidGlass 1.4.16 的真机测试中确认解决。
+这次问题的表象是绿色激活描边与微信真实转述状态不同步。第一次从空输入框启动转述后，键盘手动输入能够正确取消描边；但输入框保留文字并第二次启动转述时，转述刚写入一个字，描边就会被错误取消。该问题最初在 WCLiquidGlass 1.4.16 的真机测试中确认解决；当前实现继续保留相同的事件边界。
 
 **关键诊断结论**
 
@@ -597,7 +613,7 @@ gmake clean package FINALPACKAGE=1
 - 当前主要依赖真机验收，没有完整的微信私有环境单元测试替身。
 - overlay 选择一个前台 active scene；若微信未来引入复杂多窗口，需要重新定义 scene 所有权。
 - 动作选择器的分组为显式清单，新增动作必须手动选择分类。
-- 最多 12 个按钮是经过当前普通与紧凑布局验证的产品边界，不是任意常量。
+- 最多 16 个按钮是经过当前普通与紧凑布局验证的产品边界，不是任意常量。
 - 环形菜单不显示文字和消息角标，这是简约视觉和触摸空间的设计决定。
 - 页面不支持的动作会临时隐藏；执行提示仅用于页面瞬时变化或私有 API 失效。
 

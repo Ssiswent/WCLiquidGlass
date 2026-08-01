@@ -3,6 +3,7 @@
 #import <CydiaSubstrate.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <stdatomic.h>
 
 #import "WCLiquidGlassPreferences.h"
 
@@ -21,12 +22,34 @@ static BOOL WCLiquidGlassRemoveItemHookInstalled = NO;
 static BOOL WCLiquidGlassShouldMoveItemHookInstalled = NO;
 static BOOL WCLiquidGlassMaterialFileProtectionRetryScheduled = NO;
 static NSUInteger WCLiquidGlassMaterialFileProtectionInstallAttempts = 0;
+static BOOL WCLiquidGlassMaterialFileProtectionObserverInstalled = NO;
+static atomic_bool WCLiquidGlassMaterialFileProtectionEnabled = ATOMIC_VAR_INIT(true);
 
 // ThemePro bypasses its own resource operations through this state.
 static BOOL WCLiquidGlassMaterialFileWorking = NO;
 
+static void WCLiquidGlassReloadMaterialFileProtectionPreference(void) {
+    atomic_store_explicit(&WCLiquidGlassMaterialFileProtectionEnabled,
+                          WCLiquidGlassPreferences.materialFileProtectionEnabled,
+                          memory_order_relaxed);
+}
+
+static void WCLiquidGlassMaterialFileProtectionPreferenceChanged(
+    __unused CFNotificationCenterRef center,
+    __unused void *observer,
+    __unused CFNotificationName name,
+    __unused const void *object,
+    __unused CFDictionaryRef userInfo) {
+    WCLiquidGlassReloadMaterialFileProtectionPreference();
+}
+
+static BOOL WCLiquidGlassMaterialFileProtectionPreferenceEnabled(void) {
+    return atomic_load_explicit(&WCLiquidGlassMaterialFileProtectionEnabled,
+                                memory_order_relaxed);
+}
+
 static BOOL WCLiquidGlassMaterialFileProtectionIsActive(void) {
-    return WCLiquidGlassPreferences.materialFileProtectionEnabled &&
+    return WCLiquidGlassMaterialFileProtectionPreferenceEnabled() &&
         !WCLiquidGlassMaterialFileWorking;
 }
 
@@ -93,7 +116,7 @@ static void WCLiquidGlassSetDiskUsageBoolean(id config, NSString *selectorName) 
 }
 
 static void WCLiquidGlassDiskUsageScanerStart(id self, SEL selector, id config) {
-    if (WCLiquidGlassPreferences.materialFileProtectionEnabled) {
+    if (WCLiquidGlassMaterialFileProtectionPreferenceEnabled()) {
         WCLiquidGlassSetDiskUsageBoolean(config, @"setM_isDeleteUnknow:");
         WCLiquidGlassSetDiskUsageBoolean(config, @"setM_isReportDelUnknow:");
         WCLiquidGlassSetDiskUsageBoolean(config, @"setIsDeleteEmptyFolder:");
@@ -107,7 +130,7 @@ static void WCLiquidGlassSetDeleteUnknow(id self, SEL selector, BOOL value) {
     if (WCLiquidGlassOriginalSetDeleteUnknow) {
         WCLiquidGlassOriginalSetDeleteUnknow(self,
                                              selector,
-                                             WCLiquidGlassPreferences.materialFileProtectionEnabled ? NO : value);
+                                             WCLiquidGlassMaterialFileProtectionPreferenceEnabled() ? NO : value);
     }
 }
 
@@ -115,7 +138,7 @@ static void WCLiquidGlassSetReportDeleteUnknow(id self, SEL selector, BOOL value
     if (WCLiquidGlassOriginalSetReportDeleteUnknow) {
         WCLiquidGlassOriginalSetReportDeleteUnknow(self,
                                                    selector,
-                                                   WCLiquidGlassPreferences.materialFileProtectionEnabled ? NO : value);
+                                                   WCLiquidGlassMaterialFileProtectionPreferenceEnabled() ? NO : value);
     }
 }
 
@@ -123,7 +146,7 @@ static void WCLiquidGlassSetDeleteEmptyFolder(id self, SEL selector, BOOL value)
     if (WCLiquidGlassOriginalSetDeleteEmptyFolder) {
         WCLiquidGlassOriginalSetDeleteEmptyFolder(self,
                                                   selector,
-                                                  WCLiquidGlassPreferences.materialFileProtectionEnabled ? NO : value);
+                                                  WCLiquidGlassMaterialFileProtectionPreferenceEnabled() ? NO : value);
     }
 }
 
@@ -215,6 +238,17 @@ static void WCLiquidGlassInstallMaterialFileProtectionHooksNow(void) {
 }
 
 void WCLiquidGlassInstallMaterialFileProtectionHooks(void) {
+    if (!WCLiquidGlassMaterialFileProtectionObserverInstalled) {
+        WCLiquidGlassMaterialFileProtectionObserverInstalled = YES;
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            NULL,
+            WCLiquidGlassMaterialFileProtectionPreferenceChanged,
+            (__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionDarwinNotification,
+            NULL,
+            CFNotificationSuspensionBehaviorDeliverImmediately);
+        WCLiquidGlassReloadMaterialFileProtectionPreference();
+    }
     WCLiquidGlassInstallMaterialFileProtectionHooksNow();
     BOOL allHooksInstalled =
         WCLiquidGlassDiskUsageScanerHookInstalled &&

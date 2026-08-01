@@ -458,14 +458,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassTryRegisterPlugin();
         }];
 
         [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             if (WCLiquidGlassPreferences.wcGlassIOS27CompatibilityEnabled) {
                 WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             } else if (WCLiquidGlassWCGlassRowGuardActive ||
@@ -477,14 +477,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillShowNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassKeyboardVisible = YES;
         }];
 
         [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidHideNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassKeyboardVisible = NO;
         }];
 
