@@ -9,6 +9,7 @@
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassMaterialFileProtection.h"
+#import "WCLiquidGlassMessageNotification.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 #import "WCLiquidGlassWCGlassLongPress.h"
@@ -451,6 +452,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             WCLiquidGlassInstallWCGlassSearchTabBarHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();
             WCLiquidGlassInstallHomeCornersHooks();
+            WCLiquidGlassInstallMessageNotificationHooks();
             [WCLiquidGlassManager.sharedManager start];
             WCLiquidGlassTryRegisterPlugin();
         });

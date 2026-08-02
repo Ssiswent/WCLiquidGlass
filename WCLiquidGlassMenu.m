@@ -201,11 +201,10 @@ BOOL WCLiquidGlassShouldReportManualTextEdit(void) {
     return WCLiquidGlassManualTextEditMonitoringEnabled;
 }
 
-static UIVisualEffect *WCLiquidGlassMakeEffect(void) {
+UIVisualEffect *WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearance appearance) {
     Class glassClass = NSClassFromString(@"UIGlassEffect");
     SEL factorySelector = NSSelectorFromString(@"effectWithStyle:");
     if (glassClass != Nil && [glassClass respondsToSelector:factorySelector]) {
-        WCLiquidGlassGlassAppearance appearance = WCLiquidGlassPreferences.glassAppearance;
         UIVisualEffect *effect = ((id (*)(id, SEL, NSInteger))objc_msgSend)(glassClass,
                                                                            factorySelector,
                                                                            appearance == WCLiquidGlassGlassAppearanceClear ? 1 : 0);
@@ -233,6 +232,10 @@ static UIVisualEffect *WCLiquidGlassMakeEffect(void) {
     UIBlurEffectStyle style = dark ? UIBlurEffectStyleSystemThickMaterialDark
                                    : UIBlurEffectStyleSystemChromeMaterialLight;
     return [UIBlurEffect effectWithStyle:style];
+}
+
+static UIVisualEffect *WCLiquidGlassMakeEffect(void) {
+    return WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassPreferences.glassAppearance);
 }
 
 UIVisualEffect *WCLiquidGlassCurrentGlassEffect(void) {

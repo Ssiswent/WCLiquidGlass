@@ -64,6 +64,14 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (void)setChatTimeGlassEnabled:(BOOL)enabled;
 + (BOOL)wcGlassLongPressMenuEnabled;
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled;
++ (BOOL)messageNotificationGlassEnabled;
++ (void)setMessageNotificationGlassEnabled:(BOOL)enabled;
++ (CGFloat)messageNotificationCornerRadius;
++ (void)setMessageNotificationCornerRadius:(CGFloat)radius;
++ (CGFloat)messageNotificationPadding;
++ (void)setMessageNotificationPadding:(CGFloat)padding;
++ (WCLiquidGlassGlassAppearance)messageNotificationGlassAppearance;
++ (void)setMessageNotificationGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (BOOL)homeCornersEnabled;
 + (void)setHomeCornersEnabled:(BOOL)enabled;
 + (CGFloat)homeCornerInset;

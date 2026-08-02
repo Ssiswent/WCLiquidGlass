@@ -1,5 +1,7 @@
 #import <UIKit/UIKit.h>
 
+#import "WCLiquidGlassPreferences.h"
+
 NS_ASSUME_NONNULL_BEGIN
 
 #ifdef __cplusplus
@@ -9,6 +11,7 @@ extern "C" {
 UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonDiameter);
 UIImage *WCLiquidGlassBrandIconImage(CGFloat size, BOOL includesBackground);
 UIVisualEffect *WCLiquidGlassCurrentGlassEffect(void);
+UIVisualEffect *WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearance appearance);
 UIVisualEffect * _Nullable WCLiquidGlassCurrentGlassContainerEffect(void);
 typedef NS_ENUM(NSInteger, WCLiquidGlassSettingsIconKind) {
     WCLiquidGlassSettingsIconKindBrand,
