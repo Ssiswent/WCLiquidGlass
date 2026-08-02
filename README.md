@@ -153,6 +153,8 @@ WCLiquidGlass 可以独立使用；安装 WCGlass 后，以下能力会自动在
 - [主页与通讯录液态玻璃 section](docs/solutions/architecture-patterns/home-and-contacts-liquid-glass-sections.md)
 - [页面感知动作筛选](docs/solutions/design-patterns/page-aware-action-filtering.md)
 - [设置页 Liquid Glass UI](docs/solutions/design-patterns/liquid-glass-settings-ui.md)
+- [WCGlass 上游版本演进与可复用设计学习](docs/solutions/architecture-patterns/wcglass-upstream-evolution-learning.md)
+- [WCGlass 3.0.1 主页加号菜单与 iOS 27 返回修复分析](docs/solutions/integration-issues/wcglass-3.0.1-home-plus-menu-and-ios27-return.md)
 - [WCGlass iOS 27 返回兼容修复](docs/solutions/integration-issues/wcglass-ios-27-stale-section-return-crash.md)
 - [WCGlass 底栏搜索框切换黑屏修复](docs/solutions/integration-issues/wcglass-search-tab-bar-cold-start-black-screen.md)
 - [ThemePro 等价素材文件保护](docs/solutions/integration-issues/themepro-material-file-protection.md)
