@@ -23,7 +23,9 @@ awk -v version="$version" '
     }
     END {
         if (!found) {
-            exit 67
+            printf "## WCLiquidGlass %s\n\n", version
+            print "- 自动构建包：未找到对应 CHANGELOG 条目。"
+            print "- 详细改动请参阅仓库提交记录。"
         }
     }
 ' "$changelog_file"

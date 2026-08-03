@@ -163,10 +163,18 @@ WCLiquidGlass 可以独立使用；安装 WCGlass 后，以下能力会自动在
 
 ```sh
 export THEOS="$HOME/theos"
-WCLIQUIDGLASS_SKIP_UPLOAD=1 make clean package FINALPACKAGE=1
+make clean package FINALPACKAGE=1
 ```
 
-普通构建默认沿用 `control` 中的版本号，不会自动改写版本文件；如需显式生成下一补丁版本，可额外传入 `WCLIQUIDGLASS_AUTO_BUMP=1`。项目输出 rootless `iphoneos-arm64` `.deb` 包，发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。
+普通构建默认沿用 `control` 中的版本号，不会自动改写版本文件，也不会上传任何包；它只用于中间验证。需要安装到手机的最终构建使用：
+
+```sh
+scripts/build-device-package.sh
+```
+
+该命令只在构建成功后分发一次：本地 HTTP 服务可访问时上传至 `/Plugins/`；服务不可访问时，自动为已提交并推送到 `origin/main` 的最终源码创建对应版本 tag，并发布到 GitHub Release。HTTP 分发会先校验同名文件的 SHA-256，相同文件跳过，不同文件拒绝上传，必须先升级 `control` 的版本号，避免产生 `(1)` 重复包或同版本不同二进制。GitHub Release 资产使用覆盖上传，因此同一 tag 始终只保留一个同名 `.deb`。
+
+如需显式生成下一补丁版本，可额外传入 `WCLIQUIDGLASS_AUTO_BUMP=1`。项目输出 rootless `iphoneos-arm64` `.deb` 包，发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。
 
 ### 版本与 Tag
 

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 发布流程
+
+- 普通编译不再自动分发；仅通过 `scripts/build-device-package.sh` 或 `WCLIQUIDGLASS_DISTRIBUTE=1` 生成的可安装构建才会分发到手机。
+- 分发优先使用可访问的本地 HTTP 服务；服务不可访问时，自动发布到与 `control` 版本和 Git tag 严格对应的 GitHub Release。
+- 本地 HTTP 分发先下载并校验同名包的 SHA-256：相同包直接跳过，不同包拒绝上传并要求先升级版本，避免生成 `(1)` 重复包或同版本不同二进制。
+- GitHub Release 缺少对应更新日志时使用可读的自动说明，避免发布步骤仅因 CHANGELOG 条目遗漏而失败。
+
 ### 发布
 
 - 统一 Debian 包版本、Git tag 与 GitHub Release 状态的推导规则：正式版使用 `MAJOR.MINOR.PATCH` 与 `vMAJOR.MINOR.PATCH`，预发布使用 `MAJOR.MINOR.PATCH~PRERELEASE` 与 `vMAJOR.MINOR.PATCH-PRERELEASE`；预发布自动标记为 GitHub Pre-release。
