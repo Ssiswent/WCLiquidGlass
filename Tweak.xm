@@ -390,6 +390,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassInstallChatBottomMenuHooks();
+    WCLiquidGlassRefreshChatBottomMenuHierarchy((UIView *)self);
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
 }
 

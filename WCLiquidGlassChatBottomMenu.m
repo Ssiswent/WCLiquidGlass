@@ -19,8 +19,10 @@
 static const void *WCLiquidGlassChatBottomMenuStateKey = &WCLiquidGlassChatBottomMenuStateKey;
 static void (*WCLiquidGlassOriginalInputToolContainerLayoutSubviews)(UIView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalSelectAttachmentLayoutSubviews)(UIView *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalInputToolViewBarLayoutSubviews)(UIView *, SEL) = NULL;
 static BOOL WCLiquidGlassInputToolContainerHookInstalled = NO;
 static BOOL WCLiquidGlassSelectAttachmentHookInstalled = NO;
+static BOOL WCLiquidGlassInputToolViewBarHookInstalled = NO;
 static BOOL WCLiquidGlassChatBottomMenuObserverInstalled = NO;
 static BOOL WCLiquidGlassChatBottomMenuHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassChatBottomMenuHookInstallAttempts = 0;
@@ -80,13 +82,16 @@ static BOOL WCLiquidGlassChatBottomMenuClassNameContains(id object, NSString *to
 
 static BOOL WCLiquidGlassChatBottomMenuIsCandidate(UIView *view) {
     return WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolcontainerview") ||
-        WCLiquidGlassChatBottomMenuClassNameContains(view, @"selectattachmentview");
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"selectattachmentview") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolviewbar") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"mminputtoolview");
 }
 
 static BOOL WCLiquidGlassChatBottomMenuBelongsToChat(UIView *view) {
     for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
         if (WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"inputtoolcontainerview") ||
             WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"selectattachmentview") ||
+            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"inputtoolviewbar") ||
             WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"mminputtoolview") ||
             WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"basemsgcontentviewcontroller") ||
             WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"msgcontent") ||
@@ -122,10 +127,63 @@ static BOOL WCLiquidGlassChatBottomMenuHasVisibleSelectDescendant(UIView *view,
     return NO;
 }
 
+static BOOL WCLiquidGlassChatBottomMenuHasVisibleAttachmentDescendant(UIView *view,
+                                                                       NSUInteger depth) {
+    if (!view || depth > 10) {
+        return NO;
+    }
+    for (UIView *subview in view.subviews) {
+        if ((WCLiquidGlassChatBottomMenuClassNameContains(subview, @"inputtoolcontainerview") ||
+             WCLiquidGlassChatBottomMenuClassNameContains(subview, @"selectattachmentview") ||
+             WCLiquidGlassChatBottomMenuClassNameContains(subview, @"inputtoolviewbar")) &&
+            !subview.hidden && subview.alpha > 0.01 && !CGRectIsEmpty(subview.bounds)) {
+            return YES;
+        }
+        if (WCLiquidGlassChatBottomMenuHasVisibleAttachmentDescendant(subview, depth + 1)) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL WCLiquidGlassChatBottomMenuIsLikelyVisibleInputToolPanel(UIView *view) {
+    if (!view || view.hidden || view.alpha <= 0.01 || CGRectIsEmpty(view.bounds)) {
+        return NO;
+    }
+    if (WCLiquidGlassChatBottomMenuHasVisibleAttachmentDescendant(view, 0)) {
+        return YES;
+    }
+    // Some WeChat builds put the attachment buttons directly in MMInputToolView
+    // and do not expose either of the two panel classes above.  The attachment
+    // panel is substantially taller than the normal input toolbar and contains
+    // multiple controls; use that shape only as a fallback host.
+    if (!WCLiquidGlassChatBottomMenuClassNameContains(view, @"mminputtoolview") ||
+        CGRectGetHeight(view.bounds) < 120.0) {
+        return NO;
+    }
+    NSUInteger visibleControls = 0;
+    for (UIView *subview in view.subviews) {
+        if (!subview.hidden && subview.alpha > 0.01 && [subview isKindOfClass:UIControl.class]) {
+            visibleControls += 1;
+        }
+    }
+    return visibleControls >= 2;
+}
+
 static BOOL WCLiquidGlassChatBottomMenuShouldUseHost(UIView *view) {
     if (!WCLiquidGlassChatBottomMenuIsCandidate(view) ||
         !WCLiquidGlassChatBottomMenuBelongsToChat(view)) {
         return NO;
+    }
+    if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"mminputtoolview")) {
+        if (!WCLiquidGlassChatBottomMenuIsLikelyVisibleInputToolPanel(view)) {
+            return NO;
+        }
+        if (WCLiquidGlassChatBottomMenuHasVisibleAttachmentDescendant(view, 0)) {
+            // A nested attachment host will get the single glass layer.  The
+            // outer input toolbar must not receive a second full-size layer.
+            return NO;
+        }
     }
     if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolcontainerview") &&
         WCLiquidGlassChatBottomMenuHasVisibleSelectDescendant(view, 0)) {
@@ -188,6 +246,41 @@ static void WCLiquidGlassChatBottomMenuAppendBackgroundView(NSMutableArray<UIVie
     [views addObject:candidate];
 }
 
+static BOOL WCLiquidGlassChatBottomMenuLooksLikeBackgroundView(UIView *view) {
+    return [view isKindOfClass:UIVisualEffectView.class] ||
+        [view isKindOfClass:UIImageView.class] ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"background") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"effect") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"backdrop") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"material") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"visual") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolviewbar");
+}
+
+static void WCLiquidGlassChatBottomMenuCollectCoveringViews(UIView *container,
+                                                             UIView *host,
+                                                             UIView *glassView,
+                                                             NSUInteger depth,
+                                                             NSMutableArray<UIView *> *views) {
+    if (!container || depth > 8) {
+        return;
+    }
+    for (UIView *subview in container.subviews) {
+        if (subview == glassView || subview.hidden || subview.alpha <= 0.01) {
+            continue;
+        }
+        if (WCLiquidGlassChatBottomMenuLooksLikeBackgroundView(subview) &&
+            WCLiquidGlassChatBottomMenuViewCoversHost(subview, host)) {
+            WCLiquidGlassChatBottomMenuAppendBackgroundView(views, subview, host);
+        }
+        WCLiquidGlassChatBottomMenuCollectCoveringViews(subview,
+                                                        host,
+                                                        glassView,
+                                                        depth + 1,
+                                                        views);
+    }
+}
+
 static NSArray<UIView *> *WCLiquidGlassChatBottomMenuNativeBackgroundViews(
     UIView *host,
     UIView *glassView) {
@@ -222,18 +315,7 @@ static NSArray<UIView *> *WCLiquidGlassChatBottomMenuNativeBackgroundViews(
         }
     }
 
-    for (UIView *subview in host.subviews) {
-        if (subview == glassView || !WCLiquidGlassChatBottomMenuViewCoversHost(subview, host)) {
-            continue;
-        }
-        BOOL likelyBackground = [subview isKindOfClass:UIVisualEffectView.class] ||
-            [subview isKindOfClass:UIImageView.class] ||
-            WCLiquidGlassChatBottomMenuClassNameContains(subview, @"background") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(subview, @"effect");
-        if (likelyBackground) {
-            [views addObject:subview];
-        }
-    }
+    WCLiquidGlassChatBottomMenuCollectCoveringViews(host, host, glassView, 0, views);
     return views.copy;
 }
 
@@ -370,6 +452,14 @@ static void WCLiquidGlassChatBottomMenuLayoutSelectAttachment(UIView *self, SEL 
     WCLiquidGlassChatBottomMenuUpdate(self);
 }
 
+static void WCLiquidGlassChatBottomMenuLayoutInputToolViewBar(UIView *self, SEL selector) {
+    if (WCLiquidGlassOriginalInputToolViewBarLayoutSubviews) {
+        WCLiquidGlassOriginalInputToolViewBarLayoutSubviews(self, selector);
+    }
+    [WCLiquidGlassVisibleChatBottomMenuViews() addObject:self];
+    WCLiquidGlassChatBottomMenuUpdate(self);
+}
+
 static void WCLiquidGlassRefreshChatBottomMenuViews(void) {
     for (UIView *view in WCLiquidGlassVisibleChatBottomMenuViews().allObjects) {
         if (view.window) {
@@ -394,6 +484,28 @@ static void WCLiquidGlassChatBottomMenuRefreshVisibleHierarchy(UIView *view,
     for (UIView *subview in view.subviews) {
         WCLiquidGlassChatBottomMenuRefreshVisibleHierarchy(subview, depth + 1);
     }
+}
+
+void WCLiquidGlassRefreshChatBottomMenuHierarchy(UIView *rootView) {
+    if (!rootView) {
+        return;
+    }
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            WCLiquidGlassRefreshChatBottomMenuHierarchy(rootView);
+        });
+        return;
+    }
+    if (WCLiquidGlassInputToolContainerHookInstalled &&
+        WCLiquidGlassSelectAttachmentHookInstalled &&
+        WCLiquidGlassInputToolViewBarHookInstalled) {
+        return;
+    }
+    if (CGRectGetHeight(rootView.bounds) < 120.0 &&
+        !WCLiquidGlassChatBottomMenuHasVisibleAttachmentDescendant(rootView, 0)) {
+        return;
+    }
+    WCLiquidGlassChatBottomMenuRefreshVisibleHierarchy(rootView, 0);
 }
 
 static void WCLiquidGlassRefreshVisibleChatBottomMenuViews(void) {
@@ -453,8 +565,24 @@ void WCLiquidGlassInstallChatBottomMenuHooks(void) {
         }
     }
 
+    Class inputToolViewBarClass = NSClassFromString(@"InputToolViewBar");
+    if (!WCLiquidGlassInputToolViewBarHookInstalled && inputToolViewBarClass) {
+        Method layoutMethod = class_getInstanceMethod(inputToolViewBarClass,
+                                                       @selector(layoutSubviews));
+        if (layoutMethod) {
+            MSHookMessageEx(inputToolViewBarClass,
+                            @selector(layoutSubviews),
+                            (IMP)&WCLiquidGlassChatBottomMenuLayoutInputToolViewBar,
+                            (IMP *)&WCLiquidGlassOriginalInputToolViewBarLayoutSubviews);
+            WCLiquidGlassInputToolViewBarHookInstalled =
+                WCLiquidGlassOriginalInputToolViewBarLayoutSubviews != NULL;
+            didInstallHook = WCLiquidGlassInputToolViewBarHookInstalled || didInstallHook;
+        }
+    }
+
     if (!WCLiquidGlassInputToolContainerHookInstalled &&
-        !WCLiquidGlassSelectAttachmentHookInstalled) {
+        !WCLiquidGlassSelectAttachmentHookInstalled &&
+        !WCLiquidGlassInputToolViewBarHookInstalled) {
         WCLiquidGlassScheduleChatBottomMenuHookRetry();
         return;
     }
