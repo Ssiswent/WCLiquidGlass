@@ -6,6 +6,7 @@
 
 #import "WCLiquidGlass.h"
 #import "WCLiquidGlassChatTime.h"
+#import "WCLiquidGlassChatBottomMenu.h"
 #import "WCLiquidGlassContactsIndex.h"
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassHomeCorners.h"
@@ -388,6 +389,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 - (void)layoutSubviews {
     %orig;
+    WCLiquidGlassInstallChatBottomMenuHooks();
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
 }
 
@@ -452,6 +454,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallWCGlassSearchTabBarHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();
+            WCLiquidGlassInstallChatBottomMenuHooks();
             WCLiquidGlassInstallHomeCornersHooks();
             WCLiquidGlassInstallContactsIndexHooks();
             WCLiquidGlassInstallMessageNotificationHooks();

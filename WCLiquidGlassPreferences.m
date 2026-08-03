@@ -38,6 +38,7 @@ static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
 static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
+static NSString *const WCLiquidGlassChatBottomMenuGlassEnabledKey = @"WCLiquidGlass.ChatBottomMenuGlassEnabled";
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
 static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
@@ -228,6 +229,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
         WCLiquidGlassChatTimeGlassEnabledKey: @YES,
+        WCLiquidGlassChatBottomMenuGlassEnabledKey: @YES,
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
         WCLiquidGlassMessageNotificationGlassEnabledKey: @YES,
@@ -309,6 +311,15 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setChatTimeGlassEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatTimeGlassEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)chatBottomMenuGlassEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassChatBottomMenuGlassEnabledKey];
+}
+
++ (void)setChatBottomMenuGlassEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatBottomMenuGlassEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -531,6 +542,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassHomeCardGapKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassChatTimeGlassEnabledKey];
+    [defaults removeObjectForKey:WCLiquidGlassChatBottomMenuGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassContactsIndexGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassWCGlassLongPressMenuEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
