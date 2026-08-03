@@ -34,6 +34,8 @@ static NSUInteger WCLiquidGlassChatBottomMenuHookInstallAttempts = 0;
 static CFTimeInterval WCLiquidGlassChatBottomMenuLastRescanTime = 0.0;
 static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
 
+static const NSInteger WCLiquidGlassChatBottomMenuMaterialTag = 0x22b9;
+
 @interface WCLiquidGlassChatBottomMenuBackgroundState : NSObject
 
 @property(nonatomic, weak) UIView *view;
@@ -57,7 +59,7 @@ static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
 @interface WCLiquidGlassChatBottomMenuState : NSObject
 
 @property(nonatomic, strong) UIVisualEffectView *glassView;
-@property(nonatomic, strong, nullable) UIView *fallbackBackgroundView;
+@property(nonatomic, strong, nullable) UIView *materialSlotView;
 @property(nonatomic, strong) NSMutableArray<WCLiquidGlassChatBottomMenuBackgroundState *> *nativeBackgrounds;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, assign) BOOL capturedOriginalBackgroundColor;
@@ -65,6 +67,7 @@ static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
 @property(nonatomic, assign) BOOL createdEffectPresent;
 @property(nonatomic, assign) BOOL effectRecoveryAttempted;
 @property(nonatomic, assign) BOOL backgroundPrepared;
+@property(nonatomic, assign) NSInteger materialColorState;
 @property(nonatomic, assign) NSUInteger lastNativeSubviewCount;
 @property(nonatomic, assign) CGRect lastViewBounds;
 @property(nonatomic, weak) UIView *lastRenderHost;
@@ -124,6 +127,7 @@ static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
     if (self) {
         _nativeBackgrounds = [NSMutableArray array];
         _effectState = NSIntegerMin;
+        _materialColorState = NSIntegerMin;
     }
     return self;
 }
@@ -131,39 +135,32 @@ static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
 @end
 
 /*
- * Keep a deliberately visible, ordinary color layer inside the replacement
- * view while we verify the attachment panel's rendering path.  It is not a
- * second interaction surface: it sits behind the native controls and never
- * receives touches.  A neutral high-contrast tint makes a missing backdrop
- * distinguishable from a material that is merely too subtle on a wallpaper.
+ * The attachment-material tweak does not put its image in a visual effect's
+ * contentView.  It creates a normal direct child in the panel's native
+ * background slot, then leaves the native controls above it.  Keep the same
+ * shape here so WCGlass cannot cover the only visible surface with its own
+ * panel cleanup.
  */
-static UIColor *WCLiquidGlassChatBottomMenuFallbackColor(UIView *view) {
+@interface WCLiquidGlassChatBottomMenuMaterialSlotView : UIImageView
+@end
+
+@implementation WCLiquidGlassChatBottomMenuMaterialSlotView
+@end
+
+static UIColor *WCLiquidGlassChatBottomMenuMaterialColor(UIView *view) {
     return view.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
-        ? [UIColor colorWithWhite:0.92 alpha:0.22]
-        : [UIColor colorWithWhite:0.20 alpha:0.30];
+        ? [UIColor colorWithWhite:0.16 alpha:0.72]
+        : [UIColor colorWithWhite:0.96 alpha:0.72];
 }
 
-static void WCLiquidGlassChatBottomMenuEnsureFallbackBackground(
-    WCLiquidGlassChatBottomMenuState *state,
-    UIView *view) {
-    if (!state.glassView || !view) {
-        return;
-    }
-    UIView *contentView = state.glassView.contentView;
-    UIView *fallback = state.fallbackBackgroundView;
-    if (!fallback || fallback.superview != contentView) {
-        [fallback removeFromSuperview];
-        fallback = [[UIView alloc] initWithFrame:contentView.bounds];
-        fallback.userInteractionEnabled = NO;
-        fallback.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        fallback.clipsToBounds = YES;
-        fallback.layer.cornerCurve = kCACornerCurveContinuous;
-        [contentView insertSubview:fallback atIndex:0];
-        state.fallbackBackgroundView = fallback;
-    }
-    fallback.frame = contentView.bounds;
-    fallback.layer.cornerRadius = state.glassView.layer.cornerRadius;
-    fallback.backgroundColor = WCLiquidGlassChatBottomMenuFallbackColor(view);
+static UIImage *WCLiquidGlassChatBottomMenuMaterialImage(UIView *view) {
+    UIColor *color = WCLiquidGlassChatBottomMenuMaterialColor(view);
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(1.0, 1.0), NO, 0.0);
+    [color setFill];
+    UIRectFill(CGRectMake(0.0, 0.0, 1.0, 1.0));
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
 }
 
 static NSHashTable<UIView *> *WCLiquidGlassVisibleChatBottomMenuViews(void) {
@@ -352,7 +349,9 @@ static BOOL WCLiquidGlassChatBottomMenuViewCoversHost(UIView *candidate, UIView 
 static void WCLiquidGlassChatBottomMenuAppendBackgroundView(NSMutableArray<UIView *> *views,
                                                              UIView *candidate,
                                                              UIView *host) {
-    if (!candidate || candidate == host || !WCLiquidGlassChatBottomMenuViewCoversHost(candidate, host) ||
+    if (!candidate || candidate == host ||
+        [candidate isKindOfClass:WCLiquidGlassChatBottomMenuMaterialSlotView.class] ||
+        !WCLiquidGlassChatBottomMenuViewCoversHost(candidate, host) ||
         [views containsObject:candidate]) {
         return;
     }
@@ -535,14 +534,15 @@ static void WCLiquidGlassChatBottomMenuRestore(UIView *view,
             backgroundView.hidden = backgroundState.hidden;
         }
     }
-    [state.fallbackBackgroundView removeFromSuperview];
-    state.fallbackBackgroundView = nil;
+    [state.materialSlotView removeFromSuperview];
+    state.materialSlotView = nil;
     [state.glassView removeFromSuperview];
     state.capturedOriginalBackgroundColor = NO;
     state.originalBackgroundColor = nil;
     state.effectState = NSIntegerMin;
     state.effectRecoveryAttempted = NO;
     state.backgroundPrepared = NO;
+    state.materialColorState = NSIntegerMin;
     state.lastNativeSubviewCount = 0;
     state.lastViewBounds = CGRectZero;
     state.lastRenderHost = nil;
@@ -555,7 +555,7 @@ static void WCLiquidGlassChatBottomMenuRestore(UIView *view,
 static void WCLiquidGlassChatBottomMenuClearNativeView(
     WCLiquidGlassChatBottomMenuState *state,
     UIView *view) {
-    if (!view || view == state.glassView) {
+    if (!view || view == state.glassView || view == state.materialSlotView) {
         return;
     }
     WCLiquidGlassChatBottomMenuStateForBackground(state, view);
@@ -577,43 +577,53 @@ static void WCLiquidGlassChatBottomMenuPlaceGlassView(
     UIView *view,
     UIView *renderHost,
     BOOL useSiblingRenderHost) {
-    if (!state.glassView || !view || !renderHost) {
+    if (!state.glassView || !state.materialSlotView || !view || !renderHost) {
         return;
     }
-    if (state.glassView.superview != renderHost) {
-        [state.glassView removeFromSuperview];
+    if (state.materialSlotView.superview != renderHost) {
+        [state.materialSlotView removeFromSuperview];
         NSUInteger viewIndex = [renderHost.subviews indexOfObject:view];
-        [renderHost insertSubview:state.glassView
+        [renderHost insertSubview:state.materialSlotView
                             atIndex:viewIndex == NSNotFound ? 0 : viewIndex];
     } else if (useSiblingRenderHost) {
-        // Native layout can reorder the panel after it is presented.  Restore
-        // the glass immediately below it without touching any button views.
         NSUInteger viewIndex = [renderHost.subviews indexOfObject:view];
-        NSUInteger glassIndex = [renderHost.subviews indexOfObject:state.glassView];
-        if (viewIndex != NSNotFound && glassIndex != NSNotFound && glassIndex > viewIndex) {
-            [state.glassView removeFromSuperview];
-            [renderHost insertSubview:state.glassView atIndex:viewIndex];
+        NSUInteger slotIndex = [renderHost.subviews indexOfObject:state.materialSlotView];
+        if (viewIndex != NSNotFound && slotIndex != NSNotFound && slotIndex > viewIndex) {
+            [state.materialSlotView removeFromSuperview];
+            [renderHost insertSubview:state.materialSlotView atIndex:viewIndex];
         }
-    } else if (renderHost == view && [renderHost.subviews indexOfObject:state.glassView] != 0) {
-        [state.glassView removeFromSuperview];
-        [renderHost insertSubview:state.glassView atIndex:0];
+    } else if (renderHost == view && [renderHost.subviews indexOfObject:state.materialSlotView] != 0) {
+        [state.materialSlotView removeFromSuperview];
+        [renderHost insertSubview:state.materialSlotView atIndex:0];
     }
-    state.glassView.autoresizingMask = useSiblingRenderHost
+
+    if (state.glassView.superview != state.materialSlotView) {
+        [state.glassView removeFromSuperview];
+        [state.materialSlotView insertSubview:state.glassView atIndex:0];
+    } else if ([state.materialSlotView.subviews indexOfObject:state.glassView] != 0) {
+        [state.glassView removeFromSuperview];
+        [state.materialSlotView insertSubview:state.glassView atIndex:0];
+    }
+    state.materialSlotView.autoresizingMask = useSiblingRenderHost
         ? UIViewAutoresizingNone
         : (UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight);
+    state.glassView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 }
 
 static void WCLiquidGlassChatBottomMenuConfigureGlassFrame(
     UIVisualEffectView *glassView,
+    UIView *materialSlotView,
     UIView *view,
     UIView *renderHost,
     BOOL useSiblingRenderHost) {
-    if (!glassView || !view || !renderHost) {
+    if (!glassView || !materialSlotView || !view || !renderHost) {
         return;
     }
-    glassView.frame = useSiblingRenderHost
+    CGRect slotFrame = useSiblingRenderHost
         ? [view convertRect:view.bounds toView:renderHost]
         : renderHost.bounds;
+    materialSlotView.frame = slotFrame;
+    glassView.frame = materialSlotView.bounds;
     CGFloat height = CGRectGetHeight(view.bounds);
     CGFloat cornerRadius = view.layer.cornerRadius > 0.0
         ? view.layer.cornerRadius
@@ -629,7 +639,82 @@ static void WCLiquidGlassChatBottomMenuConfigureGlassFrame(
         maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
             kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
     }
+    materialSlotView.layer.cornerRadius = cornerRadius;
+    materialSlotView.layer.maskedCorners = maskedCorners;
+    materialSlotView.layer.cornerCurve = kCACornerCurveContinuous;
     glassView.layer.maskedCorners = maskedCorners;
+}
+
+static UIView *WCLiquidGlassChatBottomMenuDirectBackgroundCandidate(UIView *host) {
+    for (UIView *subview in host.subviews) {
+        if ([subview isKindOfClass:WCLiquidGlassChatBottomMenuMaterialSlotView.class] ||
+            [subview isKindOfClass:UIVisualEffectView.class]) {
+            continue;
+        }
+        if ([subview isKindOfClass:UIImageView.class] && !subview.hidden) {
+            return subview;
+        }
+    }
+    return nil;
+}
+
+static UIView *WCLiquidGlassChatBottomMenuEnsureMaterialSlot(
+    WCLiquidGlassChatBottomMenuState *state,
+    UIView *view,
+    UIView *renderHost,
+    BOOL selectAttachment) {
+    if (!state || !view || !renderHost) {
+        return nil;
+    }
+
+    WCLiquidGlassChatBottomMenuMaterialSlotView *slot =
+        [state.materialSlotView isKindOfClass:WCLiquidGlassChatBottomMenuMaterialSlotView.class]
+            ? (WCLiquidGlassChatBottomMenuMaterialSlotView *)state.materialSlotView
+            : nil;
+    if (!slot || slot.superview != renderHost) {
+        [state.materialSlotView removeFromSuperview];
+        slot = nil;
+        for (UIView *subview in renderHost.subviews) {
+            if ([subview isKindOfClass:WCLiquidGlassChatBottomMenuMaterialSlotView.class] &&
+                subview.tag == WCLiquidGlassChatBottomMenuMaterialTag) {
+                slot = (WCLiquidGlassChatBottomMenuMaterialSlotView *)subview;
+                break;
+            }
+        }
+    }
+    if (!slot) {
+        slot = [[WCLiquidGlassChatBottomMenuMaterialSlotView alloc] initWithFrame:renderHost.bounds];
+        slot.tag = WCLiquidGlassChatBottomMenuMaterialTag;
+        slot.userInteractionEnabled = NO;
+        slot.hidden = NO;
+        slot.alpha = 1.0;
+        slot.opaque = NO;
+        slot.clipsToBounds = YES;
+        slot.contentMode = UIViewContentModeScaleToFill;
+        slot.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+
+        if (selectAttachment) {
+            [renderHost insertSubview:slot atIndex:0];
+        } else {
+            UIView *belowView = WCLiquidGlassChatBottomMenuDirectBackgroundCandidate(renderHost);
+            if (belowView) {
+                [renderHost insertSubview:slot belowSubview:belowView];
+            } else {
+                [renderHost insertSubview:slot atIndex:0];
+            }
+        }
+    }
+    state.materialSlotView = slot;
+    slot.frame = renderHost.bounds;
+    slot.backgroundColor = WCLiquidGlassChatBottomMenuMaterialColor(view);
+    NSInteger materialColorState = view.traitCollection.userInterfaceStyle;
+    if (!slot.image || state.materialColorState != materialColorState) {
+        slot.image = WCLiquidGlassChatBottomMenuMaterialImage(view);
+        state.materialColorState = materialColorState;
+    }
+    slot.hidden = NO;
+    slot.alpha = 1.0;
+    return slot;
 }
 
 static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
@@ -688,8 +773,6 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         needsGlassView = YES;
     }
     if (needsGlassView) {
-        [state.fallbackBackgroundView removeFromSuperview];
-        state.fallbackBackgroundView = nil;
         [state.glassView removeFromSuperview];
         UIVisualEffect *effect = WCLiquidGlassCurrentGlassEffect();
         state.glassView = [[WCLiquidGlassChatBottomMenuEffectView alloc] initWithEffect:effect];
@@ -709,14 +792,19 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
     }
 
     // ThemePro inserts its attachment image directly into the panel's native
-    // background slot.  Use the same host and ordering for the glass view.
-    // Supply the material to initWithEffect: above and never call setEffect:
-    // here, because WCGlass clears attachment-panel effects in that setter.
+    // background slot.  Use the same host and ordering for our ordinary slot,
+    // then keep the protected glass view inside that slot.  Supply the
+    // material to initWithEffect: above and never call setEffect: here,
+    // because WCGlass clears attachment-panel effects in that setter.
     BOOL useSiblingRenderHost = NO;
     UIView *renderHost = view;
+    BOOL selectAttachment = WCLiquidGlassChatBottomMenuClassNameContains(view, @"selectattachmentview");
     BOOL hierarchyChanged = !state.backgroundPrepared;
     NSUInteger nativeSubviewCount = view.subviews.count;
     if (state.glassView && [view.subviews containsObject:state.glassView] && nativeSubviewCount > 0) {
+        nativeSubviewCount -= 1;
+    }
+    if (state.materialSlotView && [view.subviews containsObject:state.materialSlotView] && nativeSubviewCount > 0) {
         nativeSubviewCount -= 1;
     }
     if (state.backgroundPrepared && state.lastNativeSubviewCount != nativeSubviewCount) {
@@ -732,7 +820,6 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         WCLiquidGlassChatBottomMenuRestore(view, state);
         return;
     }
-    WCLiquidGlassChatBottomMenuPlaceGlassView(state, view, renderHost, useSiblingRenderHost);
 
     if (hierarchyChanged) {
         WCLiquidGlassChatBottomMenuStateForBackground(state, view);
@@ -757,10 +844,14 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         // layout.  On current WeChat these are the old panel background slots;
         // action icons live inside buttons and are not direct children of the
         // bar.
-        if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"selectattachmentview") ||
+        if (selectAttachment ||
+            WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolcontainerview") ||
             WCLiquidGlassChatBottomMenuClassNameContains(renderHost, @"inputtoolviewbar")) {
             for (UIView *subview in view.subviews.copy) {
-                if (subview == state.glassView || subview.class != UIImageView.class) {
+                BOOL isImageView = selectAttachment
+                    ? [subview isKindOfClass:UIImageView.class]
+                    : subview.class == UIImageView.class;
+                if (subview == state.glassView || subview == state.materialSlotView || !isImageView) {
                     continue;
                 }
                 WCLiquidGlassChatBottomMenuStateForBackground(state, subview);
@@ -772,11 +863,23 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         state.lastNativeSubviewCount = nativeSubviewCount;
     }
 
+    UIView *materialSlotView = WCLiquidGlassChatBottomMenuEnsureMaterialSlot(state,
+                                                                              view,
+                                                                              renderHost,
+                                                                              selectAttachment);
+    if (!materialSlotView) {
+        WCLiquidGlassChatBottomMenuRestore(view, state);
+        return;
+    }
+    WCLiquidGlassChatBottomMenuPlaceGlassView(state, view, renderHost, useSiblingRenderHost);
+
     BOOL geometryChanged = state.lastRenderHost != renderHost ||
         state.lastUseSiblingRenderHost != useSiblingRenderHost ||
-        !CGRectEqualToRect(state.lastViewBounds, view.bounds);
+        !CGRectEqualToRect(state.lastViewBounds, view.bounds) ||
+        !CGRectEqualToRect(materialSlotView.frame, renderHost.bounds);
     if (geometryChanged) {
         WCLiquidGlassChatBottomMenuConfigureGlassFrame(state.glassView,
+                                                       materialSlotView,
                                                        view,
                                                        renderHost,
                                                        useSiblingRenderHost);
@@ -788,19 +891,28 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
     state.glassView.opaque = NO;
     state.glassView.backgroundColor = UIColor.clearColor;
     state.glassView.contentView.backgroundColor = UIColor.clearColor;
-    WCLiquidGlassChatBottomMenuEnsureFallbackBackground(state, view);
+    materialSlotView.hidden = NO;
+    materialSlotView.alpha = 1.0;
     state.glassView.hidden = NO;
     if (!state.diagnosticMaterialRecorded && state.glassView.window) {
         state.diagnosticMaterialRecorded = YES;
         [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
-            @"ChatBottomMenu material host=%@ render=%@ bar=%@ nativeBackgrounds=%lu createdEffect=%@ glassClass=%@ glassSuperview=%@ glassSuperviewClass=%@ glassWindow=%@ glassFrame={x=%.1f y=%.1f w=%.1f h=%.1f} glassEffect=%@ effectClass=%@",
+            @"ChatBottomMenu material host=%@ render=%@ bar=%@ nativeBackgrounds=%lu createdEffect=%@ slotClass=%@ slotTag=%ld slotSuperview=%@ slotWindow=%@ slotFrame={x=%.1f y=%.1f w=%.1f h=%.1f} glassClass=%@ glassSuperview=%@ glassSuperviewClass=%@ glassWindow=%@ glassFrame={x=%.1f y=%.1f w=%.1f h=%.1f} glassEffect=%@ effectClass=%@",
             NSStringFromClass(view.class),
             NSStringFromClass(renderHost.class),
             attachmentBar ? NSStringFromClass(attachmentBar.class) : @"NONE",
             (unsigned long)state.nativeBackgrounds.count,
             state.createdEffectPresent ? @"YES" : @"NO",
+            NSStringFromClass(materialSlotView.class),
+            (long)materialSlotView.tag,
+            materialSlotView.superview == renderHost ? @"YES" : @"NO",
+            materialSlotView.window ? @"YES" : @"NO",
+            CGRectGetMinX(materialSlotView.frame),
+            CGRectGetMinY(materialSlotView.frame),
+            CGRectGetWidth(materialSlotView.bounds),
+            CGRectGetHeight(materialSlotView.bounds),
             NSStringFromClass(state.glassView.class),
-            state.glassView.superview == renderHost ? @"YES" : @"NO",
+            state.glassView.superview == materialSlotView ? @"YES" : @"NO",
             state.glassView.superview ? NSStringFromClass(state.glassView.superview.class) : @"NONE",
             state.glassView.window ? @"YES" : @"NO",
             CGRectGetMinX(state.glassView.frame),

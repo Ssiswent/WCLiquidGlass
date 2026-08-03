@@ -27,7 +27,8 @@
 - 只 Hook `InputToolContainerView` 与 `SelectAttachmentView` 的 `layoutSubviews`。
 - 优先使用可见的 `SelectAttachmentView`，避免外层容器和内层面板叠加两层材质。
 - 仅清除宿主背景以及覆盖整个面板的原生 `backgroundView` / `effectSubview` / 图片背景；按钮和内容子视图不改动。
-- 插入一个不可交互的 `UIVisualEffectView` 到索引 0，效果来自 WCLiquidGlass 的全局“透明 / 平衡 / 色调”设置。
+- 按素材仓的原生槽位方式，插入一个独立 tag 的不可交互 `UIImageView` 到 `SelectAttachmentView` 的索引 0，或插入到 `InputToolContainerView` 原生背景图片的下方；Liquid Glass 作为该背景槽的子层，效果来自 WCLiquidGlass 的全局“透明 / 平衡 / 色调”设置。
+- 背景槽本身保留稳定的材质底色，避免 WCGlass 或系统在附件面板转场期间清理 effect 后出现完全透明的空层。
 - 关闭开关或视图离开窗口时恢复已捕获的原生颜色、图片和 effect。
 - 新增“聊天底部菜单液态”开关，默认开启；与“消息长按菜单液态”互相独立。
 
