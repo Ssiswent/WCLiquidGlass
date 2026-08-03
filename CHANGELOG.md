@@ -9,6 +9,14 @@
 - 本地 HTTP 分发先下载并校验同名包的 SHA-256：相同包直接跳过，不同包拒绝上传并要求先升级版本，避免生成 `(1)` 重复包或同版本不同二进制。
 - GitHub Release 缺少对应更新日志时使用可读的自动说明，避免发布步骤仅因 CHANGELOG 条目遗漏而失败。
 
+## [1.8.27] - 2026-08-03
+
+### 修复
+
+- 完全沿用素材仓附件菜单的原生背景边界：不替换微信附件按钮、文字、布局、点击或关闭行为，只处理原生背景层。
+- 为聊天底部菜单液态材质加入 WCGlass 兼容标记；优先挂载在 `SelectAttachmentView` 的原生背景层，若当前 WCGlass 构建仍清理该层，则自动退回同一面板的兄弟背景层。
+- 在延迟布局和效果被清理后重新应用 Liquid Glass，避免诊断中出现 `glassEffect=NO effectClass=NONE`。
+
 ### 发布
 
 - 统一 Debian 包版本、Git tag 与 GitHub Release 状态的推导规则：正式版使用 `MAJOR.MINOR.PATCH` 与 `vMAJOR.MINOR.PATCH`，预发布使用 `MAJOR.MINOR.PATCH~PRERELEASE` 与 `vMAJOR.MINOR.PATCH-PRERELEASE`；预发布自动标记为 GitHub Pre-release。
