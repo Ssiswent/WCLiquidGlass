@@ -80,6 +80,57 @@ static void WCLiquidGlassContactsIndexRestore(UIView *view,
     state.effectState = NSIntegerMin;
 }
 
+static void WCLiquidGlassContactsIndexCollectLetterFrame(UIView *rootView,
+                                                          UIView *container,
+                                                          UIView *glassView,
+                                                          NSUInteger depth,
+                                                          CGRect *letterFrame) {
+    if (depth > 4) {
+        return;
+    }
+    for (UIView *subview in container.subviews) {
+        if (subview == glassView) {
+            continue;
+        }
+        if ([subview isKindOfClass:UILabel.class] && !subview.hidden && subview.alpha > 0.01) {
+            CGRect frame = [subview convertRect:subview.bounds toView:rootView];
+            if (!CGRectIsEmpty(frame)) {
+                *letterFrame = CGRectIsNull(*letterFrame)
+                    ? frame
+                    : CGRectUnion(*letterFrame, frame);
+            }
+        }
+        WCLiquidGlassContactsIndexCollectLetterFrame(rootView,
+                                                      subview,
+                                                      glassView,
+                                                      depth + 1,
+                                                      letterFrame);
+    }
+}
+
+static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view, UIView *glassView) {
+    CGRect letterFrame = CGRectNull;
+    WCLiquidGlassContactsIndexCollectLetterFrame(view, view, glassView, 0, &letterFrame);
+
+    CGFloat width = CGRectGetWidth(view.bounds);
+    CGFloat height = CGRectGetHeight(view.bounds);
+    if (CGRectIsNull(letterFrame) || CGRectIsEmpty(letterFrame)) {
+        return CGRectIntegral(CGRectMake(4.0,
+                                         20.0,
+                                         MAX(0.0, width - 12.0),
+                                         MAX(0.0, height - 40.0)));
+    }
+
+    CGFloat leading = MAX(0.0, CGRectGetMinX(letterFrame));
+    CGFloat trailing = MIN(MAX(leading, width - 8.0), CGRectGetMaxX(letterFrame) + 4.0);
+    CGFloat top = MAX(0.0, CGRectGetMinY(letterFrame) - 7.0);
+    CGFloat bottom = MIN(height, CGRectGetMaxY(letterFrame) + 7.0);
+    return CGRectIntegral(CGRectMake(leading,
+                                     top,
+                                     MAX(0.0, trailing - leading),
+                                     MAX(0.0, bottom - top)));
+}
+
 static void WCLiquidGlassContactsIndexUpdate(UIView *view) {
     WCLiquidGlassContactsIndexState *state =
         objc_getAssociatedObject(view, WCLiquidGlassContactsIndexStateKey);
@@ -112,7 +163,7 @@ static void WCLiquidGlassContactsIndexUpdate(UIView *view) {
     }
 
     view.backgroundColor = UIColor.clearColor;
-    CGRect frame = CGRectIntegral(view.bounds);
+    CGRect frame = WCLiquidGlassContactsIndexGlassFrame(view, state.glassView);
     if (!CGRectEqualToRect(state.glassView.frame, frame)) {
         state.glassView.frame = frame;
     }
