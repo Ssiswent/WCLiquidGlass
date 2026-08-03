@@ -87,29 +87,6 @@ static BOOL WCLiquidGlassChatBottomMenuIsCandidate(UIView *view) {
         WCLiquidGlassChatBottomMenuClassNameContains(view, @"mminputtoolview");
 }
 
-static BOOL WCLiquidGlassChatBottomMenuBelongsToChat(UIView *view) {
-    for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
-        if (WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"inputtoolcontainerview") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"selectattachmentview") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"inputtoolviewbar") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"mminputtoolview") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"basemsgcontentviewcontroller") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"msgcontent") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"chatroom")) {
-            return YES;
-        }
-    }
-    for (UIResponder *responder = view.nextResponder; responder; responder = responder.nextResponder) {
-        if (WCLiquidGlassChatBottomMenuClassNameContains(responder, @"mminputtoolview") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(responder, @"basemsgcontentviewcontroller") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(responder, @"msgcontent") ||
-            WCLiquidGlassChatBottomMenuClassNameContains(responder, @"chatroom")) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
 static BOOL WCLiquidGlassChatBottomMenuHasVisibleSelectDescendant(UIView *view,
                                                                   NSUInteger depth) {
     if (!view || depth > 8) {
@@ -171,8 +148,7 @@ static BOOL WCLiquidGlassChatBottomMenuIsLikelyVisibleInputToolPanel(UIView *vie
 }
 
 static BOOL WCLiquidGlassChatBottomMenuShouldUseHost(UIView *view) {
-    if (!WCLiquidGlassChatBottomMenuIsCandidate(view) ||
-        !WCLiquidGlassChatBottomMenuBelongsToChat(view)) {
+    if (!WCLiquidGlassChatBottomMenuIsCandidate(view)) {
         return NO;
     }
     if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"mminputtoolview")) {
