@@ -18,18 +18,6 @@
  */
 
 static const void *WCLiquidGlassChatBottomMenuStateKey = &WCLiquidGlassChatBottomMenuStateKey;
-static const void *WCLiquidGlassChatBottomMenuWCGlassExemptionKey(void) {
-    // WCGlass uses the private `fontName` associated-object key as an
-    // opt-out marker for visual-effect views it must not manage.  This is the
-    // same marker its own glass views use internally; setting it to YES keeps
-    // our replacement material out of WCGlass's setEffect: clearing path.
-    static const void *key = NULL;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        key = sel_registerName("fontName");
-    });
-    return key;
-}
 static void (*WCLiquidGlassOriginalInputToolContainerLayoutSubviews)(UIView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalSelectAttachmentLayoutSubviews)(UIView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalInputToolViewBarLayoutSubviews)(UIView *, SEL) = NULL;
@@ -70,7 +58,7 @@ static CFTimeInterval WCLiquidGlassChatBottomMenuLastRescanTime = 0.0;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, assign) BOOL capturedOriginalBackgroundColor;
 @property(nonatomic, assign) NSInteger effectState;
-@property(nonatomic, assign) BOOL usesSiblingRenderHost;
+@property(nonatomic, assign) BOOL createdEffectPresent;
 @property(nonatomic, assign) BOOL diagnosticCandidateRecorded;
 @property(nonatomic, assign) BOOL diagnosticMaterialRecorded;
 
@@ -594,24 +582,26 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         state.capturedOriginalBackgroundColor = YES;
         state.originalBackgroundColor = view.backgroundColor;
     }
-    if (!state.glassView) {
-        state.glassView = [[UIVisualEffectView alloc] initWithEffect:nil];
-        objc_setAssociatedObject(state.glassView,
-                                 WCLiquidGlassChatBottomMenuWCGlassExemptionKey(),
-                                 @YES,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    NSInteger effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
+        view.traitCollection.userInterfaceStyle;
+    if (!state.glassView || state.effectState != effectState || !state.glassView.effect) {
+        [state.glassView removeFromSuperview];
+        UIVisualEffect *effect = WCLiquidGlassCurrentGlassEffect();
+        state.glassView = [[UIVisualEffectView alloc] initWithEffect:effect];
+        state.createdEffectPresent = state.glassView.effect != nil;
+        state.effectState = effectState;
         state.glassView.userInteractionEnabled = NO;
         state.glassView.clipsToBounds = YES;
         state.glassView.layer.cornerCurve = kCACornerCurveContinuous;
         state.glassView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     }
 
-    // ThemePro uses the attachment panel's native background slot.  First use
-    // the same direct panel layer, with WCGlass's own private opt-out marker
-    // applied above.  If a particular WCGlass build still clears the effect,
-    // fall back to the immediate parent as a sibling background layer.
-    BOOL useSiblingRenderHost = state.usesSiblingRenderHost;
-    UIView *renderHost = useSiblingRenderHost ? view.superview : view;
+    // ThemePro inserts its attachment image directly into the panel's native
+    // background slot.  Use the same host and ordering for the glass view.
+    // Supply the material to initWithEffect: above and never call setEffect:
+    // here, because WCGlass clears attachment-panel effects in that setter.
+    BOOL useSiblingRenderHost = NO;
+    UIView *renderHost = view;
     UIView *attachmentBar = WCLiquidGlassChatBottomMenuFindAttachmentBar(view, 0);
     WCLiquidGlassChatBottomMenuStateForBackground(state, view);
     if (!renderHost) {
@@ -658,28 +648,6 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
                                                    renderHost,
                                                    useSiblingRenderHost);
 
-    NSInteger effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
-        renderHost.traitCollection.userInterfaceStyle;
-    if (state.effectState != effectState || !state.glassView.effect) {
-        state.glassView.effect = WCLiquidGlassCurrentGlassEffect();
-        state.effectState = effectState;
-    }
-    if (!state.glassView.effect &&
-        !useSiblingRenderHost &&
-        WCLiquidGlassChatBottomMenuClassNameContains(view, @"selectattachmentview") &&
-        view.superview) {
-        state.usesSiblingRenderHost = YES;
-        useSiblingRenderHost = YES;
-        renderHost = view.superview;
-        WCLiquidGlassChatBottomMenuPlaceGlassView(state, view, renderHost, useSiblingRenderHost);
-        WCLiquidGlassChatBottomMenuConfigureGlassFrame(state.glassView,
-                                                       view,
-                                                       renderHost,
-                                                       useSiblingRenderHost);
-        state.glassView.effect = WCLiquidGlassCurrentGlassEffect();
-        state.effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
-            renderHost.traitCollection.userInterfaceStyle;
-    }
     state.glassView.opaque = NO;
     state.glassView.backgroundColor = UIColor.clearColor;
     state.glassView.contentView.backgroundColor = UIColor.clearColor;
@@ -687,12 +655,12 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
     if (!state.diagnosticMaterialRecorded && state.glassView.window) {
         state.diagnosticMaterialRecorded = YES;
         [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
-            @"ChatBottomMenu material host=%@ render=%@ bar=%@ nativeBackgrounds=%lu sibling=%@ glassSuperview=%@ glassSuperviewClass=%@ glassWindow=%@ glassFrame={x=%.1f y=%.1f w=%.1f h=%.1f} glassEffect=%@ effectClass=%@",
+            @"ChatBottomMenu material host=%@ render=%@ bar=%@ nativeBackgrounds=%lu createdEffect=%@ glassSuperview=%@ glassSuperviewClass=%@ glassWindow=%@ glassFrame={x=%.1f y=%.1f w=%.1f h=%.1f} glassEffect=%@ effectClass=%@",
             NSStringFromClass(view.class),
             NSStringFromClass(renderHost.class),
             attachmentBar ? NSStringFromClass(attachmentBar.class) : @"NONE",
             (unsigned long)state.nativeBackgrounds.count,
-            useSiblingRenderHost ? @"YES" : @"NO",
+            state.createdEffectPresent ? @"YES" : @"NO",
             state.glassView.superview == renderHost ? @"YES" : @"NO",
             state.glassView.superview ? NSStringFromClass(state.glassView.superview.class) : @"NONE",
             state.glassView.window ? @"YES" : @"NO",
