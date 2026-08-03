@@ -37,8 +37,14 @@ static CFTimeInterval WCLiquidGlassChatBottomMenuLastRescanTime = 0.0;
 @property(nonatomic, strong, nullable) UIColor *backgroundColor;
 @property(nonatomic, strong, nullable) UIImage *image;
 @property(nonatomic, strong, nullable) UIVisualEffect *effect;
+@property(nonatomic, strong, nullable) UIColor *layerBackgroundColor;
+@property(nonatomic, assign) BOOL capturesLayerBackgroundColor;
+@property(nonatomic, strong, nullable) UIColor *effectContentBackgroundColor;
+@property(nonatomic, assign) BOOL capturesEffectContentBackgroundColor;
 @property(nonatomic, assign) BOOL capturesImage;
 @property(nonatomic, assign) BOOL capturesEffect;
+@property(nonatomic, assign) BOOL capturesHidden;
+@property(nonatomic, assign) BOOL hidden;
 
 @end
 
@@ -53,6 +59,7 @@ static CFTimeInterval WCLiquidGlassChatBottomMenuLastRescanTime = 0.0;
 @property(nonatomic, assign) BOOL capturedOriginalBackgroundColor;
 @property(nonatomic, assign) NSInteger effectState;
 @property(nonatomic, assign) BOOL diagnosticCandidateRecorded;
+@property(nonatomic, assign) BOOL diagnosticMaterialRecorded;
 
 @end
 
@@ -83,6 +90,35 @@ static BOOL WCLiquidGlassChatBottomMenuClassNameContains(id object, NSString *to
         return NO;
     }
     return [NSStringFromClass([object class]).lowercaseString containsString:token.lowercaseString];
+}
+
+static BOOL WCLiquidGlassChatBottomMenuHasSelectAncestor(UIView *view) {
+    UIView *ancestor = view.superview;
+    while (ancestor) {
+        if (WCLiquidGlassChatBottomMenuClassNameContains(ancestor, @"selectattachmentview")) {
+            return YES;
+        }
+        ancestor = ancestor.superview;
+    }
+    return NO;
+}
+
+static UIView *WCLiquidGlassChatBottomMenuFindAttachmentBar(UIView *view,
+                                                             NSUInteger depth) {
+    if (!view || depth > 10 || view.hidden || view.alpha <= 0.01 ||
+        CGRectIsEmpty(view.bounds)) {
+        return nil;
+    }
+    if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolviewbar")) {
+        return view;
+    }
+    for (UIView *subview in view.subviews) {
+        UIView *bar = WCLiquidGlassChatBottomMenuFindAttachmentBar(subview, depth + 1);
+        if (bar) {
+            return bar;
+        }
+    }
+    return nil;
 }
 
 static BOOL WCLiquidGlassChatBottomMenuIsCandidate(UIView *view) {
@@ -170,6 +206,12 @@ static BOOL WCLiquidGlassChatBottomMenuShouldUseHost(UIView *view) {
             return NO;
         }
     }
+    if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolviewbar") &&
+        WCLiquidGlassChatBottomMenuHasSelectAncestor(view)) {
+        // The enclosing SelectAttachmentView owns the single material layer.
+        // A second bar-sized effect would stack the material and dim buttons.
+        return NO;
+    }
     if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolcontainerview") &&
         WCLiquidGlassChatBottomMenuHasVisibleSelectDescendant(view, 0)) {
         // SelectAttachmentView owns the visible panel when it is present.  A
@@ -242,6 +284,30 @@ static BOOL WCLiquidGlassChatBottomMenuLooksLikeBackgroundView(UIView *view) {
         WCLiquidGlassChatBottomMenuClassNameContains(view, @"inputtoolviewbar");
 }
 
+static BOOL WCLiquidGlassChatBottomMenuHasOpaqueSurface(UIView *view) {
+    if (!view || view.hidden || view.alpha <= 0.01) {
+        return NO;
+    }
+    UIColor *backgroundColor = view.backgroundColor;
+    if (backgroundColor && CGColorGetAlpha(backgroundColor.CGColor) > 0.01) {
+        return YES;
+    }
+    CGColorRef layerColor = view.layer.backgroundColor;
+    return layerColor && CGColorGetAlpha(layerColor) > 0.01;
+}
+
+static BOOL WCLiquidGlassChatBottomMenuLooksLikeGenericContainer(UIView *view) {
+    if (!view || [view isKindOfClass:UIControl.class] ||
+        [view isKindOfClass:UILabel.class] || [view isKindOfClass:UIImageView.class] ||
+        [view isKindOfClass:UIVisualEffectView.class]) {
+        return NO;
+    }
+    NSString *className = NSStringFromClass(view.class).lowercaseString;
+    return ![className containsString:@"button"] &&
+        ![className containsString:@"label"] &&
+        ![className containsString:@"image"];
+}
+
 static void WCLiquidGlassChatBottomMenuCollectCoveringViews(UIView *container,
                                                              UIView *host,
                                                              UIView *glassView,
@@ -254,7 +320,10 @@ static void WCLiquidGlassChatBottomMenuCollectCoveringViews(UIView *container,
         if (subview == glassView || subview.hidden || subview.alpha <= 0.01) {
             continue;
         }
-        if (WCLiquidGlassChatBottomMenuLooksLikeBackgroundView(subview) &&
+        BOOL isKnownBackground = WCLiquidGlassChatBottomMenuLooksLikeBackgroundView(subview);
+        BOOL isOpaqueContainer = WCLiquidGlassChatBottomMenuLooksLikeGenericContainer(subview) &&
+            WCLiquidGlassChatBottomMenuHasOpaqueSurface(subview);
+        if ((isKnownBackground || isOpaqueContainer) &&
             WCLiquidGlassChatBottomMenuViewCoversHost(subview, host)) {
             WCLiquidGlassChatBottomMenuAppendBackgroundView(views, subview, host);
         }
@@ -300,6 +369,17 @@ static NSArray<UIView *> *WCLiquidGlassChatBottomMenuNativeBackgroundViews(
         }
     }
 
+    // Current WeChat builds keep the native attachment surface in private
+    // tagged image views.  ThemePro targets these exact slots rather than
+    // relying only on an ivar or a class name.
+    const NSInteger backgroundTags[] = {0x22b8, 0x270f};
+    for (NSUInteger index = 0; index < sizeof(backgroundTags) / sizeof(backgroundTags[0]); index += 1) {
+        UIView *candidate = [host viewWithTag:backgroundTags[index]];
+        if (candidate != glassView) {
+            WCLiquidGlassChatBottomMenuAppendBackgroundView(views, candidate, host);
+        }
+    }
+
     WCLiquidGlassChatBottomMenuCollectCoveringViews(host, host, glassView, 0, views);
     return views.copy;
 }
@@ -316,6 +396,11 @@ static WCLiquidGlassChatBottomMenuBackgroundState *WCLiquidGlassChatBottomMenuSt
         [[WCLiquidGlassChatBottomMenuBackgroundState alloc] init];
     backgroundState.view = view;
     backgroundState.backgroundColor = view.backgroundColor;
+    CGColorRef layerColor = view.layer.backgroundColor;
+    if (layerColor) {
+        backgroundState.capturesLayerBackgroundColor = YES;
+        backgroundState.layerBackgroundColor = [UIColor colorWithCGColor:layerColor];
+    }
     if ([view isKindOfClass:UIImageView.class]) {
         backgroundState.capturesImage = YES;
         backgroundState.image = ((UIImageView *)view).image;
@@ -323,7 +408,11 @@ static WCLiquidGlassChatBottomMenuBackgroundState *WCLiquidGlassChatBottomMenuSt
     if ([view isKindOfClass:UIVisualEffectView.class]) {
         backgroundState.capturesEffect = YES;
         backgroundState.effect = ((UIVisualEffectView *)view).effect;
+        backgroundState.capturesEffectContentBackgroundColor = YES;
+        backgroundState.effectContentBackgroundColor = ((UIVisualEffectView *)view).contentView.backgroundColor;
     }
+    backgroundState.capturesHidden = YES;
+    backgroundState.hidden = view.hidden;
     [state.nativeBackgrounds addObject:backgroundState];
     return backgroundState;
 }
@@ -342,11 +431,22 @@ static void WCLiquidGlassChatBottomMenuRestore(UIView *view,
             continue;
         }
         backgroundView.backgroundColor = backgroundState.backgroundColor;
+        if (backgroundState.capturesLayerBackgroundColor) {
+            backgroundView.layer.backgroundColor = backgroundState.layerBackgroundColor.CGColor;
+        }
         if (backgroundState.capturesImage && [backgroundView isKindOfClass:UIImageView.class]) {
             ((UIImageView *)backgroundView).image = backgroundState.image;
         }
         if (backgroundState.capturesEffect && [backgroundView isKindOfClass:UIVisualEffectView.class]) {
             ((UIVisualEffectView *)backgroundView).effect = backgroundState.effect;
+        }
+        if (backgroundState.capturesEffectContentBackgroundColor &&
+            [backgroundView isKindOfClass:UIVisualEffectView.class]) {
+            ((UIVisualEffectView *)backgroundView).contentView.backgroundColor =
+                backgroundState.effectContentBackgroundColor;
+        }
+        if (backgroundState.capturesHidden) {
+            backgroundView.hidden = backgroundState.hidden;
         }
     }
     [state.glassView removeFromSuperview];
@@ -354,6 +454,26 @@ static void WCLiquidGlassChatBottomMenuRestore(UIView *view,
     state.originalBackgroundColor = nil;
     state.effectState = NSIntegerMin;
     [state.nativeBackgrounds removeAllObjects];
+}
+
+static void WCLiquidGlassChatBottomMenuClearNativeView(
+    WCLiquidGlassChatBottomMenuState *state,
+    UIView *view) {
+    if (!view || view == state.glassView) {
+        return;
+    }
+    WCLiquidGlassChatBottomMenuStateForBackground(state, view);
+    view.backgroundColor = UIColor.clearColor;
+    if (view.layer.backgroundColor) {
+        view.layer.backgroundColor = UIColor.clearColor.CGColor;
+    }
+    if ([view isKindOfClass:UIImageView.class]) {
+        ((UIImageView *)view).image = nil;
+    }
+    if ([view isKindOfClass:UIVisualEffectView.class]) {
+        ((UIVisualEffectView *)view).effect = nil;
+        ((UIVisualEffectView *)view).contentView.backgroundColor = UIColor.clearColor;
+    }
 }
 
 static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
@@ -408,41 +528,97 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         state.glassView.layer.cornerCurve = kCACornerCurveContinuous;
         state.glassView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     }
-    if (state.glassView.superview != view) {
+
+    // ThemePro inserts its replacement material into the actual
+    // SelectAttachmentView (the same view that owns the transition frame), not
+    // into the nested InputToolViewBar.  Keep that boundary so the native bar
+    // remains the content layer and the glass is rendered behind it.
+    UIView *renderHost = view;
+    UIView *attachmentBar = WCLiquidGlassChatBottomMenuFindAttachmentBar(view, 0);
+    WCLiquidGlassChatBottomMenuStateForBackground(state, view);
+    if (state.glassView.superview != renderHost) {
         [state.glassView removeFromSuperview];
-        [view insertSubview:state.glassView atIndex:0];
+        [renderHost insertSubview:state.glassView atIndex:0];
     }
 
-    view.backgroundColor = UIColor.clearColor;
+    WCLiquidGlassChatBottomMenuClearNativeView(state, view);
+    if (attachmentBar && attachmentBar != view) {
+        // The bar can carry a second opaque surface even though the replacement
+        // view belongs to SelectAttachmentView.  Clear only that surface; its
+        // buttons and their subviews stay untouched.
+        WCLiquidGlassChatBottomMenuClearNativeView(state, attachmentBar);
+    }
     for (UIView *backgroundView in WCLiquidGlassChatBottomMenuNativeBackgroundViews(view,
                                                                                        state.glassView)) {
-        WCLiquidGlassChatBottomMenuStateForBackground(state, backgroundView);
-        backgroundView.backgroundColor = UIColor.clearColor;
-        if ([backgroundView isKindOfClass:UIImageView.class]) {
-            ((UIImageView *)backgroundView).image = nil;
-        }
-        if ([backgroundView isKindOfClass:UIVisualEffectView.class]) {
-            ((UIVisualEffectView *)backgroundView).effect = nil;
+        WCLiquidGlassChatBottomMenuClearNativeView(state, backgroundView);
+    }
+    if (attachmentBar && attachmentBar != view) {
+        for (UIView *backgroundView in WCLiquidGlassChatBottomMenuNativeBackgroundViews(attachmentBar,
+                                                                                         state.glassView)) {
+            WCLiquidGlassChatBottomMenuClearNativeView(state, backgroundView);
         }
     }
 
-    state.glassView.frame = view.bounds;
-    CGFloat height = CGRectGetHeight(view.bounds);
+    // ThemePro hides exact-class UIImageView children after the native layout.
+    // On current WeChat these are the old panel background slots; action icons
+    // live inside buttons and are not direct children of the bar.
+    if (WCLiquidGlassChatBottomMenuClassNameContains(view, @"selectattachmentview") ||
+        WCLiquidGlassChatBottomMenuClassNameContains(renderHost, @"inputtoolviewbar")) {
+        for (UIView *subview in view.subviews.copy) {
+            if (subview == state.glassView || subview.class != UIImageView.class) {
+                continue;
+            }
+            WCLiquidGlassChatBottomMenuStateForBackground(state, subview);
+            subview.hidden = YES;
+            ((UIImageView *)subview).image = nil;
+        }
+    }
+
+    state.glassView.frame = renderHost.bounds;
+    CGFloat height = CGRectGetHeight(renderHost.bounds);
     CGFloat cornerRadius = view.layer.cornerRadius > 0.0
         ? view.layer.cornerRadius
-        : MIN(28.0, MAX(0.0, height * 0.5));
+        : (renderHost.layer.cornerRadius > 0.0
+            ? renderHost.layer.cornerRadius
+            : MIN(28.0, MAX(0.0, height * 0.5)));
     state.glassView.layer.cornerRadius = cornerRadius;
-    state.glassView.layer.maskedCorners = view.layer.maskedCorners ?:
-        (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
-         kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner);
+    CACornerMask maskedCorners = view.layer.maskedCorners;
+    if (maskedCorners == 0) {
+        maskedCorners = renderHost.layer.maskedCorners;
+    }
+    if (maskedCorners == 0) {
+        maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner |
+            kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    }
+    state.glassView.layer.maskedCorners = maskedCorners;
 
     NSInteger effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
-        view.traitCollection.userInterfaceStyle;
+        renderHost.traitCollection.userInterfaceStyle;
     if (state.effectState != effectState) {
         state.glassView.effect = WCLiquidGlassCurrentGlassEffect();
         state.effectState = effectState;
     }
+    state.glassView.opaque = NO;
+    state.glassView.backgroundColor = UIColor.clearColor;
+    state.glassView.contentView.backgroundColor = UIColor.clearColor;
     state.glassView.hidden = NO;
+    if (!state.diagnosticMaterialRecorded && state.glassView.window) {
+        state.diagnosticMaterialRecorded = YES;
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+            @"ChatBottomMenu material host=%@ render=%@ bar=%@ nativeBackgrounds=%lu glassSuperview=%@ glassWindow=%@ glassFrame={x=%.1f y=%.1f w=%.1f h=%.1f} glassEffect=%@ effectClass=%@",
+            NSStringFromClass(view.class),
+            NSStringFromClass(renderHost.class),
+            attachmentBar ? NSStringFromClass(attachmentBar.class) : @"NONE",
+            (unsigned long)state.nativeBackgrounds.count,
+            state.glassView.superview == renderHost ? @"YES" : @"NO",
+            state.glassView.window ? @"YES" : @"NO",
+            CGRectGetMinX(state.glassView.frame),
+            CGRectGetMinY(state.glassView.frame),
+            CGRectGetWidth(state.glassView.bounds),
+            CGRectGetHeight(state.glassView.bounds),
+            state.glassView.effect ? @"YES" : @"NO",
+            state.glassView.effect ? NSStringFromClass(state.glassView.effect.class) : @"NONE"]];
+    }
 }
 
 static void WCLiquidGlassChatBottomMenuLayoutInputToolContainer(UIView *self, SEL selector) {

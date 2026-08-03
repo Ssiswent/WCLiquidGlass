@@ -13,6 +13,15 @@
 
 - 统一 Debian 包版本、Git tag 与 GitHub Release 状态的推导规则：正式版使用 `MAJOR.MINOR.PATCH` 与 `vMAJOR.MINOR.PATCH`，预发布使用 `MAJOR.MINOR.PATCH~PRERELEASE` 与 `vMAJOR.MINOR.PATCH-PRERELEASE`；预发布自动标记为 GitHub Pre-release。
 
+## [1.8.26] - 2026-08-03
+
+### 修复
+
+- 按微信附件菜单真实层级修复“聊天底部菜单液态”：玻璃现在挂在 `SelectAttachmentView` 的原生过渡面板底层，并清理嵌套 `InputToolViewBar` 的覆盖材质。
+- 对齐素材仓的原生背景处理边界，兼容附件面板的私有标签背景槽和精确 `UIImageView` 背景图；不替换微信按钮、文字、布局、点击或关闭行为，也不依赖素材仓插件。
+- 保留并恢复微信原生背景颜色、图层颜色、图片、视觉效果和隐藏状态，关闭开关或面板销毁后不会残留修改。
+- 增加一次性的材质宿主诊断，记录宿主类、玻璃窗口挂载状态、几何和效果类，不记录可见文字或消息内容。
+
 ## [1.8.25] - 2026-08-03
 
 ### 修复
