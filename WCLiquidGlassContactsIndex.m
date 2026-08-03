@@ -19,6 +19,11 @@ static NSUInteger WCLiquidGlassContactsIndexHookInstallAttempts = 0;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, assign) BOOL capturedOriginalBackgroundColor;
 @property(nonatomic, assign) NSInteger effectState;
+@property(nonatomic, assign) CGRect resolvedBounds;
+@property(nonatomic, assign) CGRect resolvedLetterFrame;
+@property(nonatomic, assign) NSUInteger letterFrameResolveAttempts;
+@property(nonatomic, strong) CAShapeLayer *shapeMask;
+@property(nonatomic, assign) CGRect appliedMaskBounds;
 @end
 
 @implementation WCLiquidGlassContactsIndexState
@@ -27,6 +32,9 @@ static NSUInteger WCLiquidGlassContactsIndexHookInstallAttempts = 0;
     self = [super init];
     if (self) {
         _effectState = NSIntegerMin;
+        _resolvedBounds = CGRectNull;
+        _resolvedLetterFrame = CGRectNull;
+        _appliedMaskBounds = CGRectNull;
     }
     return self;
 }
@@ -108,12 +116,29 @@ static void WCLiquidGlassContactsIndexCollectLetterFrame(UIView *rootView,
     }
 }
 
-static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view, UIView *glassView) {
-    CGRect letterFrame = CGRectNull;
-    WCLiquidGlassContactsIndexCollectLetterFrame(view, view, glassView, 0, &letterFrame);
-
+static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view,
+                                                    WCLiquidGlassContactsIndexState *state) {
     CGFloat width = CGRectGetWidth(view.bounds);
     CGFloat height = CGRectGetHeight(view.bounds);
+    if (!CGRectEqualToRect(state.resolvedBounds, view.bounds)) {
+        state.resolvedBounds = view.bounds;
+        state.resolvedLetterFrame = CGRectNull;
+        state.letterFrameResolveAttempts = 0;
+    }
+    if (CGRectIsNull(state.resolvedLetterFrame) &&
+        state.letterFrameResolveAttempts < 8) {
+        CGRect letterFrame = CGRectNull;
+        WCLiquidGlassContactsIndexCollectLetterFrame(view,
+                                                      view,
+                                                      state.glassView,
+                                                      0,
+                                                      &letterFrame);
+        state.letterFrameResolveAttempts += 1;
+        if (!CGRectIsNull(letterFrame) && !CGRectIsEmpty(letterFrame)) {
+            state.resolvedLetterFrame = letterFrame;
+        }
+    }
+    CGRect letterFrame = state.resolvedLetterFrame;
     if (CGRectIsNull(letterFrame) || CGRectIsEmpty(letterFrame)) {
         return CGRectIntegral(CGRectMake(0.0,
                                          20.0,
@@ -129,6 +154,29 @@ static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view, UIView *glassVi
                                      top,
                                      MAX(0.0, trailing - leading),
                                      MAX(0.0, bottom - top)));
+}
+
+static void WCLiquidGlassContactsIndexUpdateShapeMask(WCLiquidGlassContactsIndexState *state) {
+    UIVisualEffectView *glassView = state.glassView;
+    if (!state.shapeMask) {
+        state.shapeMask = [CAShapeLayer layer];
+        glassView.layer.mask = state.shapeMask;
+    }
+    CGRect bounds = glassView.bounds;
+    if (CGRectEqualToRect(state.appliedMaskBounds, bounds)) {
+        return;
+    }
+    CGFloat radius = MIN(20.0,
+                         MIN(CGRectGetWidth(bounds), CGRectGetHeight(bounds)) * 0.5);
+    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:bounds
+                                                byRoundingCorners:UIRectCornerTopLeft | UIRectCornerBottomLeft
+                                                      cornerRadii:CGSizeMake(radius, radius)];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    state.shapeMask.frame = bounds;
+    state.shapeMask.path = path.CGPath;
+    [CATransaction commit];
+    state.appliedMaskBounds = bounds;
 }
 
 static void WCLiquidGlassContactsIndexUpdate(UIView *view) {
@@ -163,18 +211,11 @@ static void WCLiquidGlassContactsIndexUpdate(UIView *view) {
     }
 
     view.backgroundColor = UIColor.clearColor;
-    CGRect frame = WCLiquidGlassContactsIndexGlassFrame(view, state.glassView);
+    CGRect frame = WCLiquidGlassContactsIndexGlassFrame(view, state);
     if (!CGRectEqualToRect(state.glassView.frame, frame)) {
         state.glassView.frame = frame;
     }
-    CGFloat cornerRadius = MIN(20.0, CGRectGetHeight(frame) * 0.5);
-    if (state.glassView.layer.cornerRadius != cornerRadius) {
-        state.glassView.layer.cornerRadius = cornerRadius;
-    }
-    CACornerMask maskedCorners = kCALayerMinXMinYCorner | kCALayerMinXMaxYCorner;
-    if (state.glassView.layer.maskedCorners != maskedCorners) {
-        state.glassView.layer.maskedCorners = maskedCorners;
-    }
+    WCLiquidGlassContactsIndexUpdateShapeMask(state);
 
     NSInteger effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
         view.traitCollection.userInterfaceStyle;

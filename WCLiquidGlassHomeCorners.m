@@ -975,10 +975,8 @@ static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
     }
     CGRect sectionFrame = CGRectUnion(firstSectionFrame, lastSectionFrame);
     if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
-        CGFloat trailingInset = WCLiquidGlassPreferences.contactsIndexGlassEnabled ? 40.0 : 24.0;
         sectionFrame.origin.x = 16.0;
-        sectionFrame.size.width = MAX(0.0,
-                                      CGRectGetWidth(tableView.bounds) - 16.0 - trailingInset);
+        sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - 40.0);
         sectionFrame = CGRectInset(sectionFrame, 0.0, -8.0);
     } else {
         CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
