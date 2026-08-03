@@ -6,6 +6,7 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
+#import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 
@@ -20,9 +21,11 @@ static const void *WCLiquidGlassChatBottomMenuStateKey = &WCLiquidGlassChatBotto
 static void (*WCLiquidGlassOriginalInputToolContainerLayoutSubviews)(UIView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalSelectAttachmentLayoutSubviews)(UIView *, SEL) = NULL;
 static void (*WCLiquidGlassOriginalInputToolViewBarLayoutSubviews)(UIView *, SEL) = NULL;
+static void (*WCLiquidGlassOriginalMMInputToolViewLayoutSubviews)(UIView *, SEL) = NULL;
 static BOOL WCLiquidGlassInputToolContainerHookInstalled = NO;
 static BOOL WCLiquidGlassSelectAttachmentHookInstalled = NO;
 static BOOL WCLiquidGlassInputToolViewBarHookInstalled = NO;
+static BOOL WCLiquidGlassMMInputToolViewHookInstalled = NO;
 static BOOL WCLiquidGlassChatBottomMenuObserverInstalled = NO;
 static BOOL WCLiquidGlassChatBottomMenuHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassChatBottomMenuHookInstallAttempts = 0;
@@ -49,6 +52,7 @@ static CFTimeInterval WCLiquidGlassChatBottomMenuLastRescanTime = 0.0;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, assign) BOOL capturedOriginalBackgroundColor;
 @property(nonatomic, assign) NSInteger effectState;
+@property(nonatomic, assign) BOOL diagnosticCandidateRecorded;
 
 @end
 
@@ -139,13 +143,17 @@ static BOOL WCLiquidGlassChatBottomMenuIsLikelyVisibleInputToolPanel(UIView *vie
         CGRectGetHeight(view.bounds) < 120.0) {
         return NO;
     }
-    NSUInteger visibleControls = 0;
+    // On recent WeChat builds the attachment buttons are nested in private
+    // stack/collection views rather than being direct UIControl children.
+    // Checking only direct controls therefore rejects the real attachment
+    // panel and leaves its native opaque background untouched.
+    NSUInteger visibleSubviews = 0;
     for (UIView *subview in view.subviews) {
-        if (!subview.hidden && subview.alpha > 0.01 && [subview isKindOfClass:UIControl.class]) {
-            visibleControls += 1;
+        if (!subview.hidden && subview.alpha > 0.01 && !CGRectIsEmpty(subview.bounds)) {
+            visibleSubviews += 1;
         }
     }
-    return visibleControls >= 2;
+    return visibleSubviews >= 2;
 }
 
 static BOOL WCLiquidGlassChatBottomMenuShouldUseHost(UIView *view) {
@@ -351,9 +359,33 @@ static void WCLiquidGlassChatBottomMenuRestore(UIView *view,
 static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
     WCLiquidGlassChatBottomMenuState *state =
         objc_getAssociatedObject(view, WCLiquidGlassChatBottomMenuStateKey);
+    BOOL likelyPanel = CGRectGetHeight(view.bounds) >= 96.0 ||
+        WCLiquidGlassChatBottomMenuHasVisibleAttachmentDescendant(view, 0);
+    BOOL shouldUseHost = WCLiquidGlassChatBottomMenuShouldUseHost(view);
+    if (likelyPanel && !state) {
+        state = [[WCLiquidGlassChatBottomMenuState alloc] init];
+        objc_setAssociatedObject(view,
+                                 WCLiquidGlassChatBottomMenuStateKey,
+                                 state,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (likelyPanel && state && !state.diagnosticCandidateRecorded) {
+        state.diagnosticCandidateRecorded = YES;
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+            @"ChatBottomMenu candidate=%@ host=%@ enabled=%@ window=%@ frame={x=%.1f y=%.1f w=%.1f h=%.1f} subviews=%lu",
+            NSStringFromClass(view.class),
+            shouldUseHost ? @"YES" : @"NO",
+            WCLiquidGlassPreferences.chatBottomMenuGlassEnabled ? @"YES" : @"NO",
+            view.window ? @"YES" : @"NO",
+            CGRectGetMinX(view.frame),
+            CGRectGetMinY(view.frame),
+            CGRectGetWidth(view.bounds),
+            CGRectGetHeight(view.bounds),
+            (unsigned long)view.subviews.count]];
+    }
     if (!WCLiquidGlassPreferences.chatBottomMenuGlassEnabled ||
-        !WCLiquidGlassChatBottomMenuShouldUseHost(view) ||
-        !view.window || view.hidden || view.alpha <= 0.01 || CGRectIsEmpty(view.bounds)) {
+        !shouldUseHost ||
+        view.hidden || view.alpha <= 0.01 || CGRectIsEmpty(view.bounds)) {
         WCLiquidGlassChatBottomMenuRestore(view, state);
         return;
     }
@@ -440,15 +472,22 @@ static void WCLiquidGlassChatBottomMenuLayoutInputToolViewBar(UIView *self, SEL 
     WCLiquidGlassScheduleChatBottomMenuRescans(self);
 }
 
+static void WCLiquidGlassChatBottomMenuLayoutMMInputToolView(UIView *self, SEL selector) {
+    if (WCLiquidGlassOriginalMMInputToolViewLayoutSubviews) {
+        WCLiquidGlassOriginalMMInputToolViewLayoutSubviews(self, selector);
+    }
+    [WCLiquidGlassVisibleChatBottomMenuViews() addObject:self];
+    WCLiquidGlassChatBottomMenuUpdate(self);
+    WCLiquidGlassScheduleChatBottomMenuRescans(self);
+}
+
 static void WCLiquidGlassRefreshChatBottomMenuViews(void) {
     for (UIView *view in WCLiquidGlassVisibleChatBottomMenuViews().allObjects) {
-        if (view.window) {
-            WCLiquidGlassChatBottomMenuUpdate(view);
-        } else {
-            WCLiquidGlassChatBottomMenuState *state =
-                objc_getAssociatedObject(view, WCLiquidGlassChatBottomMenuStateKey);
-            WCLiquidGlassChatBottomMenuRestore(view, state);
-        }
+        // A native attachment panel can be laid out before UIKit attaches its
+        // transition window.  Keep the associated glass state through that
+        // phase; the next layout/window callback will move the same view into
+        // the final hierarchy without flashing back to the opaque native layer.
+        WCLiquidGlassChatBottomMenuUpdate(view);
     }
 }
 
@@ -592,9 +631,25 @@ void WCLiquidGlassInstallChatBottomMenuHooks(void) {
         }
     }
 
+    Class inputToolViewClass = NSClassFromString(@"MMInputToolView");
+    if (!WCLiquidGlassMMInputToolViewHookInstalled && inputToolViewClass) {
+        Method layoutMethod = class_getInstanceMethod(inputToolViewClass,
+                                                       @selector(layoutSubviews));
+        if (layoutMethod) {
+            MSHookMessageEx(inputToolViewClass,
+                            @selector(layoutSubviews),
+                            (IMP)&WCLiquidGlassChatBottomMenuLayoutMMInputToolView,
+                            (IMP *)&WCLiquidGlassOriginalMMInputToolViewLayoutSubviews);
+            WCLiquidGlassMMInputToolViewHookInstalled =
+                WCLiquidGlassOriginalMMInputToolViewLayoutSubviews != NULL;
+            didInstallHook = WCLiquidGlassMMInputToolViewHookInstalled || didInstallHook;
+        }
+    }
+
     if (!WCLiquidGlassInputToolContainerHookInstalled ||
         !WCLiquidGlassSelectAttachmentHookInstalled ||
-        !WCLiquidGlassInputToolViewBarHookInstalled) {
+        !WCLiquidGlassInputToolViewBarHookInstalled ||
+        !WCLiquidGlassMMInputToolViewHookInstalled) {
         WCLiquidGlassScheduleChatBottomMenuHookRetry();
     }
     if (!WCLiquidGlassChatBottomMenuObserverInstalled) {

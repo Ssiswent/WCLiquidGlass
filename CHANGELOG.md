@@ -13,6 +13,14 @@
 
 - 统一 Debian 包版本、Git tag 与 GitHub Release 状态的推导规则：正式版使用 `MAJOR.MINOR.PATCH` 与 `vMAJOR.MINOR.PATCH`，预发布使用 `MAJOR.MINOR.PATCH~PRERELEASE` 与 `vMAJOR.MINOR.PATCH-PRERELEASE`；预发布自动标记为 GitHub Pre-release。
 
+## [1.8.25] - 2026-08-03
+
+### 修复
+
+- 修复聊天底部附件菜单在窗口挂载前完成布局时，玻璃背景未能保留到最终过渡窗口的问题。
+- 直接补强 `MMInputToolView` 的布局 Hook，并放宽嵌套按钮面板的识别，兼容微信将附件按钮放入内部容器或集合视图的布局。
+- 保留素材仓移除后的独立运行路径；新增仅记录类名、几何与状态的候选面板诊断事件，便于定位瞬时附件层级，不记录文本或消息内容。
+
 ### 文档
 
 - 记录素材仓附件素材的二进制实现边界，并新增独立的“聊天底部菜单液态”布局 Hook；消息长按菜单设置项更名为“消息长按菜单液态”。
