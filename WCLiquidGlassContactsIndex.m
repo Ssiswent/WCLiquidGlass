@@ -91,9 +91,9 @@ static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view) {
                             MAX(28.0, CGRectGetWidth(view.bounds) + 8.0) * 2.0 - 16.0);
     CGFloat visibleWidth = fullWidth * 0.5;
     return CGRectIntegral(CGRectMake(CGRectGetWidth(view.bounds) - visibleWidth,
-                                     80.0,
+                                     100.0,
                                      fullWidth,
-                                     MAX(0.0, CGRectGetHeight(view.bounds) - 160.0)));
+                                     MAX(0.0, CGRectGetHeight(view.bounds) - 200.0)));
 }
 
 static void WCLiquidGlassContactsIndexUpdate(UIView *view) {
