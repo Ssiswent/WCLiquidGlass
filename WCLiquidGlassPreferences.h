@@ -62,6 +62,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (BOOL)chatTimeGlassEnabled;
 + (void)setChatTimeGlassEnabled:(BOOL)enabled;
++ (BOOL)contactsIndexGlassEnabled;
++ (void)setContactsIndexGlassEnabled:(BOOL)enabled;
 + (BOOL)wcGlassLongPressMenuEnabled;
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled;
 + (BOOL)messageNotificationGlassEnabled;
