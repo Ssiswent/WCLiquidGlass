@@ -57,6 +57,7 @@ static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
 @interface WCLiquidGlassChatBottomMenuState : NSObject
 
 @property(nonatomic, strong) UIVisualEffectView *glassView;
+@property(nonatomic, strong, nullable) UIView *fallbackBackgroundView;
 @property(nonatomic, strong) NSMutableArray<WCLiquidGlassChatBottomMenuBackgroundState *> *nativeBackgrounds;
 @property(nonatomic, strong, nullable) UIColor *originalBackgroundColor;
 @property(nonatomic, assign) BOOL capturedOriginalBackgroundColor;
@@ -128,6 +129,42 @@ static BOOL WCLiquidGlassChatBottomMenuRescanScheduled = NO;
 }
 
 @end
+
+/*
+ * Keep a deliberately visible, ordinary color layer inside the replacement
+ * view while we verify the attachment panel's rendering path.  It is not a
+ * second interaction surface: it sits behind the native controls and never
+ * receives touches.  A neutral high-contrast tint makes a missing backdrop
+ * distinguishable from a material that is merely too subtle on a wallpaper.
+ */
+static UIColor *WCLiquidGlassChatBottomMenuFallbackColor(UIView *view) {
+    return view.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
+        ? [UIColor colorWithWhite:0.92 alpha:0.22]
+        : [UIColor colorWithWhite:0.20 alpha:0.30];
+}
+
+static void WCLiquidGlassChatBottomMenuEnsureFallbackBackground(
+    WCLiquidGlassChatBottomMenuState *state,
+    UIView *view) {
+    if (!state.glassView || !view) {
+        return;
+    }
+    UIView *contentView = state.glassView.contentView;
+    UIView *fallback = state.fallbackBackgroundView;
+    if (!fallback || fallback.superview != contentView) {
+        [fallback removeFromSuperview];
+        fallback = [[UIView alloc] initWithFrame:contentView.bounds];
+        fallback.userInteractionEnabled = NO;
+        fallback.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        fallback.clipsToBounds = YES;
+        fallback.layer.cornerCurve = kCACornerCurveContinuous;
+        [contentView insertSubview:fallback atIndex:0];
+        state.fallbackBackgroundView = fallback;
+    }
+    fallback.frame = contentView.bounds;
+    fallback.layer.cornerRadius = state.glassView.layer.cornerRadius;
+    fallback.backgroundColor = WCLiquidGlassChatBottomMenuFallbackColor(view);
+}
 
 static NSHashTable<UIView *> *WCLiquidGlassVisibleChatBottomMenuViews(void) {
     static NSHashTable<UIView *> *views;
@@ -498,6 +535,8 @@ static void WCLiquidGlassChatBottomMenuRestore(UIView *view,
             backgroundView.hidden = backgroundState.hidden;
         }
     }
+    [state.fallbackBackgroundView removeFromSuperview];
+    state.fallbackBackgroundView = nil;
     [state.glassView removeFromSuperview];
     state.capturedOriginalBackgroundColor = NO;
     state.originalBackgroundColor = nil;
@@ -649,6 +688,8 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
         needsGlassView = YES;
     }
     if (needsGlassView) {
+        [state.fallbackBackgroundView removeFromSuperview];
+        state.fallbackBackgroundView = nil;
         [state.glassView removeFromSuperview];
         UIVisualEffect *effect = WCLiquidGlassCurrentGlassEffect();
         state.glassView = [[WCLiquidGlassChatBottomMenuEffectView alloc] initWithEffect:effect];
@@ -747,6 +788,7 @@ static void WCLiquidGlassChatBottomMenuUpdate(UIView *view) {
     state.glassView.opaque = NO;
     state.glassView.backgroundColor = UIColor.clearColor;
     state.glassView.contentView.backgroundColor = UIColor.clearColor;
+    WCLiquidGlassChatBottomMenuEnsureFallbackBackground(state, view);
     state.glassView.hidden = NO;
     if (!state.diagnosticMaterialRecorded && state.glassView.window) {
         state.diagnosticMaterialRecorded = YES;
