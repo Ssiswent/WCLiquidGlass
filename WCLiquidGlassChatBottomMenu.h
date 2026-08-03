@@ -18,6 +18,11 @@ void WCLiquidGlassInstallChatBottomMenuHooks(void);
 /// stable lifecycle callback available before the panel classes are loaded.
 void WCLiquidGlassRefreshChatBottomMenuHierarchy(UIView *rootView);
 
+/// Schedules a few main-thread rescans for a lazily presented attachment
+/// panel. WeChat may finish the panel layout before attaching its transition
+/// window, so the first layout callback can legitimately have no window yet.
+void WCLiquidGlassScheduleChatBottomMenuRescans(UIView *rootView);
+
 #ifdef __cplusplus
 }
 #endif

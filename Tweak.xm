@@ -391,6 +391,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
     %orig;
     WCLiquidGlassInstallChatBottomMenuHooks();
     WCLiquidGlassRefreshChatBottomMenuHierarchy((UIView *)self);
+    WCLiquidGlassScheduleChatBottomMenuRescans((UIView *)self);
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
 }
 

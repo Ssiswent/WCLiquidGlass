@@ -26,6 +26,7 @@ static BOOL WCLiquidGlassInputToolViewBarHookInstalled = NO;
 static BOOL WCLiquidGlassChatBottomMenuObserverInstalled = NO;
 static BOOL WCLiquidGlassChatBottomMenuHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassChatBottomMenuHookInstallAttempts = 0;
+static CFTimeInterval WCLiquidGlassChatBottomMenuLastRescanTime = 0.0;
 
 @interface WCLiquidGlassChatBottomMenuBackgroundState : NSObject
 
@@ -418,6 +419,7 @@ static void WCLiquidGlassChatBottomMenuLayoutInputToolContainer(UIView *self, SE
     }
     [WCLiquidGlassVisibleChatBottomMenuViews() addObject:self];
     WCLiquidGlassChatBottomMenuUpdate(self);
+    WCLiquidGlassScheduleChatBottomMenuRescans(self);
 }
 
 static void WCLiquidGlassChatBottomMenuLayoutSelectAttachment(UIView *self, SEL selector) {
@@ -426,6 +428,7 @@ static void WCLiquidGlassChatBottomMenuLayoutSelectAttachment(UIView *self, SEL 
     }
     [WCLiquidGlassVisibleChatBottomMenuViews() addObject:self];
     WCLiquidGlassChatBottomMenuUpdate(self);
+    WCLiquidGlassScheduleChatBottomMenuRescans(self);
 }
 
 static void WCLiquidGlassChatBottomMenuLayoutInputToolViewBar(UIView *self, SEL selector) {
@@ -434,6 +437,7 @@ static void WCLiquidGlassChatBottomMenuLayoutInputToolViewBar(UIView *self, SEL 
     }
     [WCLiquidGlassVisibleChatBottomMenuViews() addObject:self];
     WCLiquidGlassChatBottomMenuUpdate(self);
+    WCLiquidGlassScheduleChatBottomMenuRescans(self);
 }
 
 static void WCLiquidGlassRefreshChatBottomMenuViews(void) {
@@ -462,6 +466,8 @@ static void WCLiquidGlassChatBottomMenuRefreshVisibleHierarchy(UIView *view,
     }
 }
 
+static void WCLiquidGlassRefreshVisibleChatBottomMenuViews(void);
+
 void WCLiquidGlassRefreshChatBottomMenuHierarchy(UIView *rootView) {
     if (!rootView) {
         return;
@@ -470,11 +476,6 @@ void WCLiquidGlassRefreshChatBottomMenuHierarchy(UIView *rootView) {
         dispatch_async(dispatch_get_main_queue(), ^{
             WCLiquidGlassRefreshChatBottomMenuHierarchy(rootView);
         });
-        return;
-    }
-    if (WCLiquidGlassInputToolContainerHookInstalled &&
-        WCLiquidGlassSelectAttachmentHookInstalled &&
-        WCLiquidGlassInputToolViewBarHookInstalled) {
         return;
     }
     if (CGRectGetHeight(rootView.bounds) < 120.0 &&
@@ -492,6 +493,41 @@ static void WCLiquidGlassRefreshVisibleChatBottomMenuViews(void) {
         for (UIWindow *window in ((UIWindowScene *)scene).windows) {
             WCLiquidGlassChatBottomMenuRefreshVisibleHierarchy(window, 0);
         }
+    }
+}
+
+void WCLiquidGlassScheduleChatBottomMenuRescans(UIView *rootView) {
+    if (!rootView || ![NSThread isMainThread] || rootView.hidden || rootView.alpha <= 0.01 ||
+        CGRectIsEmpty(rootView.bounds)) {
+        return;
+    }
+    BOOL isSelectAttachmentView =
+        WCLiquidGlassChatBottomMenuClassNameContains(rootView, @"selectattachmentview");
+    BOOL hasVisibleSelectAttachment = WCLiquidGlassChatBottomMenuHasVisibleSelectDescendant(rootView, 0);
+    if (!isSelectAttachmentView && CGRectGetHeight(rootView.bounds) < 120.0 &&
+        !hasVisibleSelectAttachment) {
+        return;
+    }
+
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now - WCLiquidGlassChatBottomMenuLastRescanTime < 0.12) {
+        return;
+    }
+    WCLiquidGlassChatBottomMenuLastRescanTime = now;
+
+    __weak UIView *weakRootView = rootView;
+    const NSTimeInterval delays[] = {0.04, 0.12, 0.28};
+    for (NSUInteger index = 0; index < sizeof(delays) / sizeof(delays[0]); index += 1) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                      (int64_t)(delays[index] * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            UIView *strongRootView = weakRootView;
+            if (!strongRootView) {
+                return;
+            }
+            WCLiquidGlassRefreshChatBottomMenuHierarchy(strongRootView);
+            WCLiquidGlassRefreshVisibleChatBottomMenuViews();
+        });
     }
 }
 
@@ -556,11 +592,10 @@ void WCLiquidGlassInstallChatBottomMenuHooks(void) {
         }
     }
 
-    if (!WCLiquidGlassInputToolContainerHookInstalled &&
-        !WCLiquidGlassSelectAttachmentHookInstalled &&
+    if (!WCLiquidGlassInputToolContainerHookInstalled ||
+        !WCLiquidGlassSelectAttachmentHookInstalled ||
         !WCLiquidGlassInputToolViewBarHookInstalled) {
         WCLiquidGlassScheduleChatBottomMenuHookRetry();
-        return;
     }
     if (!WCLiquidGlassChatBottomMenuObserverInstalled) {
         WCLiquidGlassChatBottomMenuObserverInstalled = YES;
