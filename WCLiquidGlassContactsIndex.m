@@ -115,14 +115,14 @@ static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view, UIView *glassVi
     CGFloat width = CGRectGetWidth(view.bounds);
     CGFloat height = CGRectGetHeight(view.bounds);
     if (CGRectIsNull(letterFrame) || CGRectIsEmpty(letterFrame)) {
-        return CGRectIntegral(CGRectMake(4.0,
+        return CGRectIntegral(CGRectMake(0.0,
                                          20.0,
-                                         MAX(0.0, width - 12.0),
+                                         MAX(0.0, width),
                                          MAX(0.0, height - 40.0)));
     }
 
-    CGFloat leading = MAX(0.0, CGRectGetMinX(letterFrame));
-    CGFloat trailing = MIN(MAX(leading, width - 8.0), CGRectGetMaxX(letterFrame) + 4.0);
+    CGFloat leading = 0.0;
+    CGFloat trailing = width;
     CGFloat top = MAX(0.0, CGRectGetMinY(letterFrame) - 7.0);
     CGFloat bottom = MIN(height, CGRectGetMaxY(letterFrame) + 7.0);
     return CGRectIntegral(CGRectMake(leading,
@@ -167,9 +167,13 @@ static void WCLiquidGlassContactsIndexUpdate(UIView *view) {
     if (!CGRectEqualToRect(state.glassView.frame, frame)) {
         state.glassView.frame = frame;
     }
-    CGFloat cornerRadius = MIN(18.0, CGRectGetWidth(frame) * 0.5);
+    CGFloat cornerRadius = MIN(20.0, CGRectGetHeight(frame) * 0.5);
     if (state.glassView.layer.cornerRadius != cornerRadius) {
         state.glassView.layer.cornerRadius = cornerRadius;
+    }
+    CACornerMask maskedCorners = kCALayerMinXMinYCorner | kCALayerMinXMaxYCorner;
+    if (state.glassView.layer.maskedCorners != maskedCorners) {
+        state.glassView.layer.maskedCorners = maskedCorners;
     }
 
     NSInteger effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
