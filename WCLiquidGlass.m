@@ -1507,7 +1507,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.chatTimeGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1 && indexPath.row == 2) {
-        WCLiquidGlassConfigureCell(cell, @"长按菜单液态", @"接管 WCGlass 消息菜单",
+        WCLiquidGlassConfigureCell(cell, @"长按菜单液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         self.wcGlassLongPressMenuSwitch = [[UISwitch alloc] init];
         self.wcGlassLongPressMenuSwitch.on = WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled;
