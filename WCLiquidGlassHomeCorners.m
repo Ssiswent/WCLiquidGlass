@@ -1222,14 +1222,9 @@ static void WCLiquidGlassHomeCornerContactsCellLayoutSubviews(UITableViewCell *s
     if (role != WCLiquidGlassHomeCornerTableRoleOtherTab || !indexPath) {
         return;
     }
-    NSRange visualSectionRange = WCLiquidGlassHomeCornerVisualSectionRange(tableView,
-                                                                          indexPath.section,
-                                                                          role);
-    if (visualSectionRange.location == 0) {
-        WCLiquidGlassHomeCornerCellLayoutApplying = YES;
-        WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
-        WCLiquidGlassHomeCornerCellLayoutApplying = NO;
-    }
+    WCLiquidGlassHomeCornerCellLayoutApplying = YES;
+    WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
+    WCLiquidGlassHomeCornerCellLayoutApplying = NO;
     WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(self.contentView);
 }
 
