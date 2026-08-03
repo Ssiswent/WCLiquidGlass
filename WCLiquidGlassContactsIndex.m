@@ -88,7 +88,7 @@ static void WCLiquidGlassContactsIndexRestore(UIView *view,
 
 static CGRect WCLiquidGlassContactsIndexGlassFrame(UIView *view) {
     CGFloat fullWidth = MAX(0.0,
-                            MAX(28.0, CGRectGetWidth(view.bounds) + 8.0) * 2.0 - 16.0);
+                            MAX(28.0, CGRectGetWidth(view.bounds) + 8.0) * 2.0 - 12.0);
     CGFloat visibleWidth = fullWidth * 0.5;
     return CGRectIntegral(CGRectMake(CGRectGetWidth(view.bounds) - visibleWidth,
                                      100.0,
