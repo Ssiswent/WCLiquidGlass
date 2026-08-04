@@ -2370,7 +2370,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
         button.showsMenuAsPrimaryAction = YES;
-        button.automaticallyUpdatesConfiguration = YES;
+        // Keep the source material owned by the button configuration. UIKit's
+        // automatic refresh can clear it in the non-key overlay window.
+        button.automaticallyUpdatesConfiguration = NO;
         button.tintColor = UIColor.labelColor;
         [button addTarget:self
                    action:@selector(wc_nativeMenuWillOpen:)
@@ -2397,7 +2399,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [self.anchorOrb setAnchorAppearance];
     UIButtonConfiguration *configuration = nil;
     if (@available(iOS 26.0, *)) {
-        SEL glassConfigurationSelector = NSSelectorFromString(@"glassButtonConfiguration");
+        NSString *configurationSelectorName = @"glassButtonConfiguration";
+        if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceClear) {
+            configurationSelectorName = @"clearGlassButtonConfiguration";
+        }
+        SEL glassConfigurationSelector = NSSelectorFromString(configurationSelectorName);
         if ([UIButtonConfiguration respondsToSelector:glassConfigurationSelector]) {
             configuration = ((id (*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class,
                                                             glassConfigurationSelector);
@@ -2415,11 +2421,19 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.buttonSize = UIButtonConfigurationSizeMedium;
+    if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceTinted) {
+        configuration.baseBackgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+            return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+                ? [UIColor colorWithWhite:1.0 alpha:0.23]
+                : [UIColor colorWithWhite:1.0 alpha:0.16];
+        }];
+    } else {
+        configuration.baseBackgroundColor = nil;
+    }
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
-    [self.nativeMenuButton setNeedsUpdateConfiguration];
     self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
-    self.nativeMenuButton.layer.cornerRadius = self.anchorOrb.diameter * 0.5;
+    self.nativeMenuButton.layer.cornerRadius = 0.0;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
