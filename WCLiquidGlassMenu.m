@@ -2083,6 +2083,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, copy) NSArray<WCLiquidGlassPanelItemView *> *panelItemViews;
 @property(nonatomic, assign) WCLiquidGlassPanelTransitionState panelTransitionState;
 @property(nonatomic, assign) NSUInteger panelTransitionGeneration;
+@property(nonatomic, assign) CGRect panelTransitionSeedFrame;
+@property(nonatomic, assign) CGRect panelTransitionTargetFrame;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *visibleItems;
 @property(nonatomic, assign) BOOL menuOpen;
 @property(nonatomic, assign) BOOL anchorOnLeft;
@@ -2134,6 +2136,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 - (CGRect)wc_panelTargetFrame;
 - (CGRect)wc_panelSeedFrame;
 - (void)wc_layoutPanelItems;
+- (void)wc_capturePanelTransitionFrames;
+- (void)wc_completeLiquidPanelOpeningForGeneration:(NSUInteger)generation;
 - (void)wc_openLiquidPanel;
 - (void)wc_closeLiquidPanelSelectingActionIdentifier:(nullable NSString *)actionIdentifier;
 - (void)wc_activatePanelItem:(WCLiquidGlassPanelItemView *)item;
@@ -2267,11 +2271,24 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    if ([self wc_usesLiquidPanel] && !self.panelView.hidden && self.panelView.alpha > 0.01) {
-        CGPoint panelPoint = [self.panelView convertPoint:point fromView:self];
-        UIView *panelHit = [self.panelView hitTest:panelPoint withEvent:event];
-        if (panelHit) {
-            return panelHit;
+    if ([self wc_usesLiquidPanel]) {
+        if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateCollapsed) {
+            if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
+                return self.dismissControl;
+            }
+            CGPoint anchorPoint = [self.anchorOrb convertPoint:point fromView:self];
+            UIView *anchorHit = [self.anchorOrb hitTest:anchorPoint withEvent:event];
+            if (anchorHit) {
+                return anchorHit;
+            }
+            CGPoint panelPoint = [self.panelView convertPoint:point fromView:self];
+            UIView *panelHit = [self.panelView hitTest:panelPoint withEvent:event];
+            for (UIView *view = panelHit; view && view != self.panelView; view = view.superview) {
+                if ([view isKindOfClass:WCLiquidGlassPanelItemView.class]) {
+                    return panelHit;
+                }
+            }
+            return self.dismissControl;
         }
     }
     for (WCLiquidGlassOrbView *orb in self.optionOrbs.reverseObjectEnumerator) {
@@ -2417,6 +2434,22 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     return CGRectIntegral(CGRectMake(x, self.anchorOrb.center.y - side * 0.5, side, side));
 }
 
+- (void)wc_capturePanelTransitionFrames {
+    [self wc_cancelIdleHide];
+    [self wc_endPressAnimated:NO];
+    CALayer *presentationLayer = (CALayer *)self.anchorOrb.layer.presentationLayer;
+    CGRect presentationFrame = presentationLayer ? presentationLayer.frame : self.anchorOrb.frame;
+    UIView *anchorSuperview = self.anchorOrb.superview ?: self.glassContainer.contentView;
+    self.panelTransitionSeedFrame = [anchorSuperview convertRect:presentationFrame
+                                                          toView:self.glassContainer.contentView];
+    [self.anchorOrb.layer removeAllAnimations];
+    [self.anchorOrb.iconView.layer removeAllAnimations];
+    self.anchorOrb.transform = CGAffineTransformIdentity;
+    self.anchorOrb.frame = [anchorSuperview convertRect:self.panelTransitionSeedFrame
+                                                fromView:self.glassContainer.contentView];
+    self.panelTransitionTargetFrame = [self wc_panelTargetFrame];
+}
+
 - (void)wc_layoutPanelItems {
     if (CGRectIsEmpty(self.panelView.bounds) || self.panelItemViews.count == 0) {
         return;
@@ -2447,31 +2480,58 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }];
 }
 
+- (void)wc_completeLiquidPanelOpeningForGeneration:(NSUInteger)generation {
+    if (generation != self.panelTransitionGeneration || !self.menuOpen ||
+        self.panelTransitionState != WCLiquidGlassPanelTransitionStateOpening) {
+        return;
+    }
+    [self.panelView.layer removeAllAnimations];
+    self.panelView.frame = self.panelTransitionTargetFrame;
+    self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(self.panelView.bounds) * 0.24);
+    [self wc_layoutPanelItems];
+    self.anchorOrb.transform = CGAffineTransformIdentity;
+    self.anchorOrb.frame = self.panelTransitionSeedFrame;
+    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
+    [self.anchorOrb setCloseAppearance];
+    self.anchorOrb.alpha = 1.0;
+    self.anchorOrb.hidden = NO;
+    self.anchorOrb.userInteractionEnabled = YES;
+    self.panelScrollView.alpha = 1.0;
+    self.panelTransitionState = WCLiquidGlassPanelTransitionStateExpanded;
+    self.panelView.userInteractionEnabled = YES;
+    self.panelScrollView.userInteractionEnabled = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (generation == self.panelTransitionGeneration && self.menuOpen &&
+            self.panelTransitionState == WCLiquidGlassPanelTransitionStateExpanded) {
+            [self setNeedsLayout];
+        }
+    });
+}
+
 - (void)wc_openLiquidPanel {
     if (self.panelItemViews.count == 0) {
         [self wc_scheduleIdleHide];
         return;
     }
-    WCLiquidGlassPanelTransitionState previousState = self.panelTransitionState;
+    [self wc_capturePanelTransitionFrames];
     self.menuOpen = YES;
     self.panelTransitionState = WCLiquidGlassPanelTransitionStateOpening;
     NSUInteger generation = ++self.panelTransitionGeneration;
     self.dismissControl.hidden = NO;
     self.dismissControl.userInteractionEnabled = YES;
-    [self wc_updateAnchorVisual];
     self.panelView.hidden = NO;
     self.panelView.effect = WCLiquidGlassMakeEffect();
-    self.panelView.frame = previousState == WCLiquidGlassPanelTransitionStateCollapsed
-        ? [self wc_panelSeedFrame] : self.panelView.frame;
-    if (CGRectIsEmpty(self.panelView.frame)) {
-        self.panelView.frame = [self wc_panelSeedFrame];
-    }
+    self.panelView.frame = self.panelTransitionSeedFrame;
     self.panelView.alpha = 1.0;
     self.panelView.layer.cornerRadius = CGRectGetHeight(self.panelView.bounds) * 0.5;
     self.panelScrollView.alpha = 0.0;
-    self.panelScrollView.userInteractionEnabled = YES;
+    self.panelView.userInteractionEnabled = NO;
+    self.panelScrollView.userInteractionEnabled = NO;
     [self wc_layoutPanelItems];
-    CGRect target = [self wc_panelTargetFrame];
+    self.anchorOrb.userInteractionEnabled = NO;
+    self.anchorOrb.alpha = 0.0;
+    self.anchorOrb.hidden = YES;
+    CGRect target = self.panelTransitionTargetFrame;
     [UIView animateWithDuration:0.46
                           delay:0
          usingSpringWithDamping:0.78
@@ -2481,19 +2541,16 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         self.panelView.frame = target;
         self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(target) * 0.24);
         [self wc_layoutPanelItems];
-    } completion:^(__unused BOOL finished) {
-        if (generation == self.panelTransitionGeneration && self.menuOpen) {
-            self.panelTransitionState = WCLiquidGlassPanelTransitionStateExpanded;
-        }
-    }];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (generation != self.panelTransitionGeneration || !self.menuOpen) {
+    } completion:^(BOOL finished) {
+        if (generation != self.panelTransitionGeneration || !self.menuOpen ||
+            self.panelTransitionState != WCLiquidGlassPanelTransitionStateOpening) {
             return;
         }
-        [UIView animateWithDuration:0.18 delay:0 options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:^{
-            self.panelScrollView.alpha = 1.0;
-        } completion:nil];
-    });
+        if (!finished) {
+            [self.panelView.layer removeAllAnimations];
+        }
+        [self wc_completeLiquidPanelOpeningForGeneration:generation];
+    }];
 }
 
 - (void)wc_closeLiquidPanelSelectingActionIdentifier:(NSString *)actionIdentifier {
@@ -2507,8 +2564,15 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.panelTransitionState = WCLiquidGlassPanelTransitionStateClosing;
     self.dismissControl.hidden = NO;
     self.dismissControl.userInteractionEnabled = YES;
+    [self.anchorOrb.layer removeAllAnimations];
+    [self.anchorOrb.iconView.layer removeAllAnimations];
+    self.anchorOrb.userInteractionEnabled = NO;
+    self.anchorOrb.alpha = 0.0;
+    self.anchorOrb.hidden = YES;
+    self.anchorOrb.transform = CGAffineTransformIdentity;
+    self.anchorOrb.frame = self.panelTransitionSeedFrame;
+    self.panelView.userInteractionEnabled = NO;
     self.panelScrollView.userInteractionEnabled = NO;
-    [self wc_updateAnchorVisual];
     [self wc_scheduleIdleHide];
     __block BOOL actionPerformed = NO;
     void (^performAction)(void) = ^{
@@ -2520,20 +2584,29 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         actionPerformed = YES;
         WCLiquidGlassPerformAction(actionIdentifier);
     };
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.13 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionBeginFromCurrentState animations:^{
         if (generation == self.panelTransitionGeneration && !self.menuOpen) {
-            [UIView animateWithDuration:0.14 animations:^{ self.panelScrollView.alpha = 0.0; }];
+            self.panelScrollView.alpha = 0.0;
         }
-    });
-    CGRect seed = [self wc_panelSeedFrame];
+    } completion:nil];
+    CGRect seed = self.panelTransitionSeedFrame;
     void (^finishClose)(void) = ^{
         if (generation != self.panelTransitionGeneration || self.menuOpen) {
             return;
         }
         [self.panelView.layer removeAllAnimations];
         self.panelView.hidden = YES;
+        self.panelView.alpha = 0.0;
         self.panelTransitionState = WCLiquidGlassPanelTransitionStateCollapsed;
         self.dismissControl.hidden = YES;
+        self.anchorOrb.transform = CGAffineTransformIdentity;
+        self.anchorOrb.frame = self.panelTransitionSeedFrame;
+        self.anchorOrb.effect = WCLiquidGlassMakeEffect();
+        [self.anchorOrb setAnchorAppearance];
+        self.anchorOrb.alpha = 1.0;
+        self.anchorOrb.hidden = NO;
+        self.anchorOrb.userInteractionEnabled = YES;
+        self.panelView.userInteractionEnabled = YES;
         self.panelScrollView.userInteractionEnabled = YES;
         performAction();
     };
@@ -2559,8 +2632,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_activatePanelItem:(WCLiquidGlassPanelItemView *)item {
-    if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateOpening &&
-        self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
+    if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
         return;
     }
     NSString *actionIdentifier = item.actionIdentifier;
@@ -2684,16 +2756,20 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    if (!self.menuOpen) {
-        [self wc_layoutAnchorFromPreferences];
-    } else {
-        if ([self wc_usesLiquidPanel]) {
+    if ([self wc_usesLiquidPanel]) {
+        if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateCollapsed) {
+            [self wc_layoutAnchorFromPreferences];
+        } else if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateExpanded) {
             self.panelView.frame = [self wc_panelTargetFrame];
             self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(self.panelView.bounds) * 0.24);
             [self wc_layoutPanelItems];
-        } else {
-            [self wc_layoutOptionOrbsAnimated:NO];
         }
+        return;
+    }
+    if (!self.menuOpen) {
+        [self wc_layoutAnchorFromPreferences];
+    } else {
+        [self wc_layoutOptionOrbsAnimated:NO];
     }
 }
 
@@ -2733,14 +2809,18 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (void)wc_layoutForKeyboardNotification:(NSNotification *)notification {
     [self wc_animateForKeyboardNotification:notification changes:^{
-        [self wc_layoutAnchorFromPreferences];
-        if (self.menuOpen) {
-            if ([self wc_usesLiquidPanel]) {
+        if ([self wc_usesLiquidPanel]) {
+            if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateCollapsed) {
+                [self wc_layoutAnchorFromPreferences];
+            } else if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateExpanded) {
                 self.panelView.frame = [self wc_panelTargetFrame];
                 [self wc_layoutPanelItems];
-            } else {
-                [self wc_layoutOptionOrbsAnimated:NO];
             }
+            return;
+        }
+        [self wc_layoutAnchorFromPreferences];
+        if (self.menuOpen) {
+            [self wc_layoutOptionOrbsAnimated:NO];
         }
     }];
 }
@@ -3292,6 +3372,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
             return;
         }
+        if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
+            return;
+        }
         NSUInteger currentColumns = WCLiquidGlassPanelColumnsForCount(self.panelItemViews.count);
         if (previousCount != self.panelItemViews.count || previousColumns != currentColumns) {
             CGRect target = [self wc_panelTargetFrame];
@@ -3418,8 +3501,15 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [self.panelView.layer removeAllAnimations];
     self.panelView.hidden = YES;
     self.panelView.alpha = 0.0;
+    self.panelView.userInteractionEnabled = YES;
     self.panelScrollView.alpha = 0.0;
     self.panelScrollView.userInteractionEnabled = YES;
+    self.anchorOrb.transform = CGAffineTransformIdentity;
+    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
+    [self.anchorOrb setAnchorAppearance];
+    self.anchorOrb.alpha = 1.0;
+    self.anchorOrb.hidden = NO;
+    self.anchorOrb.userInteractionEnabled = YES;
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    __unused NSUInteger index,
                                                    __unused BOOL *stop) {
