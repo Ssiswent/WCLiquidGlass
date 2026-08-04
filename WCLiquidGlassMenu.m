@@ -2334,15 +2334,44 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
         button.showsMenuAsPrimaryAction = YES;
         button.tintColor = UIColor.labelColor;
-        button.clipsToBounds = YES;
-        [self.glassContainer.contentView addSubview:button];
+        // Keep the UIKit source control outside the host's glass container.
+        // The source button owns the system morph material; putting it inside
+        // another glass surface creates the second offset layer visible while
+        // the control is pressed or moved.
+        [self addSubview:button];
         self.nativeMenuButton = button;
+    } else if (self.nativeMenuButton.superview != self) {
+        [self.nativeMenuButton removeFromSuperview];
+        [self addSubview:self.nativeMenuButton];
     }
+
+    // The native button is already a complete Liquid Glass element.  Keeping
+    // it inside our UIGlassContainerEffect makes the hidden radial anchor and
+    // the button participate in the same combined material, which produces a
+    // second offset glass layer while the button is pressed or moved.  Native
+    // menu mode owns this glass surface, so detach the container material and
+    // let UIKit perform the source-to-menu morph from the button itself.
+    self.glassContainer.effect = nil;
 
     [self.anchorOrb setAnchorAppearance];
     UIButtonConfiguration *configuration = nil;
-    SEL glassConfigurationSelector = NSSelectorFromString(@"glassButtonConfiguration");
     if (@available(iOS 26.0, *)) {
+        NSString *configurationSelectorName = @"glassButtonConfiguration";
+        switch (WCLiquidGlassPreferences.glassAppearance) {
+            case WCLiquidGlassGlassAppearanceClear:
+                configurationSelectorName = @"clearGlassButtonConfiguration";
+                break;
+            case WCLiquidGlassGlassAppearanceTinted:
+                // UIKit's regular glass configuration is the closest native
+                // counterpart to our tinted effect.  The dynamic background
+                // tint below mirrors WCLiquidGlassGlassEffectForAppearance.
+                configurationSelectorName = @"glassButtonConfiguration";
+                break;
+            default:
+                configurationSelectorName = @"glassButtonConfiguration";
+                break;
+        }
+        SEL glassConfigurationSelector = NSSelectorFromString(configurationSelectorName);
         if ([UIButtonConfiguration respondsToSelector:glassConfigurationSelector]) {
             configuration = ((id (*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class,
                                                             glassConfigurationSelector);
@@ -2358,25 +2387,25 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }
     configuration.image = self.anchorOrb.iconView.image;
     configuration.baseForegroundColor = UIColor.labelColor;
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    configuration.buttonSize = UIButtonConfigurationSizeMedium;
+    if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceTinted) {
+        configuration.baseBackgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+            return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+                ? [UIColor colorWithWhite:1.0 alpha:0.23]
+                : [UIColor colorWithWhite:1.0 alpha:0.16];
+        }];
+    } else {
+        configuration.baseBackgroundColor = nil;
+    }
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
     self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
-    self.nativeMenuButton.layer.cornerRadius = self.anchorOrb.diameter * 0.5;
+    self.nativeMenuButton.layer.cornerRadius = 0.0;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
-    NSArray<UIMenuElement *> *children = nil;
-    if (@available(iOS 15.0, *)) {
-        __weak typeof(self) weakSelf = self;
-        UIDeferredMenuElement *deferredElement = [UIDeferredMenuElement elementWithUncachedProvider:
-            ^(void (^completion)(NSArray<UIMenuElement *> *elements)) {
-            __strong typeof(weakSelf) self = weakSelf;
-            completion(self ? [self wc_nativeMenuRowsWithVisibleItems:[self wc_currentVisibleItems]] : @[]);
-        }];
-        children = @[deferredElement];
-    } else {
-        children = [self wc_nativeMenuRowsWithVisibleItems:items];
-    }
+    NSArray<UIMenuElement *> *children = [self wc_nativeMenuRowsWithVisibleItems:items];
     UIMenu *menu = [UIMenu menuWithTitle:@""
                                     image:nil
                                identifier:@"WCLiquidGlass.native.menu"
@@ -2388,6 +2417,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             ((void (*)(id, SEL, UIMenuElementSize))objc_msgSend)(menu,
                                                                    preferredElementSizeSelector,
                                                                    UIMenuElementSizeMedium);
+        }
+        if (@available(iOS 17.4, *)) {
+            UIMenuDisplayPreferences *displayPreferences = [[UIMenuDisplayPreferences alloc] init];
+            displayPreferences.maximumNumberOfTitleLines = 1;
+            menu.displayPreferences = displayPreferences;
         }
     }
     return menu;
@@ -2414,10 +2448,10 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             }
             [actions addObject:action];
         }
+        // Keep the actions inline and let the medium menu layout render the
+        // image/title pair.  DisplayAsPalette intentionally suppresses action
+        // titles on iOS 26, leaving the grid as icon-only buttons.
         UIMenuOptions rowOptions = UIMenuOptionsDisplayInline;
-        if (@available(iOS 17.0, *)) {
-            rowOptions |= UIMenuOptionsDisplayAsPalette;
-        }
         UIMenu *row = [UIMenu menuWithTitle:@""
                                        image:nil
                                   identifier:[NSString stringWithFormat:@"WCLiquidGlass.native.row.%tu", start / 3]
@@ -2429,6 +2463,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
                 ((void (*)(id, SEL, UIMenuElementSize))objc_msgSend)(row,
                                                                        preferredElementSizeSelector,
                                                                        UIMenuElementSizeMedium);
+            }
+            if (@available(iOS 17.4, *)) {
+                UIMenuDisplayPreferences *displayPreferences = [[UIMenuDisplayPreferences alloc] init];
+                displayPreferences.maximumNumberOfTitleLines = 1;
+                row.displayPreferences = displayPreferences;
             }
         }
         [rows addObject:row];
@@ -2473,7 +2512,13 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         if (togglesVoiceTranscription) {
             self.voiceTranscriptionActive = !self.voiceTranscriptionActive;
         }
-        [self wc_scheduleNativeMenuUpdate];
+        // Let UIKit finish the source-to-menu dismissal before replacing the
+        // menu tree.  Rebuilding it in the same run-loop turn can truncate the
+        // collapse morph and make it appear much faster than the opening.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.24 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [self wc_scheduleNativeMenuUpdate];
+        });
     });
 }
 
@@ -2919,6 +2964,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         }
         [self wc_scheduleNativeMenuUpdate];
     } else {
+        self.glassContainer.effect = WCLiquidGlassCurrentGlassContainerEffect();
         self.nativeMenuButton.hidden = YES;
         self.nativeMenuButton.userInteractionEnabled = NO;
         self.panelView.hidden = YES;
@@ -2978,7 +3024,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.anchorOrb.center = CGPointMake(x, MIN(maximumY, MAX(minimumY, y)));
     self.nativeMenuButton.bounds = self.anchorOrb.bounds;
     self.nativeMenuButton.center = self.anchorOrb.center;
-    self.nativeMenuButton.layer.cornerRadius = CGRectGetHeight(self.nativeMenuButton.bounds) * 0.5;
 }
 
 - (CGFloat)wc_effectiveLayoutBottom {
