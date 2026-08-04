@@ -3068,7 +3068,13 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.anchorOrb.center = center;
     self.nativeMenuButton.bounds = self.anchorOrb.bounds;
     UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
-    self.nativeMenuButton.center = [self convertPoint:center toView:buttonSuperview];
+    CGPoint buttonCenter = center;
+    if (self.window && buttonSuperview.window && self.window != buttonSuperview.window) {
+        buttonCenter = [self.window convertPoint:center toWindow:buttonSuperview.window];
+    } else {
+        buttonCenter = [self convertPoint:center toView:buttonSuperview];
+    }
+    self.nativeMenuButton.center = buttonCenter;
 }
 
 - (CGFloat)wc_effectiveLayoutBottom {
@@ -4194,7 +4200,13 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if ([self wc_usesNativeSystemMenu]) {
         self.nativeMenuButton.bounds = self.anchorOrb.bounds;
         UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
-        self.nativeMenuButton.center = [self convertPoint:self.anchorOrb.center toView:buttonSuperview];
+        CGPoint buttonCenter = self.anchorOrb.center;
+        if (self.window && buttonSuperview.window && self.window != buttonSuperview.window) {
+            buttonCenter = [self.window convertPoint:buttonCenter toWindow:buttonSuperview.window];
+        } else {
+            buttonCenter = [self convertPoint:buttonCenter toView:buttonSuperview];
+        }
+        self.nativeMenuButton.center = buttonCenter;
         self.nativeMenuButton.hidden = NO;
         return;
     }
