@@ -1654,8 +1654,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSString *)wc_menuStyleTitle {
-    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleLiquidPanel
-        ? @"液态面板" : @"环形菜单";
+    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleNativeSystemMenu
+        ? @"系统液态菜单" : @"环形菜单";
 }
 
 - (NSString *)wc_glassAppearanceTitle {
@@ -1702,9 +1702,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_presentMenuStylePickerFromView:(UIView *)sourceView {
     UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"菜单样式"
-                                                                     message:@"环形菜单仅显示图标；液态面板显示图标和标题。"
+                                                                     message:@"环形菜单支持拖动和长按选择；系统液态菜单使用 iOS 原生按钮与菜单过渡，并显示图标和标题。"
                                                               preferredStyle:UIAlertControllerStyleActionSheet];
-    NSArray<NSString *> *titles = @[@"环形菜单", @"液态面板"];
+    NSArray<NSString *> *titles = @[@"环形菜单", @"系统液态菜单"];
     [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
         [picker addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
             [WCLiquidGlassPreferences setMenuStyle:(WCLiquidGlassMenuStyle)index];

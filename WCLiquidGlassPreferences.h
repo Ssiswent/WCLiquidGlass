@@ -45,7 +45,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassCompactLayoutStyle) {
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStyle) {
     WCLiquidGlassMenuStyleRadial = 0,
-    WCLiquidGlassMenuStyleLiquidPanel = 1
+    WCLiquidGlassMenuStyleNativeSystemMenu = 1,
+    WCLiquidGlassMenuStyleLiquidPanel = WCLiquidGlassMenuStyleNativeSystemMenu
 };
 
 typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {

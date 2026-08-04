@@ -290,11 +290,11 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (WCLiquidGlassMenuStyle)menuStyle {
     NSInteger style = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuStyleKey];
-    return MIN(WCLiquidGlassMenuStyleLiquidPanel, MAX(WCLiquidGlassMenuStyleRadial, style));
+    return MIN(WCLiquidGlassMenuStyleNativeSystemMenu, MAX(WCLiquidGlassMenuStyleRadial, style));
 }
 
 + (void)setMenuStyle:(WCLiquidGlassMenuStyle)style {
-    NSInteger clampedStyle = MIN(WCLiquidGlassMenuStyleLiquidPanel,
+    NSInteger clampedStyle = MIN(WCLiquidGlassMenuStyleNativeSystemMenu,
                                  MAX(WCLiquidGlassMenuStyleRadial, style));
     if ([self menuStyle] == clampedStyle) {
         return;
