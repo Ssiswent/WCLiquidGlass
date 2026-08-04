@@ -937,7 +937,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterLabel(@"最多可添加 16 个动作；菜单会按当前页面自动隐藏不可用的动作。预览会跟随所选菜单样式。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。");
+        return WCLiquidGlassFooterLabel(@"最多可添加 16 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。");
@@ -947,7 +947,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterHeight(@"最多可添加 16 个动作；菜单会按当前页面自动隐藏不可用的动作。预览会跟随所选菜单样式。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。", 54.0);
+        return WCLiquidGlassFooterHeight(@"最多可添加 16 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。", 54.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。", 54.0);
@@ -1415,7 +1415,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) {
-        return 5;
+        return 4;
     }
     if (section == 1) {
         return 6;
@@ -1437,7 +1437,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。紧凑布局仅影响环形菜单；液态面板使用图标和标题网格。");
+        return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
         return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引与长按菜单跟随本插件材质设置；消息通知和首页圆角与液态可分别管理各自的圆角、间距与材质。");
@@ -1453,7 +1453,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。紧凑布局仅影响环形菜单；液态面板使用图标和标题网格。", 72.0);
+        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
     }
     if (section == 1) {
         return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引与长按菜单跟随本插件材质设置；消息通知和首页圆角与液态可分别管理各自的圆角、间距与材质。", 104.0);
@@ -1474,7 +1474,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 
     if (indexPath.section == 0 && indexPath.row == 0) {
-        WCLiquidGlassConfigureCell(cell, @"启用全局菜单", nil,
+        WCLiquidGlassConfigureCell(cell, @"启用全局环形菜单", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
         self.enabledSwitch = [[UISwitch alloc] init];
         self.enabledSwitch.on = WCLiquidGlassPreferences.enabled;
@@ -1486,10 +1486,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 0 && indexPath.row == 2) {
-        WCLiquidGlassConfigureCell(cell, @"菜单样式", [self wc_menuStyleTitle],
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 0 && indexPath.row == 3) {
         WCLiquidGlassConfigureCell(cell, @"紧凑布局", [self wc_compactLayoutStyleTitle],
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -1576,10 +1572,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.section == 0 && indexPath.row == 1) {
         [self wc_presentSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 0 && indexPath.row == 2) {
-        [self wc_presentMenuStylePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
-    } else if (indexPath.section == 0 && indexPath.row == 3) {
         [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
-    } else if (indexPath.section == 0 && indexPath.row == 4) {
+    } else if (indexPath.section == 0 && indexPath.row == 3) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
@@ -1653,11 +1647,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-- (NSString *)wc_menuStyleTitle {
-    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleNativeSystemMenu
-        ? @"系统液态菜单" : @"环形菜单";
-}
-
 - (NSString *)wc_glassAppearanceTitle {
     return WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance);
 }
@@ -1683,7 +1672,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_presentCompactLayoutPickerFromView:(UIView *)sourceView {
     UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"紧凑布局"
-                                                                     message:@"仅在环形菜单空间不足时自动采用；保留胶黏动画所需的按钮间距。"
+                                                                     message:@"菜单空间不足时自动采用；所有样式都会保留胶黏动画所需的按钮间距。"
                                                               preferredStyle:UIAlertControllerStyleActionSheet];
     NSArray<NSString *> *titles = @[@"双层月牙", @"流动 S 弧", @"宽扇形", @"花瓣环簇"];
     [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
@@ -1700,25 +1689,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [self presentViewController:picker animated:YES completion:nil];
 }
 
-- (void)wc_presentMenuStylePickerFromView:(UIView *)sourceView {
-    UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"菜单样式"
-                                                                     message:@"环形菜单支持拖动和长按选择；系统液态菜单使用 iOS 原生按钮与菜单过渡，并显示图标和标题。"
-                                                              preferredStyle:UIAlertControllerStyleActionSheet];
-    NSArray<NSString *> *titles = @[@"环形菜单", @"系统液态菜单"];
-    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
-        [picker addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-            [WCLiquidGlassPreferences setMenuStyle:(WCLiquidGlassMenuStyle)index];
-        }]];
-    }];
-    [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    picker.popoverPresentationController.sourceView = sourceView;
-    picker.popoverPresentationController.sourceRect = sourceView.bounds;
-    [self presentViewController:picker animated:YES completion:nil];
-}
-
 - (void)wc_confirmRestore {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认设置？"
-                                                                   message:@"开关、按钮大小、菜单样式、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
+                                                                   message:@"开关、按钮大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"恢复"

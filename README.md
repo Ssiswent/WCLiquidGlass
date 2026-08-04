@@ -8,7 +8,7 @@
 
 <h1 align="center">WCLiquidGlass</h1>
 
-<p align="center">为微信提供原生感 Liquid Glass、上下文快捷菜单与 WCGlass 兼容修复。</p>
+<p align="center">为微信提供原生感 Liquid Glass、上下文环形菜单与 WCGlass 兼容修复。</p>
 
 <p align="center">
   <a href="https://github.com/Ssiswent/WCLiquidGlass/releases/latest"><img src="https://img.shields.io/github/v/release/Ssiswent/WCLiquidGlass?display_name=tag&sort=semver" alt="最新正式版"></a>
@@ -35,9 +35,9 @@
 
 1. 从 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases/latest) 下载最新的 `iphoneos-arm64` `.deb` 包并安装。
 2. 确认 `WCLiquidGlass.dylib` 已注入微信，再彻底结束并重新打开微信。
-3. 在微信的插件列表进入 **WCLiquidGlass**，开启“全局菜单”，再按需要设置菜单样式、按钮、材质和页面效果。
+3. 在微信的插件列表进入 **WCLiquidGlass**，开启“全局环形菜单”，再按需要设置按钮、材质和页面效果。
 
-默认按钮是“插件列表”和“搜索记录”。所有配置都可在插件设置页恢复默认；两种菜单样式最多保存 **16 个动作**。
+默认按钮是“插件列表”和“搜索记录”。所有配置都可在插件设置页恢复默认；环形菜单本身最多保存 **16 个动作**。
 
 ## Liquid Glass 效果
 
@@ -68,8 +68,6 @@ WCLiquidGlass 的目标不是给微信覆盖一层统一模糊，而是让每个
 - **长按菜单液态**：开启后仅接管 WCGlass 消息长按菜单的呈现层；按钮文字、图标、数量、点击与长按业务逻辑仍由微信原生菜单负责。展开和收起使用连续圆角玻璃与弹簧动画，并跟随“清透 / 均衡 / 着色”。
 
 ## 环形菜单与按钮动作
-
-菜单样式默认是图标优先的**环形菜单**。也可选择**液态面板**：它以单独的圆形入口/关闭按钮配合圆角玻璃面板，在同一 `UIGlassContainerEffect` 中做真实几何开合，网格同时显示图标和动作标题。该结构受 WCGlass 3.0.1 的公开可观察架构启发，但不依赖 WCGlass，也不复刻其未公开的动画常数。
 
 菜单使用不抢焦点的透明覆盖窗口：按钮之外的触摸会继续透传给微信，键盘与普通页面交互不会被覆盖层抢走。
 

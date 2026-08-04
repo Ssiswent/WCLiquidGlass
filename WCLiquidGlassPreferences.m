@@ -36,7 +36,6 @@ NSString *const WCLiquidGlassActionPageHierarchyDiagnostics = @"page_hierarchy_d
 static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
 static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
-static NSString *const WCLiquidGlassMenuStyleKey = @"WCLiquidGlass.MenuStyle";
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
 static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
@@ -189,7 +188,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         assetNames = @{
-            WCLiquidGlassActionPlugins: @[@"icons_filled_plugin", @"icons_outlined_plugin", @"plugin_filled", @"plugin_outlined", @"icons_filled_extension", @"icons_outlined_extension", @"extension_filled", @"WeChat_Lab_Logo_light_small@3x", @"WeChat_Lab_Logo_light_small", @"WeChat_Lab_Logo_Dark@3x", @"WeChat_Lab_Logo_Dark", @"icons_filled_setting", @"setting_filled"],
+            WCLiquidGlassActionPlugins: @[@"WeChat_Lab_Logo_light_small@3x", @"WeChat_Lab_Logo_light_small", @"WeChat_Lab_Logo_Dark@3x", @"WeChat_Lab_Logo_Dark", @"icons_filled_plugin", @"icons_outlined_plugin", @"plugin_filled", @"plugin_outlined", @"icons_filled_extension", @"icons_outlined_extension", @"extension_filled", @"icons_filled_setting", @"setting_filled"],
             WCLiquidGlassActionMoments: @[@"icons_outlined_colorful_moment", @"icons_filled_moments", @"icons_filled_sns"],
             WCLiquidGlassActionChannels: @[@"play_circle_regular", @"icons_filled_channels_recommend_group"],
             WCLiquidGlassActionAlbum: @[@"icons_filled_album"],
@@ -227,7 +226,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassEnabledKey: @NO,
         WCLiquidGlassSizeModeKey: @1,
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
-        WCLiquidGlassMenuStyleKey: @(WCLiquidGlassMenuStyleRadial),
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
         WCLiquidGlassChatTimeGlassEnabledKey: @YES,
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
@@ -285,21 +283,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     NSInteger clampedStyle = MIN(WCLiquidGlassCompactLayoutStylePetalCluster,
                                  MAX(WCLiquidGlassCompactLayoutStyleDoubleCrescent, style));
     [NSUserDefaults.standardUserDefaults setInteger:clampedStyle forKey:WCLiquidGlassCompactLayoutStyleKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (WCLiquidGlassMenuStyle)menuStyle {
-    NSInteger style = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuStyleKey];
-    return MIN(WCLiquidGlassMenuStyleNativeSystemMenu, MAX(WCLiquidGlassMenuStyleRadial, style));
-}
-
-+ (void)setMenuStyle:(WCLiquidGlassMenuStyle)style {
-    NSInteger clampedStyle = MIN(WCLiquidGlassMenuStyleNativeSystemMenu,
-                                 MAX(WCLiquidGlassMenuStyleRadial, style));
-    if ([self menuStyle] == clampedStyle) {
-        return;
-    }
-    [NSUserDefaults.standardUserDefaults setInteger:clampedStyle forKey:WCLiquidGlassMenuStyleKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -540,7 +523,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassSizeModeKey];
     [defaults removeObjectForKey:WCLiquidGlassCompactLayoutStyleKey];
-    [defaults removeObjectForKey:WCLiquidGlassMenuStyleKey];
     [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornersEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornerInsetKey];

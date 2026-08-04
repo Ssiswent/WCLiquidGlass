@@ -43,12 +43,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassCompactLayoutStyle) {
     WCLiquidGlassCompactLayoutStylePetalCluster
 };
 
-typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStyle) {
-    WCLiquidGlassMenuStyleRadial = 0,
-    WCLiquidGlassMenuStyleNativeSystemMenu = 1,
-    WCLiquidGlassMenuStyleLiquidPanel = WCLiquidGlassMenuStyleNativeSystemMenu
-};
-
 typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
     WCLiquidGlassGlassAppearanceClear = 0,
     WCLiquidGlassGlassAppearanceBalanced,
@@ -64,8 +58,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (void)setSizeMode:(NSInteger)sizeMode;
 + (WCLiquidGlassCompactLayoutStyle)compactLayoutStyle;
 + (void)setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)style;
-+ (WCLiquidGlassMenuStyle)menuStyle;
-+ (void)setMenuStyle:(WCLiquidGlassMenuStyle)style;
 + (WCLiquidGlassGlassAppearance)glassAppearance;
 + (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (BOOL)chatTimeGlassEnabled;

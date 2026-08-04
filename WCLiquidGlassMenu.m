@@ -17,19 +17,6 @@ static BOOL WCLiquidGlassDoutuConfiguredCached = NO;
 static char WCLiquidGlassDoutuCachedButtonKey;
 static char WCLiquidGlassDoutuLastVisibilityKey;
 
-static NSUInteger WCLiquidGlassPanelColumnsForCount(NSUInteger count) {
-    if (count <= 1) {
-        return 1;
-    }
-    if (count <= 4) {
-        return 2;
-    }
-    if (count <= 9) {
-        return 3;
-    }
-    return 4;
-}
-
 static void WCLiquidGlassAppendArcOffsets(NSMutableArray<NSValue *> *offsets,
                                            NSUInteger count,
                                            CGFloat radius,
@@ -1069,39 +1056,6 @@ UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonD
     return image;
 }
 
-static UIImage *WCLiquidGlassNativeMenuImage(NSString *actionIdentifier) {
-    static NSCache<NSString *, UIImage *> *imageCache;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        imageCache = [[NSCache alloc] init];
-        imageCache.countLimit = 96;
-    });
-
-    NSInteger interfaceStyle = UITraitCollection.currentTraitCollection.userInterfaceStyle;
-    NSString *cacheKey = [NSString stringWithFormat:@"%@|%ld", actionIdentifier, (long)interfaceStyle];
-    UIImage *cachedImage = [imageCache objectForKey:cacheKey];
-    if (cachedImage) {
-        return cachedImage;
-    }
-
-    // Use one shared high-resolution logical canvas. UIKit performs the final
-    // fitting, while the generated/vector assets keep their native pixels.
-    // A common request size also prevents sparse brand marks from looking much
-    // smaller or larger than neighboring menu icons.
-    UIImage *sourceImage = WCLiquidGlassImageForAction(actionIdentifier, 56.0);
-    if (!sourceImage) {
-        return nil;
-    }
-
-    [imageCache setObject:sourceImage forKey:cacheKey];
-    return sourceImage;
-}
-
-static NSString *WCLiquidGlassNativeMenuTitle(NSString *actionIdentifier) {
-    NSString *title = WCLiquidGlassActionTitle(actionIdentifier);
-    return title.length > 0 ? title : @"…";
-}
-
 static UIImage *WCLiquidGlassCloseImage(void) {
     UIImage *image = WCLiquidGlassImageNamedFromCandidates(@[@"icons_outlined_close",
                                                               @"icons_filled_close",
@@ -1902,7 +1856,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.actionIdentifier = nil;
     self.showsCloseIcon = YES;
     self.accessibilityLabel = @"关闭";
-    self.accessibilityTraits = UIAccessibilityTraitButton;
     self.iconView.tintColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traitCollection) {
         if (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
             return [UIColor colorWithWhite:0.82 alpha:1.0];
@@ -1917,7 +1870,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.actionIdentifier = nil;
     self.showsCloseIcon = NO;
     self.accessibilityLabel = @"WCLiquidGlass 菜单";
-    self.accessibilityTraits = UIAccessibilityTraitButton;
     self.iconView.tintColor = UIColor.labelColor;
     UIImage *image = WCLiquidGlassImageNamedFromCandidates(@[@"icons_filled_more"]);
     if (!image) {
@@ -2027,100 +1979,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 @end
 
-@interface WCLiquidGlassPanelItemView : UIControl
-
-@property(nonatomic, copy) NSString *actionIdentifier;
-@property(nonatomic, strong) UIImageView *iconView;
-@property(nonatomic, strong) UILabel *titleLabel;
-
-- (void)configureWithActionIdentifier:(NSString *)actionIdentifier active:(BOOL)active;
-
-@end
-
-@implementation WCLiquidGlassPanelItemView
-
-- (instancetype)init {
-    self = [super initWithFrame:CGRectZero];
-    if (!self) {
-        return nil;
-    }
-    self.isAccessibilityElement = YES;
-    self.accessibilityTraits = UIAccessibilityTraitButton;
-    self.accessibilityHint = @"点按执行";
-    self.contentHorizontalAlignment = UIControlContentHorizontalAlignmentFill;
-    self.contentVerticalAlignment = UIControlContentVerticalAlignmentFill;
-
-    _iconView = [[UIImageView alloc] initWithFrame:CGRectZero];
-    _iconView.contentMode = UIViewContentModeScaleAspectFit;
-    _iconView.tintColor = UIColor.labelColor;
-    _iconView.userInteractionEnabled = NO;
-    [self addSubview:_iconView];
-
-    _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _titleLabel.textAlignment = NSTextAlignmentCenter;
-    _titleLabel.textColor = UIColor.labelColor;
-    _titleLabel.numberOfLines = 2;
-    _titleLabel.adjustsFontSizeToFitWidth = YES;
-    _titleLabel.minimumScaleFactor = 0.75;
-    _titleLabel.userInteractionEnabled = NO;
-    [self addSubview:_titleLabel];
-    return self;
-}
-
-- (void)configureWithActionIdentifier:(NSString *)actionIdentifier active:(BOOL)active {
-    self.actionIdentifier = actionIdentifier;
-    self.accessibilityLabel = WCLiquidGlassActionTitle(actionIdentifier);
-    self.accessibilityValue = active ? @"已开启" : nil;
-    self.accessibilityTraits = UIAccessibilityTraitButton | (active ? UIAccessibilityTraitSelected : 0);
-    self.iconView.tintColor = active ? UIColor.systemGreenColor : UIColor.labelColor;
-    self.iconView.image = WCLiquidGlassImageForAction(actionIdentifier, 34.0);
-    self.titleLabel.text = WCLiquidGlassActionTitle(actionIdentifier);
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    CGFloat width = CGRectGetWidth(self.bounds);
-    CGFloat height = CGRectGetHeight(self.bounds);
-    CGFloat iconSide = MIN(34.0, MAX(22.0, height * 0.40));
-    CGFloat titleHeight = MIN(32.0, MAX(22.0, height * 0.38));
-    CGFloat combinedHeight = iconSide + 3.0 + titleHeight;
-    self.iconView.frame = CGRectMake((width - iconSide) * 0.5,
-                                     MAX(2.0, (height - combinedHeight) * 0.5),
-                                     iconSide,
-                                     iconSide);
-    self.titleLabel.frame = CGRectMake(2.0,
-                                       CGRectGetMaxY(self.iconView.frame) + 3.0,
-                                       MAX(0.0, width - 4.0),
-                                       titleHeight);
-    self.titleLabel.font = [UIFont systemFontOfSize:MAX(11.0, MIN(13.0, height * 0.19))
-                                             weight:UIFontWeightMedium];
-}
-
-@end
-
-typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
-    WCLiquidGlassPanelTransitionStateCollapsed = 0,
-    WCLiquidGlassPanelTransitionStateOpening,
-    WCLiquidGlassPanelTransitionStateExpanded,
-    WCLiquidGlassPanelTransitionStateClosing
-};
-
 @interface WCLiquidGlassHostView : UIView <UIGestureRecognizerDelegate>
 
 @property(nonatomic, strong) UIVisualEffectView *glassContainer;
 @property(nonatomic, strong) UIControl *dismissControl;
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
-@property(nonatomic, strong) UIButton *nativeMenuButton;
-@property(nonatomic, assign) BOOL nativeMenuUpdatePending;
-@property(nonatomic, copy) NSString *nativeMenuSignature;
 @property(nonatomic, copy) NSArray<WCLiquidGlassOrbView *> *optionOrbs;
-@property(nonatomic, strong) UIVisualEffectView *panelView;
-@property(nonatomic, strong) UIScrollView *panelScrollView;
-@property(nonatomic, copy) NSArray<WCLiquidGlassPanelItemView *> *panelItemViews;
-@property(nonatomic, assign) WCLiquidGlassPanelTransitionState panelTransitionState;
-@property(nonatomic, assign) NSUInteger panelTransitionGeneration;
-@property(nonatomic, assign) CGRect panelTransitionSeedFrame;
-@property(nonatomic, assign) CGRect panelTransitionTargetFrame;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *visibleItems;
 @property(nonatomic, assign) BOOL menuOpen;
 @property(nonatomic, assign) BOOL anchorOnLeft;
@@ -2167,25 +2031,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 - (void)wc_beginPressOnOrb:(WCLiquidGlassOrbView *)orb towardPoint:(CGPoint)point;
 - (void)wc_updatePressTowardPoint:(CGPoint)point;
 - (void)wc_endPressAnimated:(BOOL)animated;
-- (BOOL)wc_usesNativeSystemMenu;
-- (void)wc_configureNativeMenuButton;
-- (void)wc_refreshNativeMenuImmediately;
-- (void)wc_scheduleNativeMenuUpdate;
-- (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
-- (NSArray<UIMenuElement *> *)wc_nativeMenuElementsWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
-- (NSString *)wc_nativeMenuSignatureForItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
-- (void)wc_nativeMenuActionSelected:(NSString *)actionIdentifier;
-- (BOOL)wc_usesLiquidPanel;
-- (void)wc_rebuildPanelItems;
-- (CGRect)wc_panelTargetFrame;
-- (CGRect)wc_panelSeedFrame;
-- (void)wc_layoutPanelItems;
-- (void)wc_capturePanelTransitionFrames;
-- (void)wc_completeLiquidPanelOpeningForGeneration:(NSUInteger)generation;
-- (void)wc_openLiquidPanel;
-- (void)wc_closeLiquidPanelSelectingActionIdentifier:(nullable NSString *)actionIdentifier;
-- (void)wc_activatePanelItem:(WCLiquidGlassPanelItemView *)item;
-- (void)wc_updateVoicePanelToggleAppearance;
 
 @end
 
@@ -2224,24 +2069,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     _glassContainer.clipsToBounds = NO;
     _glassContainer.contentView.clipsToBounds = NO;
     [self addSubview:_glassContainer];
-
-    _panelView = [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassMakeEffect()];
-    _panelView.hidden = YES;
-    _panelView.alpha = 0.0;
-    _panelView.clipsToBounds = YES;
-    _panelView.contentView.clipsToBounds = YES;
-    _panelView.layer.cornerCurve = kCACornerCurveContinuous;
-    _panelView.isAccessibilityElement = NO;
-    [_glassContainer.contentView addSubview:_panelView];
-
-    _panelScrollView = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    _panelScrollView.showsHorizontalScrollIndicator = NO;
-    _panelScrollView.showsVerticalScrollIndicator = NO;
-    _panelScrollView.alwaysBounceVertical = NO;
-    _panelScrollView.bounces = NO;
-    _panelScrollView.delaysContentTouches = NO;
-    _panelScrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [_panelView.contentView addSubview:_panelScrollView];
 
     if (observesInputNotifications) {
         NSNotificationCenter *notificationCenter = NSNotificationCenter.defaultCenter;
@@ -2315,30 +2142,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    if ([self wc_usesNativeSystemMenu]) {
-        CGPoint buttonPoint = [self.nativeMenuButton convertPoint:point fromView:self];
-        return [self.nativeMenuButton hitTest:buttonPoint withEvent:event];
-    }
-    if ([self wc_usesLiquidPanel]) {
-        if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateCollapsed) {
-            if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
-                return self.dismissControl;
-            }
-            CGPoint anchorPoint = [self.anchorOrb convertPoint:point fromView:self];
-            UIView *anchorHit = [self.anchorOrb hitTest:anchorPoint withEvent:event];
-            if (anchorHit) {
-                return anchorHit;
-            }
-            CGPoint panelPoint = [self.panelView convertPoint:point fromView:self];
-            UIView *panelHit = [self.panelView hitTest:panelPoint withEvent:event];
-            for (UIView *view = panelHit; view && view != self.panelView; view = view.superview) {
-                if ([view isKindOfClass:WCLiquidGlassPanelItemView.class]) {
-                    return panelHit;
-                }
-            }
-            return self.dismissControl;
-        }
-    }
     for (WCLiquidGlassOrbView *orb in self.optionOrbs.reverseObjectEnumerator) {
         if (!orb.hidden && orb.alpha > 0.01) {
             CGPoint localPoint = [orb convertPoint:point fromView:self];
@@ -2354,199 +2157,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         return anchorHit;
     }
     return self.menuOpen ? self.dismissControl : nil;
-}
-
-- (BOOL)wc_usesNativeSystemMenu {
-    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleNativeSystemMenu;
-}
-
-- (BOOL)wc_usesLiquidPanel {
-    return NO;
-}
-
-- (void)wc_configureNativeMenuButton {
-    UIView *buttonSuperview = self;
-    if (!self.nativeMenuButton) {
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-        button.accessibilityLabel = @"WCLiquidGlass 菜单";
-        button.showsMenuAsPrimaryAction = YES;
-        button.automaticallyUpdatesConfiguration = YES;
-        button.tintColor = UIColor.labelColor;
-        [buttonSuperview addSubview:button];
-        self.nativeMenuButton = button;
-    } else if (self.nativeMenuButton.superview != buttonSuperview) {
-        [self.nativeMenuButton removeFromSuperview];
-        [buttonSuperview addSubview:self.nativeMenuButton];
-    }
-    [buttonSuperview bringSubviewToFront:self.nativeMenuButton];
-
-    // The native button is already a complete Liquid Glass element.  Keeping
-    // it inside our UIGlassContainerEffect makes the hidden radial anchor and
-    // the button participate in the same combined material, which produces a
-    // second offset glass layer while the button is pressed or moved.  Native
-    // menu mode owns this glass surface, so detach the container material and
-    // let UIKit perform the source-to-menu morph from the button itself.
-    self.glassContainer.effect = nil;
-
-    [self.anchorOrb setAnchorAppearance];
-    UIButtonConfiguration *configuration = nil;
-    if (@available(iOS 26.0, *)) {
-        SEL glassConfigurationSelector = NSSelectorFromString(@"glassButtonConfiguration");
-        if ([UIButtonConfiguration respondsToSelector:glassConfigurationSelector]) {
-            configuration = ((id (*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class,
-                                                            glassConfigurationSelector);
-        }
-    }
-    if (!configuration) {
-        configuration = [UIButtonConfiguration plainButtonConfiguration];
-        configuration.background.backgroundColor = UIColor.clearColor;
-        self.nativeMenuButton.layer.borderWidth = 1.0;
-        self.nativeMenuButton.layer.borderColor = [UIColor.separatorColor colorWithAlphaComponent:0.45].CGColor;
-    } else {
-        self.nativeMenuButton.layer.borderWidth = 0.0;
-    }
-    configuration.image = self.anchorOrb.iconView.image;
-    configuration.baseForegroundColor = UIColor.labelColor;
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-    configuration.buttonSize = UIButtonConfigurationSizeMedium;
-    configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
-    self.nativeMenuButton.configuration = configuration;
-    self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
-    self.nativeMenuButton.layer.cornerRadius = 0.0;
-}
-
-- (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
-    NSArray<UIMenuElement *> *children = [self wc_nativeMenuElementsWithVisibleItems:items];
-    UIMenu *menu = [UIMenu menuWithTitle:@""
-                                    image:nil
-                               identifier:@"WCLiquidGlass.native.menu"
-                                  options:0
-                                 children:children];
-    if (@available(iOS 16.0, *)) {
-        SEL preferredElementSizeSelector = NSSelectorFromString(@"setPreferredElementSize:");
-        if ([menu respondsToSelector:preferredElementSizeSelector]) {
-            ((void (*)(id, SEL, UIMenuElementSize))objc_msgSend)(menu,
-                                                                   preferredElementSizeSelector,
-                                                                   UIMenuElementSizeMedium);
-        }
-        if (@available(iOS 17.4, *)) {
-            UIMenuDisplayPreferences *displayPreferences = [[UIMenuDisplayPreferences alloc] init];
-            displayPreferences.maximumNumberOfTitleLines = 1;
-            menu.displayPreferences = displayPreferences;
-        }
-    }
-    return menu;
-}
-
-- (NSArray<UIMenuElement *> *)wc_nativeMenuElementsWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
-    NSMutableArray<UIAction *> *actions = [NSMutableArray arrayWithCapacity:items.count];
-    __weak typeof(self) weakSelf = self;
-    for (NSDictionary<NSString *, id> *item in items) {
-        NSString *actionIdentifier = item[@"action"];
-        UIAction *action = [UIAction actionWithTitle:WCLiquidGlassNativeMenuTitle(actionIdentifier)
-                                               image:WCLiquidGlassNativeMenuImage(actionIdentifier)
-                                          identifier:actionIdentifier
-                                             handler:^(__unused UIAction *selectedAction) {
-            __strong typeof(weakSelf) self = weakSelf;
-            [self wc_nativeMenuActionSelected:actionIdentifier];
-        }];
-        if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput] &&
-            self.voiceTranscriptionActive) {
-            action.state = UIMenuElementStateOn;
-        }
-        [actions addObject:action];
-    }
-    return actions.copy;
-}
-
-- (NSString *)wc_nativeMenuSignatureForItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
-    UIViewController *visibleController = WCLiquidGlassVisibleController();
-    NSMutableString *signature = [NSMutableString stringWithFormat:@"appearance=%ld;style=%ld;voice=%d;trait=%ld;controller=%@;tab=%ld;",
-                                  (long)WCLiquidGlassPreferences.glassAppearance,
-                                  (long)WCLiquidGlassPreferences.menuStyle,
-                                  self.voiceTranscriptionActive,
-                                  (long)UITraitCollection.currentTraitCollection.userInterfaceStyle,
-                                  NSStringFromClass(visibleController.class),
-                                  (long)WCLiquidGlassCurrentTabIndex(WCLiquidGlassCurrentTabController())];
-    for (NSDictionary<NSString *, id> *item in items) {
-        NSString *actionIdentifier = item[@"action"];
-        if (actionIdentifier.length > 0) {
-            [signature appendFormat:@"|%@", actionIdentifier];
-        }
-    }
-    return signature.copy;
-}
-
-- (void)wc_refreshNativeMenuImmediately {
-    if (![self wc_usesNativeSystemMenu] || !self.nativeMenuButton) {
-        return;
-    }
-    if (self.nativeMenuButton.isHighlighted || self.nativeMenuButton.isTracking) {
-        return;
-    }
-    NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
-    self.visibleItems = items;
-    NSString *signature = [self wc_nativeMenuSignatureForItems:items];
-    if ([signature isEqualToString:self.nativeMenuSignature]) {
-        return;
-    }
-    self.nativeMenuButton.menu = [self wc_nativeMenuWithVisibleItems:items];
-    self.nativeMenuSignature = signature;
-}
-
-- (void)wc_scheduleNativeMenuUpdate {
-    if (![self wc_usesNativeSystemMenu] || self.nativeMenuUpdatePending) {
-        return;
-    }
-    if (@available(iOS 15.0, *)) {
-        if (self.nativeMenuButton.isHeld) {
-            return;
-        }
-    }
-    self.nativeMenuUpdatePending = YES;
-    __weak typeof(self) weakSelf = self;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) {
-            return;
-        }
-        self.nativeMenuUpdatePending = NO;
-        if (![self wc_usesNativeSystemMenu]) {
-            return;
-        }
-        if (@available(iOS 15.0, *)) {
-            if (self.nativeMenuButton.isHeld) {
-                return;
-            }
-        }
-        [self wc_refreshNativeMenuImmediately];
-    });
-}
-
-- (void)wc_nativeMenuActionSelected:(NSString *)actionIdentifier {
-    if (actionIdentifier.length == 0) {
-        return;
-    }
-    __weak typeof(self) weakSelf = self;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self || UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
-            return;
-        }
-        BOOL togglesVoiceTranscription = [actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput] &&
-            WCLiquidGlassVoiceTranscriptionControl() != nil;
-        WCLiquidGlassPerformAction(actionIdentifier);
-        if (togglesVoiceTranscription) {
-            self.voiceTranscriptionActive = !self.voiceTranscriptionActive;
-        }
-        // Let UIKit finish the source-to-menu dismissal before replacing the
-        // menu tree.  Rebuilding it in the same run-loop turn can truncate the
-        // collapse morph and make it appear much faster than the opening.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.24 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [self wc_scheduleNativeMenuUpdate];
-        });
-    });
 }
 
 - (NSArray<NSDictionary<NSString *, id> *> *)wc_currentVisibleItems {
@@ -2594,318 +2204,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [orb addGestureRecognizer:longPress];
     [self.glassContainer.contentView addSubview:orb];
     return orb;
-}
-
-- (void)wc_rebuildPanelItems {
-    self.panelView.effect = WCLiquidGlassMakeEffect();
-    NSMutableDictionary<NSString *, WCLiquidGlassPanelItemView *> *existing = [NSMutableDictionary dictionary];
-    for (WCLiquidGlassPanelItemView *item in self.panelItemViews) {
-        if (item.actionIdentifier.length > 0) {
-            existing[item.actionIdentifier] = item;
-        }
-    }
-    NSMutableArray<WCLiquidGlassPanelItemView *> *newItems = [NSMutableArray arrayWithCapacity:self.visibleItems.count];
-    for (NSDictionary<NSString *, id> *item in self.visibleItems) {
-        NSString *actionIdentifier = item[@"action"];
-        WCLiquidGlassPanelItemView *panelItem = existing[actionIdentifier];
-        if (panelItem) {
-            [existing removeObjectForKey:actionIdentifier];
-        } else {
-            panelItem = [[WCLiquidGlassPanelItemView alloc] init];
-            [panelItem addTarget:self action:@selector(wc_panelItemTapped:)
-                  forControlEvents:UIControlEventTouchUpInside];
-            [self.panelScrollView addSubview:panelItem];
-        }
-        [panelItem configureWithActionIdentifier:actionIdentifier
-                                          active:[actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput] &&
-                                                 self.voiceTranscriptionActive];
-        [newItems addObject:panelItem];
-    }
-    for (WCLiquidGlassPanelItemView *item in existing.allValues) {
-        [item removeFromSuperview];
-    }
-    self.panelItemViews = newItems.copy;
-    [self wc_layoutPanelItems];
-}
-
-- (NSUInteger)wc_panelColumnCount {
-    return WCLiquidGlassPanelColumnsForCount(self.panelItemViews.count);
-}
-
-- (CGRect)wc_panelTargetFrame {
-    NSUInteger count = self.panelItemViews.count;
-    if (count == 0 || !self.anchorOrb) {
-        return CGRectZero;
-    }
-    UIEdgeInsets safe = self.safeAreaInsets;
-    CGFloat margin = 12.0;
-    CGFloat availableTop = safe.top + margin;
-    CGFloat availableBottom = MAX(availableTop + 44.0, [self wc_effectiveLayoutBottom] - margin);
-    CGFloat availableHeight = availableBottom - availableTop;
-    CGFloat anchorGap = 10.0;
-    CGFloat sideLimit = self.anchorOnLeft
-        ? CGRectGetWidth(self.bounds) - safe.right - margin - (CGRectGetMaxX(self.anchorOrb.frame) + anchorGap)
-        : CGRectGetMinX(self.anchorOrb.frame) - anchorGap - (safe.left + margin);
-    NSUInteger columns = [self wc_panelColumnCount];
-    NSUInteger rows = (count + columns - 1) / columns;
-    CGFloat preferredWidth = columns == 1 ? 132.0 : MIN(296.0, 26.0 + columns * 70.0);
-    CGFloat minimumWidth = columns * 44.0 + 20.0;
-    CGFloat width = MAX(minimumWidth, MIN(preferredWidth, MAX(minimumWidth, sideLimit)));
-    width = MIN(width, MAX(44.0, CGRectGetWidth(self.bounds) - safe.left - safe.right - 24.0));
-    CGFloat preferredHeight = 20.0 + rows * 68.0;
-    CGFloat height = MIN(preferredHeight, availableHeight);
-    height = MAX(MIN(88.0, availableHeight), height);
-    CGFloat y = MIN(MAX(availableTop, self.anchorOrb.center.y - height * 0.5), availableBottom - height);
-    CGFloat x = self.anchorOnLeft
-        ? CGRectGetMaxX(self.anchorOrb.frame) + anchorGap
-        : CGRectGetMinX(self.anchorOrb.frame) - anchorGap - width;
-    x = MIN(MAX(safe.left + margin, x), CGRectGetWidth(self.bounds) - safe.right - margin - width);
-    return CGRectIntegral(CGRectMake(x, y, width, height));
-}
-
-- (CGRect)wc_panelSeedFrame {
-    CGFloat side = MAX(44.0, MIN(self.anchorOrb.diameter, 56.0));
-    CGFloat x = self.anchorOnLeft
-        ? CGRectGetMaxX(self.anchorOrb.frame) + 4.0
-        : CGRectGetMinX(self.anchorOrb.frame) - side - 4.0;
-    return CGRectIntegral(CGRectMake(x, self.anchorOrb.center.y - side * 0.5, side, side));
-}
-
-- (void)wc_capturePanelTransitionFrames {
-    [self wc_cancelIdleHide];
-    [self wc_endPressAnimated:NO];
-    CALayer *presentationLayer = (CALayer *)self.anchorOrb.layer.presentationLayer;
-    CGRect presentationFrame = presentationLayer ? presentationLayer.frame : self.anchorOrb.frame;
-    UIView *anchorSuperview = self.anchorOrb.superview ?: self.glassContainer.contentView;
-    self.panelTransitionSeedFrame = [anchorSuperview convertRect:presentationFrame
-                                                          toView:self.glassContainer.contentView];
-    [self.anchorOrb.layer removeAllAnimations];
-    [self.anchorOrb.iconView.layer removeAllAnimations];
-    self.anchorOrb.transform = CGAffineTransformIdentity;
-    self.anchorOrb.frame = [anchorSuperview convertRect:self.panelTransitionSeedFrame
-                                                fromView:self.glassContainer.contentView];
-    self.panelTransitionTargetFrame = [self wc_panelTargetFrame];
-}
-
-- (void)wc_layoutPanelItems {
-    if (CGRectIsEmpty(self.panelView.bounds) || self.panelItemViews.count == 0) {
-        return;
-    }
-    self.panelScrollView.frame = self.panelView.contentView.bounds;
-    [self.panelView setNeedsLayout];
-    [self.panelView layoutIfNeeded];
-    [self.panelScrollView setNeedsLayout];
-    [self.panelScrollView layoutIfNeeded];
-    NSUInteger columns = [self wc_panelColumnCount];
-    NSUInteger rows = (self.panelItemViews.count + columns - 1) / columns;
-    CGFloat inset = 10.0;
-    CGFloat gap = 4.0;
-    CGFloat contentWidth = CGRectGetWidth(self.panelScrollView.bounds);
-    CGFloat cellWidth = MAX(44.0, (contentWidth - inset * 2.0 - gap * (columns - 1)) / columns);
-    CGFloat cellHeight = MAX(44.0, MIN(70.0, cellWidth * 0.92));
-    CGFloat contentHeight = MAX(CGRectGetHeight(self.panelScrollView.bounds), inset * 2.0 + rows * cellHeight + gap * (rows - 1));
-    self.panelScrollView.contentSize = CGSizeMake(contentWidth, contentHeight);
-    [self.panelItemViews enumerateObjectsUsingBlock:^(WCLiquidGlassPanelItemView *item,
-                                                       NSUInteger index,
-                                                       __unused BOOL *stop) {
-        NSUInteger row = index / columns;
-        NSUInteger column = index % columns;
-        item.frame = CGRectIntegral(CGRectMake(inset + column * (cellWidth + gap),
-                                               inset + row * (cellHeight + gap),
-                                               cellWidth,
-                                               cellHeight));
-    }];
-}
-
-- (void)wc_completeLiquidPanelOpeningForGeneration:(NSUInteger)generation {
-    if (generation != self.panelTransitionGeneration || !self.menuOpen ||
-        self.panelTransitionState != WCLiquidGlassPanelTransitionStateOpening) {
-        return;
-    }
-    [self.panelView.layer removeAllAnimations];
-    self.panelView.frame = self.panelTransitionTargetFrame;
-    self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(self.panelView.bounds) * 0.24);
-    [self wc_layoutPanelItems];
-    self.anchorOrb.transform = CGAffineTransformIdentity;
-    self.anchorOrb.frame = self.panelTransitionSeedFrame;
-    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
-    [self.anchorOrb setCloseAppearance];
-    self.anchorOrb.alpha = 1.0;
-    self.anchorOrb.hidden = NO;
-    self.anchorOrb.userInteractionEnabled = YES;
-    self.panelScrollView.alpha = 1.0;
-    self.panelTransitionState = WCLiquidGlassPanelTransitionStateExpanded;
-    self.panelView.userInteractionEnabled = YES;
-    self.panelScrollView.userInteractionEnabled = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (generation == self.panelTransitionGeneration && self.menuOpen &&
-            self.panelTransitionState == WCLiquidGlassPanelTransitionStateExpanded) {
-            [self setNeedsLayout];
-        }
-    });
-}
-
-- (void)wc_openLiquidPanel {
-    if (self.panelItemViews.count == 0) {
-        [self wc_scheduleIdleHide];
-        return;
-    }
-    [self wc_capturePanelTransitionFrames];
-    self.menuOpen = YES;
-    self.panelTransitionState = WCLiquidGlassPanelTransitionStateOpening;
-    NSUInteger generation = ++self.panelTransitionGeneration;
-    self.dismissControl.hidden = NO;
-    self.dismissControl.userInteractionEnabled = YES;
-    self.panelView.hidden = NO;
-    self.panelView.effect = WCLiquidGlassMakeEffect();
-    self.panelView.frame = self.panelTransitionSeedFrame;
-    self.panelView.alpha = 1.0;
-    self.panelView.layer.cornerRadius = CGRectGetHeight(self.panelView.bounds) * 0.5;
-    self.panelScrollView.alpha = 0.0;
-    self.panelView.userInteractionEnabled = NO;
-    self.panelScrollView.userInteractionEnabled = NO;
-    [self wc_layoutPanelItems];
-    self.anchorOrb.userInteractionEnabled = NO;
-    self.anchorOrb.alpha = 0.0;
-    self.anchorOrb.hidden = YES;
-    CGRect target = self.panelTransitionTargetFrame;
-    [UIView animateWithDuration:0.46
-                          delay:0
-         usingSpringWithDamping:0.78
-          initialSpringVelocity:0.65
-                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-                     animations:^{
-        self.panelView.frame = target;
-        self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(target) * 0.24);
-        [self wc_layoutPanelItems];
-    } completion:^(BOOL finished) {
-        if (generation != self.panelTransitionGeneration || !self.menuOpen ||
-            self.panelTransitionState != WCLiquidGlassPanelTransitionStateOpening) {
-            return;
-        }
-        if (!finished) {
-            [self.panelView.layer removeAllAnimations];
-        }
-        [self wc_completeLiquidPanelOpeningForGeneration:generation];
-    }];
-}
-
-- (void)wc_closeLiquidPanelSelectingActionIdentifier:(NSString *)actionIdentifier {
-    if (!self.menuOpen && self.panelTransitionState == WCLiquidGlassPanelTransitionStateCollapsed) {
-        return;
-    }
-    self.menuOpen = NO;
-    self.contentRefreshGeneration += 1;
-    NSUInteger actionGeneration = self.contentRefreshGeneration;
-    NSUInteger generation = ++self.panelTransitionGeneration;
-    self.panelTransitionState = WCLiquidGlassPanelTransitionStateClosing;
-    self.dismissControl.hidden = NO;
-    self.dismissControl.userInteractionEnabled = YES;
-    [self.anchorOrb.layer removeAllAnimations];
-    [self.anchorOrb.iconView.layer removeAllAnimations];
-    self.anchorOrb.userInteractionEnabled = NO;
-    self.anchorOrb.alpha = 0.0;
-    self.anchorOrb.hidden = YES;
-    self.anchorOrb.transform = CGAffineTransformIdentity;
-    self.anchorOrb.frame = self.panelTransitionSeedFrame;
-    self.panelView.userInteractionEnabled = NO;
-    self.panelScrollView.userInteractionEnabled = NO;
-    [self wc_scheduleIdleHide];
-    __block BOOL actionPerformed = NO;
-    void (^performAction)(void) = ^{
-        if (!actionIdentifier || actionPerformed || generation != self.panelTransitionGeneration ||
-            actionGeneration != self.contentRefreshGeneration || self.menuOpen ||
-            UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
-            return;
-        }
-        actionPerformed = YES;
-        WCLiquidGlassPerformAction(actionIdentifier);
-    };
-    [UIView animateWithDuration:0.12 delay:0 options:UIViewAnimationOptionBeginFromCurrentState animations:^{
-        if (generation == self.panelTransitionGeneration && !self.menuOpen) {
-            self.panelScrollView.alpha = 0.0;
-        }
-    } completion:nil];
-    CGRect seed = self.panelTransitionSeedFrame;
-    void (^finishClose)(void) = ^{
-        if (generation != self.panelTransitionGeneration || self.menuOpen) {
-            return;
-        }
-        [self.panelView.layer removeAllAnimations];
-        self.panelView.hidden = YES;
-        self.panelView.alpha = 0.0;
-        self.panelTransitionState = WCLiquidGlassPanelTransitionStateCollapsed;
-        self.dismissControl.hidden = YES;
-        self.anchorOrb.transform = CGAffineTransformIdentity;
-        self.anchorOrb.frame = self.panelTransitionSeedFrame;
-        self.anchorOrb.effect = WCLiquidGlassMakeEffect();
-        [self.anchorOrb setAnchorAppearance];
-        self.anchorOrb.alpha = 1.0;
-        self.anchorOrb.hidden = NO;
-        self.anchorOrb.userInteractionEnabled = YES;
-        self.panelView.userInteractionEnabled = YES;
-        self.panelScrollView.userInteractionEnabled = YES;
-        performAction();
-    };
-    [UIView animateWithDuration:0.35
-                          delay:0
-         usingSpringWithDamping:0.86
-          initialSpringVelocity:0.45
-                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-                     animations:^{
-        self.panelView.frame = seed;
-        self.panelView.layer.cornerRadius = CGRectGetHeight(seed) * 0.5;
-    } completion:^(__unused BOOL finished) {
-        finishClose();
-    }];
-    if (actionIdentifier) {
-        [self wc_emitSelectionFeedback];
-    }
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.52 * NSEC_PER_SEC)), dispatch_get_main_queue(), finishClose);
-}
-
-- (void)wc_panelItemTapped:(WCLiquidGlassPanelItemView *)item {
-    [self wc_activatePanelItem:item];
-}
-
-- (void)wc_activatePanelItem:(WCLiquidGlassPanelItemView *)item {
-    if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
-        return;
-    }
-    NSString *actionIdentifier = item.actionIdentifier;
-    if (actionIdentifier.length == 0) {
-        [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
-        return;
-    }
-    if (![actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
-        [self wc_closeLiquidPanelSelectingActionIdentifier:actionIdentifier];
-        return;
-    }
-    UIControl *control = WCLiquidGlassVoiceTranscriptionControl();
-    if (!control) {
-        [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
-        WCLiquidGlassShowActionError(@"当前页面没有找到微信原生的语音转述按钮。");
-        return;
-    }
-    BOOL wasActive = self.voiceTranscriptionActive;
-    [control sendActionsForControlEvents:UIControlEventTouchUpInside];
-    self.voiceTranscriptionActive = !wasActive;
-    [self wc_updateVoicePanelToggleAppearance];
-    [self wc_emitSelectionFeedback];
-    if (wasActive) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.16 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
-        });
-    }
-}
-
-- (void)wc_updateVoicePanelToggleAppearance {
-    for (WCLiquidGlassPanelItemView *item in self.panelItemViews) {
-        if ([item.actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]) {
-            [item configureWithActionIdentifier:item.actionIdentifier active:self.voiceTranscriptionActive];
-            break;
-        }
-    }
 }
 
 - (void)reload {
@@ -2979,63 +2277,18 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }
     self.anchorOrb.effect = WCLiquidGlassMakeEffect();
     [self wc_updateAnchorVisual];
-    if ([self wc_usesNativeSystemMenu]) {
-        [self wc_configureNativeMenuButton];
-        [self wc_refreshNativeMenuImmediately];
-        self.nativeMenuButton.hidden = NO;
-        self.nativeMenuButton.userInteractionEnabled = YES;
-        self.anchorOrb.hidden = YES;
-        self.anchorOrb.userInteractionEnabled = NO;
-        for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
-            orb.hidden = YES;
-            orb.alpha = 0.0;
-        }
-        [self wc_scheduleNativeMenuUpdate];
-    } else {
-        self.glassContainer.effect = WCLiquidGlassCurrentGlassContainerEffect();
-        self.nativeMenuSignature = nil;
-        self.nativeMenuButton.hidden = YES;
-        self.nativeMenuButton.userInteractionEnabled = NO;
-        self.panelView.hidden = YES;
-        self.panelTransitionState = WCLiquidGlassPanelTransitionStateCollapsed;
-    }
     [self setNeedsLayout];
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (![self wc_usesNativeSystemMenu]) {
-            [self wc_scheduleIdleHide];
-        }
+        [self wc_scheduleIdleHide];
     });
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    if ([self wc_usesNativeSystemMenu]) {
-        [self wc_layoutAnchorFromPreferences];
-        return;
-    }
-    if ([self wc_usesLiquidPanel]) {
-        if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateCollapsed) {
-            [self wc_layoutAnchorFromPreferences];
-        } else if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateExpanded) {
-            self.panelView.frame = [self wc_panelTargetFrame];
-            self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(self.panelView.bounds) * 0.24);
-            [self wc_layoutPanelItems];
-        }
-        return;
-    }
     if (!self.menuOpen) {
         [self wc_layoutAnchorFromPreferences];
     } else {
         [self wc_layoutOptionOrbsAnimated:NO];
-    }
-}
-
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-    [super traitCollectionDidChange:previousTraitCollection];
-    if ([self wc_usesNativeSystemMenu] &&
-        [self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
-        [self wc_configureNativeMenuButton];
-        [self wc_scheduleNativeMenuUpdate];
     }
 }
 
@@ -3050,11 +2303,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     CGFloat maximumY = [self wc_effectiveLayoutBottom] - diameter * 0.5 - 12.0;
     maximumY = MAX(minimumY, maximumY);
     CGFloat y = CGRectGetHeight(self.bounds) * WCLiquidGlassPreferences.anchorYFraction;
-    CGPoint center = CGPointMake(x, MIN(maximumY, MAX(minimumY, y)));
-    self.anchorOrb.center = center;
-    self.nativeMenuButton.bounds = self.anchorOrb.bounds;
-    UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
-    self.nativeMenuButton.center = [self convertPoint:center toView:buttonSuperview];
+    self.anchorOrb.center = CGPointMake(x, MIN(maximumY, MAX(minimumY, y)));
 }
 
 - (CGFloat)wc_effectiveLayoutBottom {
@@ -3079,19 +2328,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (void)wc_layoutForKeyboardNotification:(NSNotification *)notification {
     [self wc_animateForKeyboardNotification:notification changes:^{
-        if ([self wc_usesNativeSystemMenu]) {
-            [self wc_layoutAnchorFromPreferences];
-            return;
-        }
-        if ([self wc_usesLiquidPanel]) {
-            if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateCollapsed) {
-                [self wc_layoutAnchorFromPreferences];
-            } else if (self.panelTransitionState == WCLiquidGlassPanelTransitionStateExpanded) {
-                self.panelView.frame = [self wc_panelTargetFrame];
-                [self wc_layoutPanelItems];
-            }
-            return;
-        }
         [self wc_layoutAnchorFromPreferences];
         if (self.menuOpen) {
             [self wc_layoutOptionOrbsAnimated:NO];
@@ -3162,11 +2398,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (inputWasCleared) {
         self.voiceTranscriptionActive = NO;
         [self wc_updateVoiceOrbToggleAppearance];
-    }
-
-    if ([self wc_usesNativeSystemMenu]) {
-        [self wc_scheduleNativeMenuUpdate];
-        return;
     }
 
     if (!self.menuOpen || !WCLiquidGlassDoutuAssistantEnabled() ||
@@ -3246,10 +2477,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             self.voiceTranscriptionActive = NO;
             [self wc_updateVoiceOrbToggleAppearance];
         }
-        if ([self wc_usesNativeSystemMenu]) {
-            [self wc_scheduleNativeMenuUpdate];
-            return;
-        }
         if (self.menuOpen) {
             [self wc_refreshOpenMenuAnimated];
         }
@@ -3269,8 +2496,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             break;
         }
     }
-    [self wc_updateVoicePanelToggleAppearance];
-    [self wc_scheduleNativeMenuUpdate];
 }
 
 - (void)wc_cancelIdleHide {
@@ -3278,11 +2503,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_scheduleIdleHide {
-    if ([self wc_usesNativeSystemMenu]) {
-        [self wc_cancelIdleHide];
-        self.anchorIdleHidden = NO;
-        return;
-    }
     if (self.menuOpen || !self.anchorOrb) {
         return;
     }
@@ -3647,43 +2867,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_refreshOpenMenuAnimated {
-    if ([self wc_usesNativeSystemMenu]) {
-        self.visibleItems = [self wc_currentVisibleItems];
-        [self wc_scheduleNativeMenuUpdate];
-        return;
-    }
     if (!self.menuOpen) {
-        return;
-    }
-
-    if ([self wc_usesLiquidPanel]) {
-        NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
-        NSUInteger previousCount = self.panelItemViews.count;
-        NSUInteger previousColumns = WCLiquidGlassPanelColumnsForCount(previousCount);
-        self.visibleItems = newVisibleItems;
-        [self wc_rebuildPanelItems];
-        if (self.panelItemViews.count == 0) {
-            [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
-            return;
-        }
-        if (self.panelTransitionState != WCLiquidGlassPanelTransitionStateExpanded) {
-            return;
-        }
-        NSUInteger currentColumns = WCLiquidGlassPanelColumnsForCount(self.panelItemViews.count);
-        if (previousCount != self.panelItemViews.count || previousColumns != currentColumns) {
-            CGRect target = [self wc_panelTargetFrame];
-            [UIView animateWithDuration:0.28
-                                  delay:0
-                                options:UIViewAnimationOptionBeginFromCurrentState |
-                                        UIViewAnimationOptionAllowUserInteraction
-                             animations:^{
-                self.panelView.frame = target;
-                self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(target) * 0.24);
-                [self wc_layoutPanelItems];
-            } completion:nil];
-        } else {
-            [self wc_layoutPanelItems];
-        }
         return;
     }
 
@@ -3748,18 +2932,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)openMenu {
-    if ([self wc_usesNativeSystemMenu]) {
-        return;
-    }
     if (self.menuOpen) {
         return;
     }
     [self reload];
     [self wc_revealAnchorAnimated:NO];
-    if ([self wc_usesLiquidPanel]) {
-        [self wc_openLiquidPanel];
-        return;
-    }
     if (self.optionOrbs.count == 0) {
         [self wc_scheduleIdleHide];
         return;
@@ -3793,21 +2970,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
     [self.anchorOrb.layer removeAllAnimations];
     [self.anchorOrb.iconView.layer removeAllAnimations];
-    self.panelTransitionGeneration += 1;
-    self.panelTransitionState = WCLiquidGlassPanelTransitionStateCollapsed;
-    [self.panelView.layer removeAllAnimations];
-    self.panelView.hidden = YES;
-    self.panelView.alpha = 0.0;
-    self.panelView.userInteractionEnabled = YES;
-    self.panelScrollView.alpha = 0.0;
-    self.panelScrollView.userInteractionEnabled = YES;
-    self.anchorOrb.transform = CGAffineTransformIdentity;
-    BOOL usesNativeSystemMenu = [self wc_usesNativeSystemMenu];
-    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
-    [self.anchorOrb setAnchorAppearance];
-    self.anchorOrb.alpha = 1.0;
-    self.anchorOrb.hidden = NO;
-    self.anchorOrb.userInteractionEnabled = YES;
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    __unused NSUInteger index,
                                                    __unused BOOL *stop) {
@@ -3818,27 +2980,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         orb.hidden = YES;
     }];
     [self wc_updateAnchorVisual];
-    if (usesNativeSystemMenu) {
-        self.nativeMenuButton.hidden = NO;
-        self.nativeMenuButton.userInteractionEnabled = YES;
-        self.anchorOrb.hidden = YES;
-        self.anchorOrb.userInteractionEnabled = NO;
-        return;
-    }
 }
 
 - (void)closeMenuSelectingIndex:(NSInteger)index {
-    if ([self wc_usesNativeSystemMenu]) {
-        return;
-    }
-    if ([self wc_usesLiquidPanel]) {
-        NSString *actionIdentifier = nil;
-        if (index >= 0 && index < (NSInteger)self.panelItemViews.count) {
-            actionIdentifier = self.panelItemViews[index].actionIdentifier;
-        }
-        [self wc_closeLiquidPanelSelectingActionIdentifier:actionIdentifier];
-        return;
-    }
     if (!self.menuOpen) {
         return;
     }
@@ -3890,10 +3034,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_updateAnchorVisual {
-    if ([self wc_usesNativeSystemMenu]) {
-        [self.anchorOrb setAnchorAppearance];
-        return;
-    }
     if (self.menuOpen) {
         [self.anchorOrb setCloseAppearance];
     } else {
@@ -3902,9 +3042,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_anchorTapped:(UITapGestureRecognizer *)gesture {
-    if ([self wc_usesNativeSystemMenu]) {
-        return;
-    }
     if (gesture.state != UIGestureRecognizerStateEnded) {
         return;
     }
@@ -3912,19 +3049,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_anchorPanned:(UIPanGestureRecognizer *)gesture {
-    if ([self wc_usesNativeSystemMenu]) {
-        return;
-    }
     CGPoint location = [gesture locationInView:self];
     if (self.menuOpen) {
-        if ([self wc_usesLiquidPanel]) {
-            if (gesture.state == UIGestureRecognizerStateEnded ||
-                gesture.state == UIGestureRecognizerStateCancelled ||
-                gesture.state == UIGestureRecognizerStateFailed) {
-                [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
-            }
-            return;
-        }
         if (gesture.state == UIGestureRecognizerStateBegan) {
             [self wc_beginPressOnOrb:self.anchorOrb towardPoint:location];
         } else if (gesture.state == UIGestureRecognizerStateChanged) {
@@ -3976,20 +3102,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_anchorLongPressed:(UILongPressGestureRecognizer *)gesture {
-    if ([self wc_usesNativeSystemMenu]) {
-        return;
-    }
     CGPoint point = [gesture locationInView:self];
-    if ([self wc_usesLiquidPanel]) {
-        if (gesture.state == UIGestureRecognizerStateBegan && !self.menuOpen) {
-            [self openMenu];
-        } else if (gesture.state == UIGestureRecognizerStateEnded ||
-                   gesture.state == UIGestureRecognizerStateCancelled ||
-                   gesture.state == UIGestureRecognizerStateFailed) {
-            [self wc_closeLiquidPanelSelectingActionIdentifier:nil];
-        }
-        return;
-    }
     if (gesture.state == UIGestureRecognizerStateBegan) {
         [self openMenu];
         [self wc_beginPressOnOrb:self.anchorOrb towardPoint:point];
@@ -4058,12 +3171,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_backgroundTapped {
-    if ([self wc_usesNativeSystemMenu]) {
-        return;
-    }
-    if ([self wc_usesLiquidPanel] && self.panelTransitionState == WCLiquidGlassPanelTransitionStateClosing) {
-        return;
-    }
     [self closeMenuSelectingIndex:NSNotFound];
 }
 
@@ -4143,7 +3250,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.dismissControl.hidden = YES;
     self.anchorOrb.userInteractionEnabled = NO;
     self.anchorOrb.isAccessibilityElement = NO;
-    self.panelScrollView.userInteractionEnabled = NO;
     for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
         orb.userInteractionEnabled = NO;
         orb.isAccessibilityElement = NO;
@@ -4177,22 +3283,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
                                         CGRectGetHeight(self.bounds) * 0.58);
     self.menuOpen = YES;
     [self wc_updateAnchorVisual];
-    if ([self wc_usesNativeSystemMenu]) {
-        self.nativeMenuButton.bounds = self.anchorOrb.bounds;
-        UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
-        self.nativeMenuButton.center = [self convertPoint:self.anchorOrb.center toView:buttonSuperview];
-        self.nativeMenuButton.hidden = NO;
-        return;
-    }
-    if ([self wc_usesLiquidPanel]) {
-        self.panelView.hidden = NO;
-        self.panelView.alpha = 1.0;
-        self.panelScrollView.alpha = 1.0;
-        self.panelView.frame = [self wc_panelTargetFrame];
-        self.panelView.layer.cornerRadius = MIN(28.0, CGRectGetHeight(self.panelView.bounds) * 0.24);
-        [self wc_layoutPanelItems];
-        return;
-    }
     for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
         orb.hidden = NO;
         orb.alpha = 1.0;
@@ -4299,14 +3389,7 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
         WCLiquidGlassRefreshDoutuConfiguration();
         [self wc_ensureWindow];
         [self.hostController.hostView reload];
-        BOOL enabled = WCLiquidGlassPreferences.enabled;
-        BOOL usesNativeSystemMenu = WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleNativeSystemMenu;
-        self.window.userInteractionEnabled = YES;
-        if (usesNativeSystemMenu && !enabled) {
-            self.hostController.hostView.nativeMenuButton.hidden = YES;
-            self.hostController.hostView.nativeMenuButton.userInteractionEnabled = NO;
-        }
-        self.window.hidden = !enabled;
+        self.window.hidden = !WCLiquidGlassPreferences.enabled;
     });
 }
 
