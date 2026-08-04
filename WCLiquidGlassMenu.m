@@ -1199,7 +1199,7 @@ static UIImage *WCLiquidGlassNativeMenuImage(NSString *actionIdentifier) {
                                                                                                     canvasSide)
                                                                                   format:format];
     UIImage *normalizedImage = [renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *context) {
-        [sourceImage drawInRect:drawRect blendMode:kCGBlendModeNormal alpha:1.0];
+        [visibleImage drawInRect:drawRect blendMode:kCGBlendModeNormal alpha:1.0];
     }];
     normalizedImage = [normalizedImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     [imageCache setObject:normalizedImage forKey:cacheKey];
