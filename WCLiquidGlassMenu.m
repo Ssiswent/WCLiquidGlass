@@ -2316,9 +2316,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     if ([self wc_usesNativeSystemMenu]) {
-        if (self.nativeMenuButton.superview != self) {
-            return nil;
-        }
         CGPoint buttonPoint = [self.nativeMenuButton convertPoint:point fromView:self];
         return [self.nativeMenuButton hitTest:buttonPoint withEvent:event];
     }
@@ -2368,10 +2365,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_configureNativeMenuButton {
-    UIWindow *applicationWindow = self.observesInputNotifications
-        ? WCLiquidGlassApplicationWindow()
-        : nil;
-    UIView *buttonSuperview = applicationWindow ?: self;
+    UIView *buttonSuperview = self;
     if (!self.nativeMenuButton) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
@@ -3060,13 +3054,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.anchorOrb.center = center;
     self.nativeMenuButton.bounds = self.anchorOrb.bounds;
     UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
-    CGPoint buttonCenter = center;
-    if (self.window && buttonSuperview.window && self.window != buttonSuperview.window) {
-        buttonCenter = [self.window convertPoint:center toWindow:buttonSuperview.window];
-    } else {
-        buttonCenter = [self convertPoint:center toView:buttonSuperview];
-    }
-    self.nativeMenuButton.center = buttonCenter;
+    self.nativeMenuButton.center = [self convertPoint:center toView:buttonSuperview];
 }
 
 - (CGFloat)wc_effectiveLayoutBottom {
@@ -4192,13 +4180,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if ([self wc_usesNativeSystemMenu]) {
         self.nativeMenuButton.bounds = self.anchorOrb.bounds;
         UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
-        CGPoint buttonCenter = self.anchorOrb.center;
-        if (self.window && buttonSuperview.window && self.window != buttonSuperview.window) {
-            buttonCenter = [self.window convertPoint:buttonCenter toWindow:buttonSuperview.window];
-        } else {
-            buttonCenter = [self convertPoint:buttonCenter toView:buttonSuperview];
-        }
-        self.nativeMenuButton.center = buttonCenter;
+        self.nativeMenuButton.center = [self convertPoint:self.anchorOrb.center toView:buttonSuperview];
         self.nativeMenuButton.hidden = NO;
         return;
     }
@@ -4319,7 +4301,7 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
         [self.hostController.hostView reload];
         BOOL enabled = WCLiquidGlassPreferences.enabled;
         BOOL usesNativeSystemMenu = WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleNativeSystemMenu;
-        self.window.userInteractionEnabled = !usesNativeSystemMenu;
+        self.window.userInteractionEnabled = YES;
         if (usesNativeSystemMenu && !enabled) {
             self.hostController.hostView.nativeMenuButton.hidden = YES;
             self.hostController.hostView.nativeMenuButton.userInteractionEnabled = NO;
