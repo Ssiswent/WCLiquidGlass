@@ -2415,12 +2415,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.buttonSize = UIButtonConfigurationSizeMedium;
-    configuration.baseBackgroundColor = nil;
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
     [self.nativeMenuButton setNeedsUpdateConfiguration];
     self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
-    self.nativeMenuButton.layer.cornerRadius = 0.0;
+    self.nativeMenuButton.layer.cornerRadius = self.anchorOrb.diameter * 0.5;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
