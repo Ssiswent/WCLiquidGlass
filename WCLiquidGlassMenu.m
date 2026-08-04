@@ -1069,6 +1069,95 @@ UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonD
     return image;
 }
 
+static UIImage *WCLiquidGlassNativeMenuImage(NSString *actionIdentifier) {
+    static NSCache<NSString *, UIImage *> *imageCache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        imageCache = [[NSCache alloc] init];
+        imageCache.countLimit = 96;
+    });
+
+    NSInteger interfaceStyle = UITraitCollection.currentTraitCollection.userInterfaceStyle;
+    NSString *cacheKey = [NSString stringWithFormat:@"%@|%ld", actionIdentifier, (long)interfaceStyle];
+    UIImage *cachedImage = [imageCache objectForKey:cacheKey];
+    if (cachedImage) {
+        return cachedImage;
+    }
+
+    UIImage *sourceImage = WCLiquidGlassImageForAction(actionIdentifier, 24.0);
+    if (!sourceImage) {
+        return nil;
+    }
+
+    const CGFloat canvasSide = 24.0;
+    const CGFloat contentSide = 20.0;
+    CGSize sourceSize = sourceImage.size;
+    CGFloat sourceMaximumSide = MAX(sourceSize.width, sourceSize.height);
+    CGFloat scale = sourceMaximumSide > 0.0
+        ? MIN(1.0, contentSide / sourceMaximumSide)
+        : 1.0;
+    CGSize drawSize = CGSizeMake(sourceSize.width * scale, sourceSize.height * scale);
+    CGRect drawRect = CGRectMake((canvasSide - drawSize.width) * 0.5,
+                                 (canvasSide - drawSize.height) * 0.5,
+                                 drawSize.width,
+                                 drawSize.height);
+
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+    format.opaque = NO;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(canvasSide,
+                                                                                                    canvasSide)
+                                                                                  format:format];
+    UIImage *normalizedImage = [renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *context) {
+        [sourceImage drawInRect:drawRect blendMode:kCGBlendModeNormal alpha:1.0];
+    }];
+    normalizedImage = [normalizedImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    [imageCache setObject:normalizedImage forKey:cacheKey];
+    return normalizedImage;
+}
+
+static NSString *WCLiquidGlassNativeMenuTitle(NSString *actionIdentifier) {
+    NSString *title = WCLiquidGlassActionTitle(actionIdentifier);
+    if (title.length == 0) {
+        return @"…";
+    }
+
+    UIFont *font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightRegular];
+    NSDictionary<NSAttributedStringKey, id> *attributes = @{NSFontAttributeName: font};
+    CGFloat maximumWidth = 92.0;
+    CGRect titleRect = [title boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, 24.0)
+                                           options:NSStringDrawingUsesLineFragmentOrigin |
+                                                   NSStringDrawingUsesFontLeading
+                                        attributes:attributes
+                                           context:nil];
+    if (CGRectGetWidth(titleRect) <= maximumWidth) {
+        return title;
+    }
+
+    NSMutableString *prefix = [NSMutableString string];
+    __block BOOL truncated = NO;
+    [title enumerateSubstringsInRange:NSMakeRange(0, title.length)
+                              options:NSStringEnumerationByComposedCharacterSequences
+                           usingBlock:^(NSString *substring,
+                                        __unused NSRange substringRange,
+                                        __unused NSRange enclosingRange,
+                                        BOOL *stop) {
+        NSString *candidate = [prefix stringByAppendingFormat:@"%@…", substring];
+        CGRect candidateRect = [candidate boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, 24.0)
+                                                        options:NSStringDrawingUsesLineFragmentOrigin |
+                                                                NSStringDrawingUsesFontLeading
+                                                     attributes:attributes
+                                                        context:nil];
+        if (CGRectGetWidth(candidateRect) > maximumWidth) {
+            truncated = YES;
+            *stop = YES;
+            return;
+        }
+        [prefix appendString:substring];
+    }];
+
+    return truncated ? [prefix stringByAppendingString:@"…"] : title;
+}
+
 static UIImage *WCLiquidGlassCloseImage(void) {
     UIImage *image = WCLiquidGlassImageNamedFromCandidates(@[@"icons_outlined_close",
                                                               @"icons_filled_close",
@@ -2079,6 +2168,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
 @property(nonatomic, strong) UIButton *nativeMenuButton;
 @property(nonatomic, assign) BOOL nativeMenuUpdatePending;
+@property(nonatomic, copy) NSString *nativeMenuSignature;
 @property(nonatomic, copy) NSArray<WCLiquidGlassOrbView *> *optionOrbs;
 @property(nonatomic, strong) UIVisualEffectView *panelView;
 @property(nonatomic, strong) UIScrollView *panelScrollView;
@@ -2135,9 +2225,12 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 - (void)wc_endPressAnimated:(BOOL)animated;
 - (BOOL)wc_usesNativeSystemMenu;
 - (void)wc_configureNativeMenuButton;
+- (void)wc_nativeMenuWillOpen:(UIButton *)button;
+- (void)wc_refreshNativeMenuImmediately;
 - (void)wc_scheduleNativeMenuUpdate;
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
-- (NSArray<UIMenu *> *)wc_nativeMenuRowsWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
+- (NSArray<UIMenuElement *> *)wc_nativeMenuElementsWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
+- (NSString *)wc_nativeMenuSignatureForItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
 - (void)wc_nativeMenuActionSelected:(NSString *)actionIdentifier;
 - (BOOL)wc_usesLiquidPanel;
 - (void)wc_rebuildPanelItems;
@@ -2334,6 +2427,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
         button.showsMenuAsPrimaryAction = YES;
         button.tintColor = UIColor.labelColor;
+        [button addTarget:self
+                   action:@selector(wc_nativeMenuWillOpen:)
+         forControlEvents:UIControlEventTouchDown];
         // Keep the UIKit source control outside the host's glass container.
         // The source button owns the system morph material; putting it inside
         // another glass surface creates the second offset layer visible while
@@ -2385,6 +2481,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     } else {
         self.nativeMenuButton.layer.borderWidth = 0.0;
     }
+    self.nativeMenuButton.automaticallyUpdatesConfiguration = NO;
     configuration.image = self.anchorOrb.iconView.image;
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
@@ -2405,7 +2502,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
-    NSArray<UIMenuElement *> *children = [self wc_nativeMenuRowsWithVisibleItems:items];
+    NSArray<UIMenuElement *> *children = [self wc_nativeMenuElementsWithVisibleItems:items];
     UIMenu *menu = [UIMenu menuWithTitle:@""
                                     image:nil
                                identifier:@"WCLiquidGlass.native.menu"
@@ -2427,57 +2524,77 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     return menu;
 }
 
-- (NSArray<UIMenu *> *)wc_nativeMenuRowsWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
-    NSMutableArray<UIMenu *> *rows = [NSMutableArray arrayWithCapacity:(items.count + 2) / 3];
+- (NSArray<UIMenuElement *> *)wc_nativeMenuElementsWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
+    NSMutableArray<UIAction *> *actions = [NSMutableArray arrayWithCapacity:items.count];
     __weak typeof(self) weakSelf = self;
-    for (NSUInteger start = 0; start < items.count; start += 3) {
-        NSUInteger end = MIN(start + 3, items.count);
-        NSMutableArray<UIAction *> *actions = [NSMutableArray arrayWithCapacity:end - start];
-        for (NSUInteger index = start; index < end; index += 1) {
-            NSString *actionIdentifier = items[index][@"action"];
-            UIAction *action = [UIAction actionWithTitle:WCLiquidGlassActionTitle(actionIdentifier)
-                                                   image:WCLiquidGlassImageForAction(actionIdentifier, 28.0)
-                                              identifier:actionIdentifier
-                                                 handler:^(__unused UIAction *selectedAction) {
-                __strong typeof(weakSelf) self = weakSelf;
-                [self wc_nativeMenuActionSelected:actionIdentifier];
-            }];
-            if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput] &&
-                self.voiceTranscriptionActive) {
-                action.state = UIMenuElementStateOn;
-            }
-            [actions addObject:action];
+    for (NSDictionary<NSString *, id> *item in items) {
+        NSString *actionIdentifier = item[@"action"];
+        UIAction *action = [UIAction actionWithTitle:WCLiquidGlassNativeMenuTitle(actionIdentifier)
+                                               image:WCLiquidGlassNativeMenuImage(actionIdentifier)
+                                          identifier:actionIdentifier
+                                             handler:^(__unused UIAction *selectedAction) {
+            __strong typeof(weakSelf) self = weakSelf;
+            [self wc_nativeMenuActionSelected:actionIdentifier];
+        }];
+        if ([actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput] &&
+            self.voiceTranscriptionActive) {
+            action.state = UIMenuElementStateOn;
         }
-        // Keep the actions inline and let the medium menu layout render the
-        // image/title pair.  DisplayAsPalette intentionally suppresses action
-        // titles on iOS 26, leaving the grid as icon-only buttons.
-        UIMenuOptions rowOptions = UIMenuOptionsDisplayInline;
-        UIMenu *row = [UIMenu menuWithTitle:@""
-                                       image:nil
-                                  identifier:[NSString stringWithFormat:@"WCLiquidGlass.native.row.%tu", start / 3]
-                                     options:rowOptions
-                                    children:actions];
-        if (@available(iOS 16.0, *)) {
-            SEL preferredElementSizeSelector = NSSelectorFromString(@"setPreferredElementSize:");
-            if ([row respondsToSelector:preferredElementSizeSelector]) {
-                ((void (*)(id, SEL, UIMenuElementSize))objc_msgSend)(row,
-                                                                       preferredElementSizeSelector,
-                                                                       UIMenuElementSizeMedium);
-            }
-            if (@available(iOS 17.4, *)) {
-                UIMenuDisplayPreferences *displayPreferences = [[UIMenuDisplayPreferences alloc] init];
-                displayPreferences.maximumNumberOfTitleLines = 1;
-                row.displayPreferences = displayPreferences;
-            }
-        }
-        [rows addObject:row];
+        [actions addObject:action];
     }
-    return rows.copy;
+    return actions.copy;
+}
+
+- (NSString *)wc_nativeMenuSignatureForItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
+    UIViewController *visibleController = WCLiquidGlassVisibleController();
+    NSMutableString *signature = [NSMutableString stringWithFormat:@"appearance=%ld;style=%ld;voice=%d;trait=%ld;controller=%@;tab=%ld;",
+                                  (long)WCLiquidGlassPreferences.glassAppearance,
+                                  (long)WCLiquidGlassPreferences.menuStyle,
+                                  self.voiceTranscriptionActive,
+                                  (long)UITraitCollection.currentTraitCollection.userInterfaceStyle,
+                                  NSStringFromClass(visibleController.class),
+                                  (long)WCLiquidGlassCurrentTabIndex(WCLiquidGlassCurrentTabController())];
+    for (NSDictionary<NSString *, id> *item in items) {
+        NSString *actionIdentifier = item[@"action"];
+        if (actionIdentifier.length > 0) {
+            [signature appendFormat:@"|%@", actionIdentifier];
+        }
+    }
+    return signature.copy;
+}
+
+- (void)wc_refreshNativeMenuImmediately {
+    if (![self wc_usesNativeSystemMenu] || !self.nativeMenuButton) {
+        return;
+    }
+    NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
+    self.visibleItems = items;
+    NSString *signature = [self wc_nativeMenuSignatureForItems:items];
+    if ([signature isEqualToString:self.nativeMenuSignature]) {
+        return;
+    }
+    self.nativeMenuButton.menu = [self wc_nativeMenuWithVisibleItems:items];
+    self.nativeMenuSignature = signature;
+}
+
+- (void)wc_nativeMenuWillOpen:(UIButton *)button {
+    if (button != self.nativeMenuButton || ![self wc_usesNativeSystemMenu]) {
+        return;
+    }
+    // Refresh before UIKit captures the source button.  Updating after the
+    // menu starts its morph causes a visible flash and blocks the first frames.
+    self.nativeMenuUpdatePending = NO;
+    [self wc_refreshNativeMenuImmediately];
 }
 
 - (void)wc_scheduleNativeMenuUpdate {
     if (![self wc_usesNativeSystemMenu] || self.nativeMenuUpdatePending) {
         return;
+    }
+    if (@available(iOS 15.0, *)) {
+        if (self.nativeMenuButton.isHeld) {
+            return;
+        }
     }
     self.nativeMenuUpdatePending = YES;
     __weak typeof(self) weakSelf = self;
@@ -2490,9 +2607,12 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         if (![self wc_usesNativeSystemMenu]) {
             return;
         }
-        NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
-        self.visibleItems = items;
-        self.nativeMenuButton.menu = [self wc_nativeMenuWithVisibleItems:items];
+        if (@available(iOS 15.0, *)) {
+            if (self.nativeMenuButton.isHeld) {
+                return;
+            }
+        }
+        [self wc_refreshNativeMenuImmediately];
     });
 }
 
@@ -2965,6 +3085,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         [self wc_scheduleNativeMenuUpdate];
     } else {
         self.glassContainer.effect = WCLiquidGlassCurrentGlassContainerEffect();
+        self.nativeMenuSignature = nil;
         self.nativeMenuButton.hidden = YES;
         self.nativeMenuButton.userInteractionEnabled = NO;
         self.panelView.hidden = YES;
