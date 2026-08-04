@@ -2110,7 +2110,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, strong) UIVisualEffectView *glassContainer;
 @property(nonatomic, strong) UIControl *dismissControl;
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
-@property(nonatomic, strong) UIVisualEffectView *nativeMenuGlassView;
 @property(nonatomic, strong) UIButton *nativeMenuButton;
 @property(nonatomic, assign) BOOL nativeMenuUpdatePending;
 @property(nonatomic, copy) NSString *nativeMenuSignature;
@@ -2318,6 +2317,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     if ([self wc_usesNativeSystemMenu]) {
+        if (self.nativeMenuButton.superview != self) {
+            return nil;
+        }
         CGPoint buttonPoint = [self.nativeMenuButton convertPoint:point fromView:self];
         return [self.nativeMenuButton hitTest:buttonPoint withEvent:event];
     }
@@ -2367,38 +2369,26 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_configureNativeMenuButton {
-    if (!self.nativeMenuGlassView) {
-        UIVisualEffectView *glassView = [[UIVisualEffectView alloc]
-            initWithEffect:WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearanceBalanced)];
-        glassView.backgroundColor = UIColor.clearColor;
-        glassView.userInteractionEnabled = NO;
-        glassView.clipsToBounds = YES;
-        glassView.layer.cornerCurve = kCACornerCurveContinuous;
-        [self addSubview:glassView];
-        self.nativeMenuGlassView = glassView;
-    }
+    UIWindow *applicationWindow = self.observesInputNotifications
+        ? WCLiquidGlassApplicationWindow()
+        : nil;
+    UIView *buttonSuperview = applicationWindow ?: self;
     if (!self.nativeMenuButton) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
         button.showsMenuAsPrimaryAction = YES;
-        // Keep the source material owned by the button configuration. UIKit's
-        // automatic refresh can clear it in the non-key overlay window.
-        button.automaticallyUpdatesConfiguration = NO;
+        button.automaticallyUpdatesConfiguration = YES;
         button.tintColor = UIColor.labelColor;
         [button addTarget:self
                    action:@selector(wc_nativeMenuWillOpen:)
          forControlEvents:UIControlEventTouchDown];
-        // Keep the UIKit source control outside the host's glass container.
-        // The source button owns the system morph material; putting it inside
-        // another glass surface creates the second offset layer visible while
-        // the control is pressed or moved.
-        [self addSubview:button];
+        [buttonSuperview addSubview:button];
         self.nativeMenuButton = button;
-    } else if (self.nativeMenuButton.superview != self) {
+    } else if (self.nativeMenuButton.superview != buttonSuperview) {
         [self.nativeMenuButton removeFromSuperview];
-        [self addSubview:self.nativeMenuButton];
+        [buttonSuperview addSubview:self.nativeMenuButton];
     }
-    [self bringSubviewToFront:self.nativeMenuButton];
+    [buttonSuperview bringSubviewToFront:self.nativeMenuButton];
 
     // The native button is already a complete Liquid Glass element.  Keeping
     // it inside our UIGlassContainerEffect makes the hidden radial anchor and
@@ -2411,11 +2401,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [self.anchorOrb setAnchorAppearance];
     UIButtonConfiguration *configuration = nil;
     if (@available(iOS 26.0, *)) {
-        NSString *configurationSelectorName = @"glassButtonConfiguration";
-        if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceClear) {
-            configurationSelectorName = @"clearGlassButtonConfiguration";
-        }
-        SEL glassConfigurationSelector = NSSelectorFromString(configurationSelectorName);
+        SEL glassConfigurationSelector = NSSelectorFromString(@"glassButtonConfiguration");
         if ([UIButtonConfiguration respondsToSelector:glassConfigurationSelector]) {
             configuration = ((id (*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class,
                                                             glassConfigurationSelector);
@@ -2433,20 +2419,10 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.buttonSize = UIButtonConfigurationSizeMedium;
-    if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceTinted) {
-        configuration.baseBackgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
-            return traits.userInterfaceStyle == UIUserInterfaceStyleDark
-                ? [UIColor colorWithWhite:1.0 alpha:0.23]
-                : [UIColor colorWithWhite:1.0 alpha:0.16];
-        }];
-    } else {
-        configuration.baseBackgroundColor = nil;
-    }
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
     self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
     self.nativeMenuButton.layer.cornerRadius = 0.0;
-    self.nativeMenuGlassView.hidden = NO;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
@@ -3022,7 +2998,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         [self wc_configureNativeMenuButton];
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
-        self.nativeMenuGlassView.hidden = NO;
         self.anchorOrb.hidden = YES;
         self.anchorOrb.userInteractionEnabled = NO;
         for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
@@ -3035,7 +3010,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         self.nativeMenuSignature = nil;
         self.nativeMenuButton.hidden = YES;
         self.nativeMenuButton.userInteractionEnabled = NO;
-        self.nativeMenuGlassView.hidden = YES;
         self.panelView.hidden = YES;
         self.panelTransitionState = WCLiquidGlassPanelTransitionStateCollapsed;
     }
@@ -3090,12 +3064,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     CGFloat maximumY = [self wc_effectiveLayoutBottom] - diameter * 0.5 - 12.0;
     maximumY = MAX(minimumY, maximumY);
     CGFloat y = CGRectGetHeight(self.bounds) * WCLiquidGlassPreferences.anchorYFraction;
-    self.anchorOrb.center = CGPointMake(x, MIN(maximumY, MAX(minimumY, y)));
+    CGPoint center = CGPointMake(x, MIN(maximumY, MAX(minimumY, y)));
+    self.anchorOrb.center = center;
     self.nativeMenuButton.bounds = self.anchorOrb.bounds;
-    self.nativeMenuButton.center = self.anchorOrb.center;
-    self.nativeMenuGlassView.bounds = self.anchorOrb.bounds;
-    self.nativeMenuGlassView.center = self.anchorOrb.center;
-    self.nativeMenuGlassView.layer.cornerRadius = diameter * 0.5;
+    UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
+    self.nativeMenuButton.center = [self convertPoint:center toView:buttonSuperview];
 }
 
 - (CGFloat)wc_effectiveLayoutBottom {
@@ -3862,7 +3835,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (usesNativeSystemMenu) {
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
-        self.nativeMenuGlassView.hidden = NO;
         self.anchorOrb.hidden = YES;
         self.anchorOrb.userInteractionEnabled = NO;
         return;
@@ -4221,10 +4193,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [self wc_updateAnchorVisual];
     if ([self wc_usesNativeSystemMenu]) {
         self.nativeMenuButton.bounds = self.anchorOrb.bounds;
-        self.nativeMenuButton.center = self.anchorOrb.center;
-        self.nativeMenuGlassView.bounds = self.anchorOrb.bounds;
-        self.nativeMenuGlassView.center = self.anchorOrb.center;
-        self.nativeMenuGlassView.layer.cornerRadius = self.anchorOrb.diameter * 0.5;
+        UIView *buttonSuperview = self.nativeMenuButton.superview ?: self;
+        self.nativeMenuButton.center = [self convertPoint:self.anchorOrb.center toView:buttonSuperview];
         self.nativeMenuButton.hidden = NO;
         return;
     }
@@ -4343,7 +4313,14 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
         WCLiquidGlassRefreshDoutuConfiguration();
         [self wc_ensureWindow];
         [self.hostController.hostView reload];
-        self.window.hidden = !WCLiquidGlassPreferences.enabled;
+        BOOL enabled = WCLiquidGlassPreferences.enabled;
+        BOOL usesNativeSystemMenu = WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleNativeSystemMenu;
+        self.window.userInteractionEnabled = !usesNativeSystemMenu;
+        if (usesNativeSystemMenu && !enabled) {
+            self.hostController.hostView.nativeMenuButton.hidden = YES;
+            self.hostController.hostView.nativeMenuButton.userInteractionEnabled = NO;
+        }
+        self.window.hidden = !enabled;
     });
 }
 
