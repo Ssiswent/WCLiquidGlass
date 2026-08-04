@@ -1069,91 +1069,6 @@ UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonD
     return image;
 }
 
-static UIImage *WCLiquidGlassNativeMenuImageWithVisibleBounds(UIImage *image) {
-    if (!image || image.size.width <= 0.0 || image.size.height <= 0.0) {
-        return image;
-    }
-
-    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
-    format.opaque = NO;
-    format.scale = 1.0;
-    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:image.size
-                                                                                  format:format];
-    UIImage *rasterImage = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
-        [image drawInRect:CGRectMake(0.0, 0.0, image.size.width, image.size.height)
-               blendMode:kCGBlendModeNormal
-                   alpha:1.0];
-        (void)context;
-    }];
-    CGImageRef raster = rasterImage.CGImage;
-    if (!raster) {
-        return image;
-    }
-
-    size_t width = CGImageGetWidth(raster);
-    size_t height = CGImageGetHeight(raster);
-    if (width == 0 || height == 0) {
-        return image;
-    }
-
-    size_t bytesPerRow = width * 4;
-    NSMutableData *bitmapData = [NSMutableData dataWithLength:bytesPerRow * height];
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef bitmap = CGBitmapContextCreate(bitmapData.mutableBytes,
-                                                width,
-                                                height,
-                                                8,
-                                                bytesPerRow,
-                                                colorSpace,
-                                                (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
-    CGColorSpaceRelease(colorSpace);
-    if (!bitmap) {
-        return image;
-    }
-    CGContextClearRect(bitmap, CGRectMake(0.0, 0.0, width, height));
-    CGContextDrawImage(bitmap, CGRectMake(0.0, 0.0, width, height), raster);
-
-    const uint8_t *bytes = (const uint8_t *)CGBitmapContextGetData(bitmap);
-    size_t minimumX = width;
-    size_t minimumY = height;
-    size_t maximumX = 0;
-    size_t maximumY = 0;
-    BOOL foundVisiblePixel = NO;
-    if (bytes) {
-        for (size_t y = 0; y < height; y += 1) {
-            for (size_t x = 0; x < width; x += 1) {
-                uint8_t alpha = bytes[y * bytesPerRow + x * 4 + 3];
-                if (alpha < 8) {
-                    continue;
-                }
-                foundVisiblePixel = YES;
-                minimumX = MIN(minimumX, x);
-                minimumY = MIN(minimumY, y);
-                maximumX = MAX(maximumX, x);
-                maximumY = MAX(maximumY, y);
-            }
-        }
-    }
-    CGContextRelease(bitmap);
-    if (!foundVisiblePixel || maximumX < minimumX || maximumY < minimumY) {
-        return image;
-    }
-
-    CGRect cropRect = CGRectMake((CGFloat)minimumX,
-                                 (CGFloat)minimumY,
-                                 (CGFloat)(maximumX - minimumX + 1),
-                                 (CGFloat)(maximumY - minimumY + 1));
-    CGImageRef cropped = CGImageCreateWithImageInRect(raster, cropRect);
-    if (!cropped) {
-        return image;
-    }
-    UIImage *croppedImage = [[UIImage alloc] initWithCGImage:cropped
-                                                        scale:1.0
-                                                  orientation:UIImageOrientationUp];
-    CGImageRelease(cropped);
-    return [croppedImage imageWithRenderingMode:image.renderingMode];
-}
-
 static UIImage *WCLiquidGlassNativeMenuImage(NSString *actionIdentifier) {
     static NSCache<NSString *, UIImage *> *imageCache;
     static dispatch_once_t onceToken;
@@ -1169,84 +1084,22 @@ static UIImage *WCLiquidGlassNativeMenuImage(NSString *actionIdentifier) {
         return cachedImage;
     }
 
-    UIImage *sourceImage = WCLiquidGlassImageForAction(actionIdentifier, 24.0);
+    // Keep the original theme/vector image intact. UIKit performs the final
+    // fitting into the UIMenu slot and can retain the source image's scale and
+    // rendering mode. Re-rasterizing to a small 24pt canvas loses detail in
+    // brand PNGs and SVG-backed theme assets, especially on 3x displays.
+    UIImage *sourceImage = WCLiquidGlassImageForAction(actionIdentifier, 96.0);
     if (!sourceImage) {
         return nil;
     }
 
-    const CGFloat canvasSide = 24.0;
-    // Theme and plugin icons do not all use the same transparent padding.  A
-    // plain image-size fit makes sparse brand marks look much smaller than a
-    // dense WeChat symbol, even though UIKit gives every action the same slot.
-    // Normalize the visible alpha bounds first, then fit that visible content
-    // to one shared canvas.
-    const CGFloat contentSide = 21.0;
-    UIImage *visibleImage = WCLiquidGlassNativeMenuImageWithVisibleBounds(sourceImage);
-    CGSize sourceSize = visibleImage.size;
-    CGFloat sourceMaximumSide = MAX(sourceSize.width, sourceSize.height);
-    CGFloat scale = sourceMaximumSide > 0.0
-        ? MIN(1.0, contentSide / sourceMaximumSide)
-        : 1.0;
-    CGSize drawSize = CGSizeMake(sourceSize.width * scale, sourceSize.height * scale);
-    CGRect drawRect = CGRectMake((canvasSide - drawSize.width) * 0.5,
-                                 (canvasSide - drawSize.height) * 0.5,
-                                 drawSize.width,
-                                 drawSize.height);
-
-    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
-    format.opaque = NO;
-    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(canvasSide,
-                                                                                                    canvasSide)
-                                                                                  format:format];
-    UIImage *normalizedImage = [renderer imageWithActions:^(__unused UIGraphicsImageRendererContext *context) {
-        [visibleImage drawInRect:drawRect blendMode:kCGBlendModeNormal alpha:1.0];
-    }];
-    normalizedImage = [normalizedImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    [imageCache setObject:normalizedImage forKey:cacheKey];
-    return normalizedImage;
+    [imageCache setObject:sourceImage forKey:cacheKey];
+    return sourceImage;
 }
 
 static NSString *WCLiquidGlassNativeMenuTitle(NSString *actionIdentifier) {
     NSString *title = WCLiquidGlassActionTitle(actionIdentifier);
-    if (title.length == 0) {
-        return @"…";
-    }
-
-    UIFont *font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightRegular];
-    NSDictionary<NSAttributedStringKey, id> *attributes = @{NSFontAttributeName: font};
-    CGFloat maximumWidth = 92.0;
-    CGRect titleRect = [title boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, 24.0)
-                                           options:NSStringDrawingUsesLineFragmentOrigin |
-                                                   NSStringDrawingUsesFontLeading
-                                        attributes:attributes
-                                           context:nil];
-    if (CGRectGetWidth(titleRect) <= maximumWidth) {
-        return title;
-    }
-
-    NSMutableString *prefix = [NSMutableString string];
-    __block BOOL truncated = NO;
-    [title enumerateSubstringsInRange:NSMakeRange(0, title.length)
-                              options:NSStringEnumerationByComposedCharacterSequences
-                           usingBlock:^(NSString *substring,
-                                        __unused NSRange substringRange,
-                                        __unused NSRange enclosingRange,
-                                        BOOL *stop) {
-        NSString *candidate = [prefix stringByAppendingFormat:@"%@…", substring];
-        CGRect candidateRect = [candidate boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, 24.0)
-                                                        options:NSStringDrawingUsesLineFragmentOrigin |
-                                                                NSStringDrawingUsesFontLeading
-                                                     attributes:attributes
-                                                        context:nil];
-        if (CGRectGetWidth(candidateRect) > maximumWidth) {
-            truncated = YES;
-            *stop = YES;
-            return;
-        }
-        [prefix appendString:substring];
-    }];
-
-    return truncated ? [prefix stringByAppendingString:@"…"] : title;
+    return title.length > 0 ? title : @"…";
 }
 
 static UIImage *WCLiquidGlassCloseImage(void) {
@@ -2571,29 +2424,12 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     } else {
         self.nativeMenuButton.layer.borderWidth = 0.0;
     }
-    // A Liquid Glass UIButton must keep UIKit's configuration updates enabled;
-    // disabling them leaves the source control as a transparent hit target on
-    // iOS 26/27.  The menu is refreshed before touch-down, so state updates do
-    // not need to be frozen to keep the morph stable.
-    self.nativeMenuButton.automaticallyUpdatesConfiguration = YES;
     configuration.image = self.anchorOrb.iconView.image;
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.buttonSize = UIButtonConfigurationSizeMedium;
-    if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceTinted) {
-        configuration.baseBackgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
-            return traits.userInterfaceStyle == UIUserInterfaceStyleDark
-                ? [UIColor colorWithWhite:1.0 alpha:0.23]
-                : [UIColor colorWithWhite:1.0 alpha:0.16];
-        }];
-    } else {
-        configuration.baseBackgroundColor = nil;
-    }
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
-    [self.nativeMenuButton setNeedsUpdateConfiguration];
-    self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
-    self.nativeMenuButton.layer.cornerRadius = self.anchorOrb.diameter * 0.5;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
