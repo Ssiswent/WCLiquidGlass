@@ -1233,6 +1233,11 @@ static NSArray<id> *WCLiquidGlassActionTargetCandidates(UIViewController *visibl
                                                            visibleController.navigationController ?: NSNull.null,
                                                            tabController ?: NSNull.null,
                                                            nil];
+    for (UIViewController *parent = visibleController.parentViewController;
+         parent;
+         parent = parent.parentViewController) {
+        [targets addObject:parent];
+    }
     for (NSString *propertyName in @[@"hostViewController", @"parentViewController", @"toolView",
                                       @"messageToolBar", @"m_toolView", @"inputToolView",
                                       @"m_inputController"]) {
@@ -2114,6 +2119,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, strong) UIImage *nativeMenuButtonConfigurationImage;
 @property(nonatomic, assign) BOOL nativeMenuButtonNeedsConfiguration;
 @property(nonatomic, assign) BOOL nativeMenuUpdatePending;
+@property(nonatomic, assign) BOOL nativeMenuAvailabilityNeedsScan;
 @property(nonatomic, copy) NSString *nativeMenuSignature;
 @property(nonatomic, copy) NSArray<WCLiquidGlassOrbView *> *optionOrbs;
 @property(nonatomic, strong) UIVisualEffectView *panelView;
@@ -2497,8 +2503,15 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (![self wc_usesNativeSystemMenu] || !self.nativeMenuButton) {
         return;
     }
-    NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
-    self.visibleItems = items;
+    // Keep the menu tree stable while UIKit is animating the source-to-menu
+    // transition. Availability is refreshed by reload/page appearance; input
+    // changes set the flag and are picked up after the held state ends.
+    NSArray<NSDictionary<NSString *, id> *> *items = self.visibleItems ?: @[];
+    if (self.nativeMenuAvailabilityNeedsScan || !self.visibleItems) {
+        items = [self wc_currentVisibleItems];
+        self.visibleItems = items;
+        self.nativeMenuAvailabilityNeedsScan = NO;
+    }
     NSString *signature = [self wc_nativeMenuSignatureForItems:items];
     if ([signature isEqualToString:self.nativeMenuSignature]) {
         return;
@@ -2552,6 +2565,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         if (togglesVoiceTranscription) {
             self.voiceTranscriptionActive = !self.voiceTranscriptionActive;
         }
+        self.nativeMenuAvailabilityNeedsScan = YES;
         // Let UIKit finish the source-to-menu dismissal before replacing the
         // menu tree.  Rebuilding it in the same run-loop turn can truncate the
         // collapse morph and make it appear much faster than the opening.
@@ -2928,6 +2942,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.anchorOnLeft = WCLiquidGlassPreferences.anchorOnLeft;
 
     NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
+    self.nativeMenuAvailabilityNeedsScan = NO;
     CGFloat optionDiameter = [self wc_optionDiameterForCount:newVisibleItems.count];
     BOOL voiceActionAvailable = [newVisibleItems indexOfObjectPassingTest:^BOOL(NSDictionary *item,
                                                                                 __unused NSUInteger index,
@@ -3176,6 +3191,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }
 
     if ([self wc_usesNativeSystemMenu]) {
+        self.nativeMenuAvailabilityNeedsScan = YES;
         [self wc_scheduleNativeMenuUpdate];
         return;
     }
@@ -3258,6 +3274,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             [self wc_updateVoiceOrbToggleAppearance];
         }
         if ([self wc_usesNativeSystemMenu]) {
+            self.nativeMenuAvailabilityNeedsScan = YES;
             [self wc_scheduleNativeMenuUpdate];
             return;
         }
@@ -3281,7 +3298,10 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         }
     }
     [self wc_updateVoicePanelToggleAppearance];
-    [self wc_scheduleNativeMenuUpdate];
+    if ([self wc_usesNativeSystemMenu]) {
+        self.nativeMenuAvailabilityNeedsScan = YES;
+        [self wc_scheduleNativeMenuUpdate];
+    }
 }
 
 - (void)wc_cancelIdleHide {
@@ -3659,7 +3679,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (void)wc_refreshOpenMenuAnimated {
     if ([self wc_usesNativeSystemMenu]) {
-        self.visibleItems = [self wc_currentVisibleItems];
+        self.nativeMenuAvailabilityNeedsScan = YES;
         [self wc_scheduleNativeMenuUpdate];
         return;
     }
