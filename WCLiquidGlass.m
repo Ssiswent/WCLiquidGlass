@@ -1276,6 +1276,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"WCLiquidGlass";
+    self.navigationItem.rightBarButtonItem = [self wc_makeNativeMenuTestItem];
     WCLiquidGlassConfigureTableBackground(self);
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 66.0;
@@ -1286,6 +1287,30 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                                            selector:@selector(wc_preferencesChanged:)
                                            name:WCLiquidGlassPreferencesDidChangeNotification
                                            object:nil];
+}
+
+- (UIBarButtonItem *)wc_makeNativeMenuTestItem {
+    UIAction *firstAction = [UIAction actionWithTitle:@"Liquid Glass 测试"
+                                                 image:[UIImage systemImageNamed:@"sparkles"]
+                                            identifier:nil
+                                               handler:^(__unused UIAction *action) {
+        NSLog(@"[WCLiquidGlass] native menu test action");
+    }];
+    UIAction *secondAction = [UIAction actionWithTitle:@"第二个测试项"
+                                                  image:[UIImage systemImageNamed:@"circle"]
+                                             identifier:nil
+                                                handler:^(__unused UIAction *action) {
+        NSLog(@"[WCLiquidGlass] native menu second test action");
+    }];
+    UIMenu *menu = [UIMenu menuWithTitle:@"Liquid Glass 测试菜单"
+                                   image:nil
+                              identifier:nil
+                                 options:0
+                                children:@[firstAction, secondAction]];
+    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
+                                                                menu:menu];
+    item.accessibilityLabel = @"Liquid Glass 测试菜单";
+    return item;
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {

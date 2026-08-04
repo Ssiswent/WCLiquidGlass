@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.9.1~native-menu-lab.1] - 2026-08-04
+
+### 原生菜单实验
+
+- 在 WCLiquidGlass 设置页导航栏右上角增加独立的原生 `UIBarButtonItem` 与 `UIMenu` 测试入口；不接入悬浮按钮、微信主界面或现有环形菜单。
+
 ## [Unreleased]
 
 ### 发布流程
