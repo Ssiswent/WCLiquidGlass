@@ -1263,6 +1263,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
+@property(nonatomic, strong) UIButton *nativeFloatingMenuTestButton;
 
 @end
 
@@ -1344,6 +1345,79 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self.tableView reloadData];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (self.nativeFloatingMenuTestButton.superview) {
+        return;
+    }
+    UIView *host = self.navigationController.view ?: self.view.superview ?: self.view;
+    self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    if (@available(iOS 26.0, *)) {
+        self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration glassButtonConfiguration];
+    } else {
+        self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration tintedButtonConfiguration];
+    }
+    UIButtonConfiguration *configuration = self.nativeFloatingMenuTestButton.configuration;
+    configuration.image = [UIImage systemImageNamed:@"ellipsis"];
+    configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:22.0 weight:UIImageSymbolWeightMedium];
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    self.nativeFloatingMenuTestButton.configuration = configuration;
+    self.nativeFloatingMenuTestButton.menu = [self wc_makeFloatingMenuTestMenu];
+    self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction = YES;
+    self.nativeFloatingMenuTestButton.accessibilityLabel = @"原生 Liquid Glass 悬浮测试菜单";
+    self.nativeFloatingMenuTestButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [host addSubview:self.nativeFloatingMenuTestButton];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.nativeFloatingMenuTestButton.trailingAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.trailingAnchor constant:-20.0],
+        [self.nativeFloatingMenuTestButton.bottomAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.bottomAnchor constant:-20.0],
+        [self.nativeFloatingMenuTestButton.widthAnchor constraintEqualToConstant:56.0],
+        [self.nativeFloatingMenuTestButton.heightAnchor constraintEqualToConstant:56.0]
+    ]];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [self.nativeFloatingMenuTestButton removeFromSuperview];
+}
+
+- (UIMenu *)wc_makeFloatingMenuTestMenu {
+    UIAction *firstAction = [UIAction actionWithTitle:@"悬浮按钮测试"
+                                                 image:[UIImage systemImageNamed:@"hand.tap"]
+                                            identifier:nil
+                                               handler:^(__unused UIAction *action) {
+        NSLog(@"[WCLiquidGlass] native floating menu test action");
+    }];
+    UIAction *secondAction = [UIAction actionWithTitle:@"玻璃按钮测试"
+                                                  image:[UIImage systemImageNamed:@"sparkles"]
+                                             identifier:nil
+                                                handler:^(__unused UIAction *action) {
+        NSLog(@"[WCLiquidGlass] native floating menu glass action");
+    }];
+    UIMenu *subMenu = [UIMenu menuWithTitle:@"更多测试"
+                                      image:[UIImage systemImageNamed:@"wand.and.stars"]
+                                 identifier:nil
+                                    options:0
+                                   children:@[
+        [UIAction actionWithTitle:@"圆形项目"
+                             image:[UIImage systemImageNamed:@"circle"]
+                        identifier:nil
+                           handler:^(__unused UIAction *action) {
+            NSLog(@"[WCLiquidGlass] native floating menu circle action");
+        }],
+        [UIAction actionWithTitle:@"方形项目"
+                             image:[UIImage systemImageNamed:@"square"]
+                        identifier:nil
+                           handler:^(__unused UIAction *action) {
+            NSLog(@"[WCLiquidGlass] native floating menu square action");
+        }]
+    ]];
+    return [UIMenu menuWithTitle:@"原生悬浮菜单测试"
+                            image:nil
+                       identifier:nil
+                          options:0
+                         children:@[firstAction, secondAction, subMenu]];
 }
 
 - (UIView *)wc_makeHeaderView {
