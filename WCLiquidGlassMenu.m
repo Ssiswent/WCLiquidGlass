@@ -2396,21 +2396,10 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [self.anchorOrb setAnchorAppearance];
     UIButtonConfiguration *configuration = nil;
     if (@available(iOS 26.0, *)) {
-        NSString *configurationSelectorName = @"glassButtonConfiguration";
-        switch (WCLiquidGlassPreferences.glassAppearance) {
-            case WCLiquidGlassGlassAppearanceClear:
-                configurationSelectorName = @"clearGlassButtonConfiguration";
-                break;
-            case WCLiquidGlassGlassAppearanceTinted:
-                // Apple's prominent glass style is the public configuration
-                // intended for a visibly tinted Liquid Glass button.
-                configurationSelectorName = @"prominentGlassButtonConfiguration";
-                break;
-            default:
-                configurationSelectorName = @"glassButtonConfiguration";
-                break;
-        }
-        SEL glassConfigurationSelector = NSSelectorFromString(configurationSelectorName);
+        // Native menu mode must use UIKit's default source material. The
+        // plugin's appearance setting belongs to the custom radial menu and
+        // must not alter the system source-to-menu interaction state machine.
+        SEL glassConfigurationSelector = NSSelectorFromString(@"glassButtonConfiguration");
         if ([UIButtonConfiguration respondsToSelector:glassConfigurationSelector]) {
             configuration = ((id (*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class,
                                                             glassConfigurationSelector);
@@ -2478,8 +2467,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (NSString *)wc_nativeMenuSignatureForItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
     UIViewController *visibleController = WCLiquidGlassVisibleController();
-    NSMutableString *signature = [NSMutableString stringWithFormat:@"appearance=%ld;style=%ld;voice=%d;trait=%ld;controller=%@;tab=%ld;",
-                                  (long)WCLiquidGlassPreferences.glassAppearance,
+    NSMutableString *signature = [NSMutableString stringWithFormat:@"style=%ld;voice=%d;trait=%ld;controller=%@;tab=%ld;",
                                   (long)WCLiquidGlassPreferences.menuStyle,
                                   self.voiceTranscriptionActive,
                                   (long)UITraitCollection.currentTraitCollection.userInterfaceStyle,
@@ -3001,7 +2989,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         longPress.delegate = self;
         [self.anchorOrb addGestureRecognizer:longPress];
     }
-    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
+    self.anchorOrb.effect = [self wc_usesNativeSystemMenu] ? nil : WCLiquidGlassMakeEffect();
     [self wc_updateAnchorVisual];
     if ([self wc_usesNativeSystemMenu]) {
         [self wc_configureNativeMenuButton];
@@ -3823,11 +3811,12 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.panelScrollView.alpha = 0.0;
     self.panelScrollView.userInteractionEnabled = YES;
     self.anchorOrb.transform = CGAffineTransformIdentity;
-    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
+    BOOL usesNativeSystemMenu = [self wc_usesNativeSystemMenu];
+    self.anchorOrb.effect = usesNativeSystemMenu ? nil : WCLiquidGlassMakeEffect();
     [self.anchorOrb setAnchorAppearance];
     self.anchorOrb.alpha = 1.0;
-    self.anchorOrb.hidden = NO;
-    self.anchorOrb.userInteractionEnabled = YES;
+    self.anchorOrb.hidden = usesNativeSystemMenu;
+    self.anchorOrb.userInteractionEnabled = !usesNativeSystemMenu;
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    __unused NSUInteger index,
                                                    __unused BOOL *stop) {
@@ -3838,11 +3827,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         orb.hidden = YES;
     }];
     [self wc_updateAnchorVisual];
-    if ([self wc_usesNativeSystemMenu]) {
+    if (usesNativeSystemMenu) {
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
-        self.anchorOrb.hidden = YES;
-        self.anchorOrb.userInteractionEnabled = NO;
         return;
     }
 }
