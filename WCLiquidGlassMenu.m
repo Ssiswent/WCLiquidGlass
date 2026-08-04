@@ -2116,10 +2116,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, strong) UIControl *dismissControl;
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
 @property(nonatomic, strong) UIButton *nativeMenuButton;
-@property(nonatomic, strong) UIImage *nativeMenuButtonConfigurationImage;
-@property(nonatomic, assign) BOOL nativeMenuButtonNeedsConfiguration;
 @property(nonatomic, assign) BOOL nativeMenuUpdatePending;
-@property(nonatomic, assign) BOOL nativeMenuAvailabilityNeedsScan;
 @property(nonatomic, copy) NSString *nativeMenuSignature;
 @property(nonatomic, copy) NSArray<WCLiquidGlassOrbView *> *optionOrbs;
 @property(nonatomic, strong) UIVisualEffectView *panelView;
@@ -2177,6 +2174,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 - (void)wc_endPressAnimated:(BOOL)animated;
 - (BOOL)wc_usesNativeSystemMenu;
 - (void)wc_configureNativeMenuButton;
+- (void)wc_nativeMenuWillOpen:(UIButton *)button;
 - (void)wc_refreshNativeMenuImmediately;
 - (void)wc_scheduleNativeMenuUpdate;
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
@@ -2377,15 +2375,16 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
         button.showsMenuAsPrimaryAction = YES;
-        button.automaticallyUpdatesConfiguration = YES;
         button.tintColor = UIColor.labelColor;
+        [button addTarget:self
+                   action:@selector(wc_nativeMenuWillOpen:)
+         forControlEvents:UIControlEventTouchDown];
         // Keep the UIKit source control outside the host's glass container.
         // The source button owns the system morph material; putting it inside
         // another glass surface creates the second offset layer visible while
         // the control is pressed or moved.
         [self addSubview:button];
         self.nativeMenuButton = button;
-        self.nativeMenuButtonNeedsConfiguration = YES;
     } else if (self.nativeMenuButton.superview != self) {
         [self.nativeMenuButton removeFromSuperview];
         [self addSubview:self.nativeMenuButton];
@@ -2397,23 +2396,24 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     // second offset glass layer while the button is pressed or moved.  Native
     // menu mode owns this glass surface, so detach the container material and
     // let UIKit perform the source-to-menu morph from the button itself.
-    if (self.glassContainer.effect) {
-        self.glassContainer.effect = nil;
-    }
+    self.glassContainer.effect = nil;
 
     [self.anchorOrb setAnchorAppearance];
-    UIImage *anchorImage = self.anchorOrb.iconView.image;
-    if (!self.nativeMenuButtonNeedsConfiguration &&
-        self.nativeMenuButton.configuration &&
-        self.nativeMenuButtonConfigurationImage == anchorImage) {
-        return;
-    }
     UIButtonConfiguration *configuration = nil;
     if (@available(iOS 26.0, *)) {
-        // Native menu mode must use UIKit's default source material. The
-        // plugin's appearance setting belongs to the custom radial menu and
-        // must not alter the system source-to-menu interaction state machine.
-        SEL glassConfigurationSelector = NSSelectorFromString(@"glassButtonConfiguration");
+        NSString *configurationSelectorName = @"glassButtonConfiguration";
+        switch (WCLiquidGlassPreferences.glassAppearance) {
+            case WCLiquidGlassGlassAppearanceClear:
+                configurationSelectorName = @"clearGlassButtonConfiguration";
+                break;
+            case WCLiquidGlassGlassAppearanceTinted:
+                configurationSelectorName = @"glassButtonConfiguration";
+                break;
+            default:
+                configurationSelectorName = @"glassButtonConfiguration";
+                break;
+        }
+        SEL glassConfigurationSelector = NSSelectorFromString(configurationSelectorName);
         if ([UIButtonConfiguration respondsToSelector:glassConfigurationSelector]) {
             configuration = ((id (*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class,
                                                             glassConfigurationSelector);
@@ -2427,15 +2427,24 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     } else {
         self.nativeMenuButton.layer.borderWidth = 0.0;
     }
-    configuration.image = anchorImage;
+    self.nativeMenuButton.automaticallyUpdatesConfiguration = NO;
+    configuration.image = self.anchorOrb.iconView.image;
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.buttonSize = UIButtonConfigurationSizeMedium;
+    if (WCLiquidGlassPreferences.glassAppearance == WCLiquidGlassGlassAppearanceTinted) {
+        configuration.baseBackgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+            return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+                ? [UIColor colorWithWhite:1.0 alpha:0.23]
+                : [UIColor colorWithWhite:1.0 alpha:0.16];
+        }];
+    } else {
+        configuration.baseBackgroundColor = nil;
+    }
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
-    self.nativeMenuButtonConfigurationImage = anchorImage;
-    self.nativeMenuButtonNeedsConfiguration = NO;
-    [self.nativeMenuButton setNeedsUpdateConfiguration];
+    self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
+    self.nativeMenuButton.layer.cornerRadius = 0.0;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
@@ -2484,7 +2493,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (NSString *)wc_nativeMenuSignatureForItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
     UIViewController *visibleController = WCLiquidGlassVisibleController();
-    NSMutableString *signature = [NSMutableString stringWithFormat:@"style=%ld;voice=%d;trait=%ld;controller=%@;tab=%ld;",
+    NSMutableString *signature = [NSMutableString stringWithFormat:@"appearance=%ld;style=%ld;voice=%d;trait=%ld;controller=%@;tab=%ld;",
+                                  (long)WCLiquidGlassPreferences.glassAppearance,
                                   (long)WCLiquidGlassPreferences.menuStyle,
                                   self.voiceTranscriptionActive,
                                   (long)UITraitCollection.currentTraitCollection.userInterfaceStyle,
@@ -2503,21 +2513,22 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (![self wc_usesNativeSystemMenu] || !self.nativeMenuButton) {
         return;
     }
-    // Keep the menu tree stable while UIKit is animating the source-to-menu
-    // transition. Availability is refreshed by reload/page appearance; input
-    // changes set the flag and are picked up after the held state ends.
-    NSArray<NSDictionary<NSString *, id> *> *items = self.visibleItems ?: @[];
-    if (self.nativeMenuAvailabilityNeedsScan || !self.visibleItems) {
-        items = [self wc_currentVisibleItems];
-        self.visibleItems = items;
-        self.nativeMenuAvailabilityNeedsScan = NO;
-    }
+    NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
+    self.visibleItems = items;
     NSString *signature = [self wc_nativeMenuSignatureForItems:items];
     if ([signature isEqualToString:self.nativeMenuSignature]) {
         return;
     }
     self.nativeMenuButton.menu = [self wc_nativeMenuWithVisibleItems:items];
     self.nativeMenuSignature = signature;
+}
+
+- (void)wc_nativeMenuWillOpen:(UIButton *)button {
+    if (button != self.nativeMenuButton || ![self wc_usesNativeSystemMenu]) {
+        return;
+    }
+    self.nativeMenuUpdatePending = NO;
+    [self wc_refreshNativeMenuImmediately];
 }
 
 - (void)wc_scheduleNativeMenuUpdate {
@@ -2565,7 +2576,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         if (togglesVoiceTranscription) {
             self.voiceTranscriptionActive = !self.voiceTranscriptionActive;
         }
-        self.nativeMenuAvailabilityNeedsScan = YES;
         // Let UIKit finish the source-to-menu dismissal before replacing the
         // menu tree.  Rebuilding it in the same run-loop turn can truncate the
         // collapse morph and make it appear much faster than the opening.
@@ -2942,7 +2952,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.anchorOnLeft = WCLiquidGlassPreferences.anchorOnLeft;
 
     NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
-    self.nativeMenuAvailabilityNeedsScan = NO;
     CGFloat optionDiameter = [self wc_optionDiameterForCount:newVisibleItems.count];
     BOOL voiceActionAvailable = [newVisibleItems indexOfObjectPassingTest:^BOOL(NSDictionary *item,
                                                                                 __unused NSUInteger index,
@@ -3005,7 +3014,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         longPress.delegate = self;
         [self.anchorOrb addGestureRecognizer:longPress];
     }
-    self.anchorOrb.effect = [self wc_usesNativeSystemMenu] ? nil : WCLiquidGlassMakeEffect();
+    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
     [self wc_updateAnchorVisual];
     if ([self wc_usesNativeSystemMenu]) {
         [self wc_configureNativeMenuButton];
@@ -3061,7 +3070,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [super traitCollectionDidChange:previousTraitCollection];
     if ([self wc_usesNativeSystemMenu] &&
         [self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
-        self.nativeMenuButtonNeedsConfiguration = YES;
         [self wc_configureNativeMenuButton];
         [self wc_scheduleNativeMenuUpdate];
     }
@@ -3191,7 +3199,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }
 
     if ([self wc_usesNativeSystemMenu]) {
-        self.nativeMenuAvailabilityNeedsScan = YES;
         [self wc_scheduleNativeMenuUpdate];
         return;
     }
@@ -3274,7 +3281,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
             [self wc_updateVoiceOrbToggleAppearance];
         }
         if ([self wc_usesNativeSystemMenu]) {
-            self.nativeMenuAvailabilityNeedsScan = YES;
             [self wc_scheduleNativeMenuUpdate];
             return;
         }
@@ -3298,10 +3304,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         }
     }
     [self wc_updateVoicePanelToggleAppearance];
-    if ([self wc_usesNativeSystemMenu]) {
-        self.nativeMenuAvailabilityNeedsScan = YES;
-        [self wc_scheduleNativeMenuUpdate];
-    }
+    [self wc_scheduleNativeMenuUpdate];
 }
 
 - (void)wc_cancelIdleHide {
@@ -3679,7 +3682,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 
 - (void)wc_refreshOpenMenuAnimated {
     if ([self wc_usesNativeSystemMenu]) {
-        self.nativeMenuAvailabilityNeedsScan = YES;
+        self.visibleItems = [self wc_currentVisibleItems];
         [self wc_scheduleNativeMenuUpdate];
         return;
     }
@@ -3834,11 +3837,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.panelScrollView.userInteractionEnabled = YES;
     self.anchorOrb.transform = CGAffineTransformIdentity;
     BOOL usesNativeSystemMenu = [self wc_usesNativeSystemMenu];
-    self.anchorOrb.effect = usesNativeSystemMenu ? nil : WCLiquidGlassMakeEffect();
+    self.anchorOrb.effect = WCLiquidGlassMakeEffect();
     [self.anchorOrb setAnchorAppearance];
     self.anchorOrb.alpha = 1.0;
-    self.anchorOrb.hidden = usesNativeSystemMenu;
-    self.anchorOrb.userInteractionEnabled = !usesNativeSystemMenu;
+    self.anchorOrb.hidden = NO;
+    self.anchorOrb.userInteractionEnabled = YES;
     [self.optionOrbs enumerateObjectsUsingBlock:^(WCLiquidGlassOrbView *orb,
                                                    __unused NSUInteger index,
                                                    __unused BOOL *stop) {
@@ -3852,6 +3855,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (usesNativeSystemMenu) {
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
+        self.anchorOrb.hidden = YES;
+        self.anchorOrb.userInteractionEnabled = NO;
         return;
     }
 }

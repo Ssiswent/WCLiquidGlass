@@ -430,24 +430,6 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 %end
 
-%hook UIViewController
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig;
-    if (!WCLiquidGlassPreferences.enabled ||
-        WCLiquidGlassPreferences.menuStyle != WCLiquidGlassMenuStyleNativeSystemMenu ||
-        [NSStringFromClass(self.class) hasPrefix:@"WCLiquidGlass"]) {
-        return;
-    }
-    // Page appearance is the stable point after a tab/navigation transition;
-    // refresh availability here instead of rebuilding UIKit's menu mid-morph.
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [WCLiquidGlassManager.sharedManager reload];
-    });
-}
-
-%end
-
 %ctor {
     @autoreleasepool {
         NSString *bundleIdentifier = NSBundle.mainBundle.bundleIdentifier;
