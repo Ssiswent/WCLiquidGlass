@@ -1084,11 +1084,11 @@ static UIImage *WCLiquidGlassNativeMenuImage(NSString *actionIdentifier) {
         return cachedImage;
     }
 
-    // Keep the original theme/vector image intact. UIKit performs the final
-    // fitting into the UIMenu slot and can retain the source image's scale and
-    // rendering mode. Re-rasterizing to a small 24pt canvas loses detail in
-    // brand PNGs and SVG-backed theme assets, especially on 3x displays.
-    UIImage *sourceImage = WCLiquidGlassImageForAction(actionIdentifier, 96.0);
+    // Use one shared high-resolution logical canvas. UIKit performs the final
+    // fitting, while the generated/vector assets keep their native pixels.
+    // A common request size also prevents sparse brand marks from looking much
+    // smaller or larger than neighboring menu icons.
+    UIImage *sourceImage = WCLiquidGlassImageForAction(actionIdentifier, 56.0);
     if (!sourceImage) {
         return nil;
     }
@@ -2111,6 +2111,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, strong) UIControl *dismissControl;
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
 @property(nonatomic, strong) UIButton *nativeMenuButton;
+@property(nonatomic, strong) UIImage *nativeMenuButtonConfigurationImage;
+@property(nonatomic, assign) BOOL nativeMenuButtonNeedsConfiguration;
 @property(nonatomic, assign) BOOL nativeMenuUpdatePending;
 @property(nonatomic, copy) NSString *nativeMenuSignature;
 @property(nonatomic, copy) NSArray<WCLiquidGlassOrbView *> *optionOrbs;
@@ -2169,7 +2171,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 - (void)wc_endPressAnimated:(BOOL)animated;
 - (BOOL)wc_usesNativeSystemMenu;
 - (void)wc_configureNativeMenuButton;
-- (void)wc_nativeMenuWillOpen:(UIButton *)button;
 - (void)wc_refreshNativeMenuImmediately;
 - (void)wc_scheduleNativeMenuUpdate;
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
@@ -2370,16 +2371,15 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
         button.showsMenuAsPrimaryAction = YES;
+        button.automaticallyUpdatesConfiguration = YES;
         button.tintColor = UIColor.labelColor;
-        [button addTarget:self
-                   action:@selector(wc_nativeMenuWillOpen:)
-         forControlEvents:UIControlEventTouchDown];
         // Keep the UIKit source control outside the host's glass container.
         // The source button owns the system morph material; putting it inside
         // another glass surface creates the second offset layer visible while
         // the control is pressed or moved.
         [self addSubview:button];
         self.nativeMenuButton = button;
+        self.nativeMenuButtonNeedsConfiguration = YES;
     } else if (self.nativeMenuButton.superview != self) {
         [self.nativeMenuButton removeFromSuperview];
         [self addSubview:self.nativeMenuButton];
@@ -2391,9 +2391,17 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     // second offset glass layer while the button is pressed or moved.  Native
     // menu mode owns this glass surface, so detach the container material and
     // let UIKit perform the source-to-menu morph from the button itself.
-    self.glassContainer.effect = nil;
+    if (self.glassContainer.effect) {
+        self.glassContainer.effect = nil;
+    }
 
     [self.anchorOrb setAnchorAppearance];
+    UIImage *anchorImage = self.anchorOrb.iconView.image;
+    if (!self.nativeMenuButtonNeedsConfiguration &&
+        self.nativeMenuButton.configuration &&
+        self.nativeMenuButtonConfigurationImage == anchorImage) {
+        return;
+    }
     UIButtonConfiguration *configuration = nil;
     if (@available(iOS 26.0, *)) {
         // Native menu mode must use UIKit's default source material. The
@@ -2413,12 +2421,15 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     } else {
         self.nativeMenuButton.layer.borderWidth = 0.0;
     }
-    configuration.image = self.anchorOrb.iconView.image;
+    configuration.image = anchorImage;
     configuration.baseForegroundColor = UIColor.labelColor;
     configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     configuration.buttonSize = UIButtonConfigurationSizeMedium;
     configuration.contentInsets = NSDirectionalEdgeInsetsMake(0.0, 0.0, 0.0, 0.0);
     self.nativeMenuButton.configuration = configuration;
+    self.nativeMenuButtonConfigurationImage = anchorImage;
+    self.nativeMenuButtonNeedsConfiguration = NO;
+    [self.nativeMenuButton setNeedsUpdateConfiguration];
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
@@ -2494,16 +2505,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }
     self.nativeMenuButton.menu = [self wc_nativeMenuWithVisibleItems:items];
     self.nativeMenuSignature = signature;
-}
-
-- (void)wc_nativeMenuWillOpen:(UIButton *)button {
-    if (button != self.nativeMenuButton || ![self wc_usesNativeSystemMenu]) {
-        return;
-    }
-    // Refresh before UIKit captures the source button.  Updating after the
-    // menu starts its morph causes a visible flash and blocks the first frames.
-    self.nativeMenuUpdatePending = NO;
-    [self wc_refreshNativeMenuImmediately];
 }
 
 - (void)wc_scheduleNativeMenuUpdate {
@@ -3045,6 +3046,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [super traitCollectionDidChange:previousTraitCollection];
     if ([self wc_usesNativeSystemMenu] &&
         [self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        self.nativeMenuButtonNeedsConfiguration = YES;
         [self wc_configureNativeMenuButton];
         [self wc_scheduleNativeMenuUpdate];
     }
