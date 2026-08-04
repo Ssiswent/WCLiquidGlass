@@ -2110,6 +2110,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 @property(nonatomic, strong) UIVisualEffectView *glassContainer;
 @property(nonatomic, strong) UIControl *dismissControl;
 @property(nonatomic, strong) WCLiquidGlassOrbView *anchorOrb;
+@property(nonatomic, strong) UIVisualEffectView *nativeMenuGlassView;
 @property(nonatomic, strong) UIButton *nativeMenuButton;
 @property(nonatomic, assign) BOOL nativeMenuUpdatePending;
 @property(nonatomic, copy) NSString *nativeMenuSignature;
@@ -2366,6 +2367,16 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 }
 
 - (void)wc_configureNativeMenuButton {
+    if (!self.nativeMenuGlassView) {
+        UIVisualEffectView *glassView = [[UIVisualEffectView alloc]
+            initWithEffect:WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearanceBalanced)];
+        glassView.backgroundColor = UIColor.clearColor;
+        glassView.userInteractionEnabled = NO;
+        glassView.clipsToBounds = YES;
+        glassView.layer.cornerCurve = kCACornerCurveContinuous;
+        [self addSubview:glassView];
+        self.nativeMenuGlassView = glassView;
+    }
     if (!self.nativeMenuButton) {
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.accessibilityLabel = @"WCLiquidGlass 菜单";
@@ -2387,6 +2398,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         [self.nativeMenuButton removeFromSuperview];
         [self addSubview:self.nativeMenuButton];
     }
+    [self bringSubviewToFront:self.nativeMenuButton];
 
     // The native button is already a complete Liquid Glass element.  Keeping
     // it inside our UIGlassContainerEffect makes the hidden radial anchor and
@@ -2434,6 +2446,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.nativeMenuButton.configuration = configuration;
     self.nativeMenuButton.layer.cornerCurve = kCACornerCurveContinuous;
     self.nativeMenuButton.layer.cornerRadius = 0.0;
+    self.nativeMenuGlassView.hidden = NO;
 }
 
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
@@ -3009,6 +3022,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         [self wc_configureNativeMenuButton];
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
+        self.nativeMenuGlassView.hidden = NO;
         self.anchorOrb.hidden = YES;
         self.anchorOrb.userInteractionEnabled = NO;
         for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
@@ -3021,6 +3035,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         self.nativeMenuSignature = nil;
         self.nativeMenuButton.hidden = YES;
         self.nativeMenuButton.userInteractionEnabled = NO;
+        self.nativeMenuGlassView.hidden = YES;
         self.panelView.hidden = YES;
         self.panelTransitionState = WCLiquidGlassPanelTransitionStateCollapsed;
     }
@@ -3078,6 +3093,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     self.anchorOrb.center = CGPointMake(x, MIN(maximumY, MAX(minimumY, y)));
     self.nativeMenuButton.bounds = self.anchorOrb.bounds;
     self.nativeMenuButton.center = self.anchorOrb.center;
+    self.nativeMenuGlassView.bounds = self.anchorOrb.bounds;
+    self.nativeMenuGlassView.center = self.anchorOrb.center;
+    self.nativeMenuGlassView.layer.cornerRadius = diameter * 0.5;
 }
 
 - (CGFloat)wc_effectiveLayoutBottom {
@@ -3844,6 +3862,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (usesNativeSystemMenu) {
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
+        self.nativeMenuGlassView.hidden = NO;
         self.anchorOrb.hidden = YES;
         self.anchorOrb.userInteractionEnabled = NO;
         return;
@@ -4203,6 +4222,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if ([self wc_usesNativeSystemMenu]) {
         self.nativeMenuButton.bounds = self.anchorOrb.bounds;
         self.nativeMenuButton.center = self.anchorOrb.center;
+        self.nativeMenuGlassView.bounds = self.anchorOrb.bounds;
+        self.nativeMenuGlassView.center = self.anchorOrb.center;
+        self.nativeMenuGlassView.layer.cornerRadius = self.anchorOrb.diameter * 0.5;
         self.nativeMenuButton.hidden = NO;
         return;
     }
