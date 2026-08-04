@@ -1233,11 +1233,6 @@ static NSArray<id> *WCLiquidGlassActionTargetCandidates(UIViewController *visibl
                                                            visibleController.navigationController ?: NSNull.null,
                                                            tabController ?: NSNull.null,
                                                            nil];
-    for (UIViewController *parent = visibleController.parentViewController;
-         parent;
-         parent = parent.parentViewController) {
-        [targets addObject:parent];
-    }
     for (NSString *propertyName in @[@"hostViewController", @"parentViewController", @"toolView",
                                       @"messageToolBar", @"m_toolView", @"inputToolView",
                                       @"m_inputController"]) {
