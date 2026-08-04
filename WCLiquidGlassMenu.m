@@ -2169,7 +2169,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
 - (void)wc_endPressAnimated:(BOOL)animated;
 - (BOOL)wc_usesNativeSystemMenu;
 - (void)wc_configureNativeMenuButton;
-- (void)wc_nativeMenuWillOpen:(UIButton *)button;
 - (void)wc_refreshNativeMenuImmediately;
 - (void)wc_scheduleNativeMenuUpdate;
 - (UIMenu *)wc_nativeMenuWithVisibleItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
@@ -2379,9 +2378,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
         button.showsMenuAsPrimaryAction = YES;
         button.automaticallyUpdatesConfiguration = YES;
         button.tintColor = UIColor.labelColor;
-        [button addTarget:self
-                   action:@selector(wc_nativeMenuWillOpen:)
-         forControlEvents:UIControlEventTouchDown];
         [buttonSuperview addSubview:button];
         self.nativeMenuButton = button;
     } else if (self.nativeMenuButton.superview != buttonSuperview) {
@@ -2491,6 +2487,9 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     if (![self wc_usesNativeSystemMenu] || !self.nativeMenuButton) {
         return;
     }
+    if (self.nativeMenuButton.isHighlighted || self.nativeMenuButton.isTracking) {
+        return;
+    }
     NSArray<NSDictionary<NSString *, id> *> *items = [self wc_currentVisibleItems];
     self.visibleItems = items;
     NSString *signature = [self wc_nativeMenuSignatureForItems:items];
@@ -2499,14 +2498,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     }
     self.nativeMenuButton.menu = [self wc_nativeMenuWithVisibleItems:items];
     self.nativeMenuSignature = signature;
-}
-
-- (void)wc_nativeMenuWillOpen:(UIButton *)button {
-    if (button != self.nativeMenuButton || ![self wc_usesNativeSystemMenu]) {
-        return;
-    }
-    self.nativeMenuUpdatePending = NO;
-    [self wc_refreshNativeMenuImmediately];
 }
 
 - (void)wc_scheduleNativeMenuUpdate {
@@ -2996,6 +2987,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassPanelTransitionState) {
     [self wc_updateAnchorVisual];
     if ([self wc_usesNativeSystemMenu]) {
         [self wc_configureNativeMenuButton];
+        [self wc_refreshNativeMenuImmediately];
         self.nativeMenuButton.hidden = NO;
         self.nativeMenuButton.userInteractionEnabled = YES;
         self.anchorOrb.hidden = YES;
