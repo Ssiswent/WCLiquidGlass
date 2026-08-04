@@ -3348,6 +3348,7 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
 @property(nonatomic, strong) WCLiquidGlassWindow *window;
 @property(nonatomic, strong) WCLiquidGlassHostController *hostController;
 @property(nonatomic, assign) BOOL started;
+@property(nonatomic, assign) BOOL nativeMenuTestIsolationEnabled;
 
 @end
 
@@ -3389,8 +3390,13 @@ void WCLiquidGlassRefreshStaticMenuPreview(UIView *preview) {
         WCLiquidGlassRefreshDoutuConfiguration();
         [self wc_ensureWindow];
         [self.hostController.hostView reload];
-        self.window.hidden = !WCLiquidGlassPreferences.enabled;
+        self.window.hidden = self.nativeMenuTestIsolationEnabled || !WCLiquidGlassPreferences.enabled;
     });
+}
+
+- (void)setNativeMenuTestIsolationEnabled:(BOOL)enabled {
+    _nativeMenuTestIsolationEnabled = enabled;
+    [self reload];
 }
 
 - (void)wc_ensureWindow {

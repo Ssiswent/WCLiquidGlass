@@ -1349,10 +1349,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    [WCLiquidGlassManager.sharedManager setNativeMenuTestIsolationEnabled:YES];
     if (self.nativeFloatingMenuTestButton.superview) {
         return;
     }
-    UIView *host = self.navigationController.view ?: self.view.superview ?: self.view;
+    UIView *host = self.view.window ?: self.navigationController.view ?: self.view.superview ?: self.view;
     self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
     if (@available(iOS 26.0, *)) {
         self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration glassButtonConfiguration];
@@ -1375,11 +1376,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.nativeFloatingMenuTestButton.widthAnchor constraintEqualToConstant:56.0],
         [self.nativeFloatingMenuTestButton.heightAnchor constraintEqualToConstant:56.0]
     ]];
+    [host layoutIfNeeded];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [self.nativeFloatingMenuTestButton removeFromSuperview];
+    [WCLiquidGlassManager.sharedManager setNativeMenuTestIsolationEnabled:NO];
 }
 
 - (UIMenu *)wc_makeFloatingMenuTestMenu {
