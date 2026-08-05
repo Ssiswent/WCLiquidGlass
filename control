@@ -1,6 +1,6 @@
 Package: com.ssiswent.wcliquidglass
 Name: WCLiquidGlass
-Version: 1.9.1~native-menu-lab.11
+Version: 1.9.1~native-menu-lab.12
 Architecture: iphoneos-arm64
 Description: Liquid Glass effects, contextual radial actions, material protection and WCGlass compatibility for WeChat.
 Maintainer: ssiswent

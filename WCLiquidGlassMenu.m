@@ -2454,7 +2454,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     if (!self.nativeToolbar || !self.nativeMenuItem) {
         return;
     }
-    self.visibleItems = [self wc_currentVisibleItems];
+    NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
+    if ([newVisibleItems isEqualToArray:self.visibleItems]) {
+        return;
+    }
+    self.visibleItems = newVisibleItems;
     self.nativeMenuItem.menu = [self wc_makeNativeMenu];
 }
 
