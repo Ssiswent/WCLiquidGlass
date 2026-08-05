@@ -2156,7 +2156,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     if (self.nativeToolbar && !self.nativeToolbar.hidden && self.nativeToolbar.alpha > 0.01) {
-        CGPoint localPoint = [self.nativeToolbar convertPoint:point fromView:self];
+        CALayer *presentationLayer = self.nativeToolbar.layer.presentationLayer;
+        CGRect toolbarFrame = presentationLayer ? presentationLayer.frame : self.nativeToolbar.frame;
+        CGPoint localPoint = CGPointMake(point.x - CGRectGetMinX(toolbarFrame),
+                                         point.y - CGRectGetMinY(toolbarFrame));
         UIView *hit = [self.nativeToolbar hitTest:localPoint withEvent:event];
         if (hit) {
             return hit;
@@ -2405,7 +2408,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         self.nativeToolbar.layer.masksToBounds = NO;
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
                                                                                 action:@selector(wc_nativeToolbarPan:)];
-        pan.cancelsTouchesInView = YES;
+        pan.cancelsTouchesInView = NO;
+        pan.delaysTouchesBegan = NO;
         pan.delegate = self;
         [self.nativeToolbar addGestureRecognizer:pan];
         [self addSubview:self.nativeToolbar];
@@ -3456,7 +3460,31 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
         shouldReceiveTouch:(__unused UITouch *)touch {
     if (gestureRecognizer.view == self.nativeToolbar) {
+        CALayer *presentationLayer = self.nativeToolbar.layer.presentationLayer;
+        if (presentationLayer) {
+            CGRect presentationFrame = presentationLayer.frame;
+            [self.nativeToolbar.layer removeAllAnimations];
+            self.nativeToolbar.frame = presentationFrame;
+        }
         [self wc_cancelNativeHide];
+        __weak typeof(self) weakSelf = self;
+        self.nativeHideTimer = [NSTimer scheduledTimerWithTimeInterval:0.35
+                                                                    repeats:NO
+                                                                      block:^(__unused NSTimer *timer) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (self) {
+                [self wc_scheduleNativeHide];
+            }
+        }];
+    }
+    return YES;
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer.view == self.nativeToolbar &&
+        [gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class]) {
+        CGPoint velocity = [(UIPanGestureRecognizer *)gestureRecognizer velocityInView:self];
+        return hypot(velocity.x, velocity.y) > 10.0;
     }
     return YES;
 }
