@@ -1979,6 +1979,24 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 @end
 
+@interface WCLiquidGlassNativeToolbar : UIToolbar
+
+@property(nonatomic, copy) void (^touchBeganHandler)(void);
+
+@end
+
+@implementation WCLiquidGlassNativeToolbar
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    if (hit && event && self.touchBeganHandler) {
+        self.touchBeganHandler();
+    }
+    return hit;
+}
+
+@end
+
 @interface WCLiquidGlassHostView : UIView <UIGestureRecognizerDelegate, UIToolbarDelegate>
 
 @property(nonatomic, strong) UIVisualEffectView *glassContainer;
@@ -2010,6 +2028,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, strong) UIBarButtonItem *nativeMenuItem;
 @property(nonatomic, strong) UIPanGestureRecognizer *nativePanGesture;
 @property(nonatomic, strong) NSTimer *nativeHideTimer;
+@property(nonatomic, strong) NSTimer *nativeInteractionSettleTimer;
 @property(nonatomic, assign) BOOL nativeToolbarPartiallyHidden;
 @property(nonatomic, assign) BOOL nativeToolbarPositioned;
 @property(nonatomic, assign) BOOL nativeToolbarRestoring;
@@ -2045,6 +2064,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_positionNativeToolbarIfNeeded;
 - (void)wc_clampNativeToolbarFrameAnimated:(BOOL)animated;
 - (void)wc_showNativeToolbarIfNeeded;
+- (void)wc_nativeToolbarTouchBegan;
+- (void)wc_stopNativeToolbarAnimation;
+- (void)wc_cancelNativeToolbarInteractionSettle;
 - (void)wc_nativeToolbarPan:(UIPanGestureRecognizer *)gesture;
 - (void)wc_scheduleNativeHide;
 - (void)wc_cancelNativeHide;
@@ -2166,6 +2188,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         UIView *hit = [super hitTest:point withEvent:event];
         if (hit == self.nativeToolbar || [hit isDescendantOfView:self.nativeToolbar]) {
             return hit;
+        }
+        CALayer *presentationLayer = self.nativeToolbar.layer.presentationLayer;
+        if (presentationLayer && CGRectContainsPoint(presentationLayer.frame, point)) {
+            CGPoint localPoint = CGPointMake(point.x - CGRectGetMinX(presentationLayer.frame),
+                                             point.y - CGRectGetMinY(presentationLayer.frame));
+            hit = [self.nativeToolbar hitTest:localPoint withEvent:event];
+            if (hit == self.nativeToolbar || [hit isDescendantOfView:self.nativeToolbar]) {
+                return hit;
+            }
         }
     }
     for (WCLiquidGlassOrbView *orb in self.optionOrbs.reverseObjectEnumerator) {
@@ -2451,14 +2482,22 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_installNativeMenuPanel {
     [self wc_cancelNativeHide];
     if (!self.nativeToolbar) {
-        self.nativeToolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0.0, 0.0, 56.0, 56.0)];
+        WCLiquidGlassNativeToolbar *toolbar = [[WCLiquidGlassNativeToolbar alloc] initWithFrame:CGRectMake(0.0, 0.0, 56.0, 56.0)];
+        __weak typeof(self) weakSelf = self;
+        toolbar.touchBeganHandler = ^{
+            [weakSelf wc_nativeToolbarTouchBegan];
+        };
+        self.nativeToolbar = toolbar;
         self.nativeToolbar.delegate = self;
         self.nativeToolbar.userInteractionEnabled = YES;
         self.nativeToolbar.clipsToBounds = NO;
         self.nativePanGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self
                                                                           action:@selector(wc_nativeToolbarPan:)];
         self.nativePanGesture.maximumNumberOfTouches = 1;
-        self.nativePanGesture.cancelsTouchesInView = YES;
+        self.nativePanGesture.cancelsTouchesInView = NO;
+        self.nativePanGesture.delaysTouchesBegan = NO;
+        self.nativePanGesture.delaysTouchesEnded = NO;
+        self.nativePanGesture.delegate = self;
         [self.nativeToolbar addGestureRecognizer:self.nativePanGesture];
         [self addSubview:self.nativeToolbar];
     }
@@ -2487,6 +2526,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)wc_removeNativeMenuPanel {
     [self wc_cancelNativeHide];
+    [self wc_cancelNativeToolbarInteractionSettle];
     [self.nativeToolbar removeFromSuperview];
     self.nativeToolbar = nil;
     self.nativeMenuItem = nil;
@@ -2501,9 +2541,51 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.nativeHideTimer = nil;
 }
 
+- (void)wc_cancelNativeToolbarInteractionSettle {
+    [self.nativeInteractionSettleTimer invalidate];
+    self.nativeInteractionSettleTimer = nil;
+}
+
+- (void)wc_stopNativeToolbarAnimation {
+    if (!self.nativeToolbar) {
+        return;
+    }
+    CGRect frame = self.nativeToolbar.frame;
+    CALayer *presentationLayer = self.nativeToolbar.layer.presentationLayer;
+    if (presentationLayer) {
+        frame = presentationLayer.frame;
+    }
+    [self.nativeToolbar.layer removeAllAnimations];
+    self.nativeToolbar.frame = frame;
+}
+
+- (void)wc_nativeToolbarTouchBegan {
+    if (!self.nativeToolbar) {
+        return;
+    }
+    [self wc_stopNativeToolbarAnimation];
+    [self wc_cancelNativeHide];
+    [self wc_cancelNativeToolbarInteractionSettle];
+    __weak typeof(self) weakSelf = self;
+    self.nativeInteractionSettleTimer = [NSTimer scheduledTimerWithTimeInterval:0.55
+                                                                            repeats:NO
+                                                                              block:^(__unused NSTimer *timer) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) {
+            return;
+        }
+        self.nativeInteractionSettleTimer = nil;
+        if (self.nativePanGesture.state == UIGestureRecognizerStateBegan ||
+            self.nativePanGesture.state == UIGestureRecognizerStateChanged) {
+            return;
+        }
+        [self wc_scheduleNativeHide];
+    }];
+}
+
 - (void)wc_scheduleNativeHide {
     [self wc_cancelNativeHide];
-    if (!self.nativeToolbar) {
+    if (!self.nativeToolbar || self.nativeInteractionSettleTimer) {
         return;
     }
     __weak typeof(self) weakSelf = self;
@@ -2525,7 +2607,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         frame.origin.x = self.anchorOnLeft
             ? -(CGRectGetWidth(frame) * 0.5)
             : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) * 0.5;
-        [UIView animateWithDuration:0.28 animations:^{
+        [UIView animateWithDuration:0.28
+                              delay:0
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
+                         animations:^{
             self.nativeToolbar.frame = frame;
             self.nativeToolbar.alpha = 0.72;
         } completion:nil];
@@ -2533,6 +2619,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (void)wc_showNativeToolbarIfNeeded {
+    [self wc_cancelNativeToolbarInteractionSettle];
     [self wc_scheduleNativeHide];
     if (!self.nativeToolbarPartiallyHidden) {
         self.nativeToolbar.alpha = 1.0;
@@ -2556,6 +2643,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         return;
     }
     if (gesture.state == UIGestureRecognizerStateBegan) {
+        [self wc_cancelNativeToolbarInteractionSettle];
         [self wc_showNativeToolbarIfNeeded];
         self.nativePanStartFrame = self.nativeToolbar.frame;
     } else if (gesture.state == UIGestureRecognizerStateChanged) {
@@ -2582,11 +2670,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         CGRect targetFrame = [self wc_nativeToolbarVisibleFrameForLeft:self.anchorOnLeft];
         targetFrame.origin.y = frame.origin.y;
         self.nativeToolbarPartiallyHidden = NO;
+        [self wc_cancelNativeToolbarInteractionSettle];
         [UIView animateWithDuration:0.32
                               delay:0
              usingSpringWithDamping:0.86
               initialSpringVelocity:0.2
-                            options:UIViewAnimationOptionBeginFromCurrentState
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
                          animations:^{
             self.nativeToolbar.frame = targetFrame;
             self.nativeToolbar.alpha = 1.0;
