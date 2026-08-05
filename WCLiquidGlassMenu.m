@@ -2416,7 +2416,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         self.nativeToolbar.layer.masksToBounds = NO;
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
                                                                                 action:@selector(wc_nativeToolbarPan:)];
-        pan.cancelsTouchesInView = YES;
+        pan.cancelsTouchesInView = NO;
         pan.delegate = self;
         [self.nativeToolbar addGestureRecognizer:pan];
         [self addSubview:self.nativeToolbar];
