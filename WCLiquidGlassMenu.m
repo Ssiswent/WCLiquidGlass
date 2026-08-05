@@ -1163,11 +1163,6 @@ static id WCLiquidGlassActionTarget(NSArray<NSString *> *selectorNames) {
                                                            visibleController.navigationController ?: NSNull.null,
                                                            tabController ?: NSNull.null,
                                                            nil];
-    for (UIViewController *parent = visibleController.parentViewController;
-         parent;
-         parent = parent.parentViewController) {
-        [targets addObject:parent];
-    }
     for (NSString *propertyName in @[@"hostViewController", @"parentViewController", @"toolView",
                                       @"messageToolBar", @"m_toolView", @"inputToolView",
                                       @"m_inputController"]) {
@@ -1192,11 +1187,6 @@ static NSArray<id> *WCLiquidGlassActionTargetCandidates(UIViewController *visibl
                                                            visibleController.navigationController ?: NSNull.null,
                                                            tabController ?: NSNull.null,
                                                            nil];
-    for (UIViewController *parent = visibleController.parentViewController;
-         parent;
-         parent = parent.parentViewController) {
-        [targets addObject:parent];
-    }
     for (NSString *propertyName in @[@"hostViewController", @"parentViewController", @"toolView",
                                       @"messageToolBar", @"m_toolView", @"inputToolView",
                                       @"m_inputController"]) {
@@ -2051,7 +2041,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)wc_nativeToolbarPan:(UIPanGestureRecognizer *)gesture;
 - (void)wc_scheduleNativeHide;
 - (void)wc_cancelNativeHide;
-- (void)wc_refreshNativeMenuImmediately;
 - (void)wc_beginPressOnOrb:(WCLiquidGlassOrbView *)orb towardPoint:(CGPoint)point;
 - (void)wc_updatePressTowardPoint:(CGPoint)point;
 - (void)wc_endPressAnimated:(BOOL)animated;
@@ -2448,14 +2437,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.nativeToolbar = nil;
     self.nativeMenuItem = nil;
     self.nativeToolbarPartiallyHidden = NO;
-}
-
-- (void)wc_refreshNativeMenuImmediately {
-    if (!self.nativeToolbar || !self.nativeMenuItem) {
-        return;
-    }
-    self.visibleItems = [self wc_currentVisibleItems];
-    self.nativeMenuItem.menu = [self wc_makeNativeMenu];
 }
 
 - (void)wc_cancelNativeHide {
@@ -3476,7 +3457,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         shouldReceiveTouch:(__unused UITouch *)touch {
     if (gestureRecognizer.view == self.nativeToolbar) {
         [self wc_cancelNativeHide];
-        [self wc_refreshNativeMenuImmediately];
     }
     return YES;
 }
