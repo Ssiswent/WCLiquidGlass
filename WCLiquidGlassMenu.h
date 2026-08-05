@@ -45,7 +45,6 @@ extern NSString *const WCLiquidGlassManualTextEditNotification;
 + (instancetype)sharedManager;
 - (void)start;
 - (void)reload;
-- (void)setNativeMenuTestIsolationEnabled:(BOOL)enabled;
 
 @end
 

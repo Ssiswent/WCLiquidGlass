@@ -7,6 +7,12 @@
 
 static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
+static void WCLiquidGlassRecordNativeMenuEvent(NSString *event) {
+    NSString *thread = NSThread.isMainThread ? @"main" : @"background";
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+        @"NativeMenuTest thread=%@ %@", thread, event]];
+}
+
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <math.h>
@@ -1291,16 +1297,19 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 }
 
 - (UIBarButtonItem *)wc_makeNativeMenuTestItem {
+    WCLiquidGlassRecordNativeMenuEvent(@"nav item created");
     UIAction *firstAction = [UIAction actionWithTitle:@"Liquid Glass 测试"
                                                  image:[UIImage systemImageNamed:@"sparkles"]
                                             identifier:nil
                                                handler:^(__unused UIAction *action) {
+        WCLiquidGlassRecordNativeMenuEvent(@"nav action=first");
         NSLog(@"[WCLiquidGlass] native menu test action");
     }];
     UIAction *secondAction = [UIAction actionWithTitle:@"第二个测试项"
                                                   image:[UIImage systemImageNamed:@"circle"]
                                              identifier:nil
                                                 handler:^(__unused UIAction *action) {
+        WCLiquidGlassRecordNativeMenuEvent(@"nav action=second");
         NSLog(@"[WCLiquidGlass] native menu second test action");
     }];
     UIMenu *menu = [UIMenu menuWithTitle:@"Liquid Glass 测试菜单"
@@ -1349,11 +1358,25 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    [WCLiquidGlassManager.sharedManager setNativeMenuTestIsolationEnabled:YES];
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"settings didAppear controller=%p viewWindow=%@ navView=%@",
+        self,
+        self.view.window ? NSStringFromClass(self.view.window.class) : @"nil",
+        self.navigationController.view ? NSStringFromClass(self.navigationController.view.class) : @"nil"]);
     if (self.nativeFloatingMenuTestButton.superview) {
+        WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+            @"button reused superview=%@ frame=%@ window=%@",
+            self.nativeFloatingMenuTestButton.superview.class,
+            NSStringFromCGRect(self.nativeFloatingMenuTestButton.frame),
+            self.nativeFloatingMenuTestButton.window ? NSStringFromClass(self.nativeFloatingMenuTestButton.window.class) : @"nil"]);
         return;
     }
-    UIView *host = self.view.window ?: self.navigationController.view ?: self.view.superview ?: self.view;
+    UIView *host = self.navigationController.view ?: self.view.superview ?: self.view;
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button host=%@ hostWindow=%@ hostFrame=%@",
+        host.class,
+        host.window ? NSStringFromClass(host.window.class) : @"nil",
+        NSStringFromCGRect(host.bounds)]);
     self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
     if (@available(iOS 26.0, *)) {
         self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration glassButtonConfiguration];
@@ -1368,6 +1391,21 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     self.nativeFloatingMenuTestButton.menu = [self wc_makeFloatingMenuTestMenu];
     self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction = YES;
     self.nativeFloatingMenuTestButton.accessibilityLabel = @"原生 Liquid Glass 悬浮测试菜单";
+    [self.nativeFloatingMenuTestButton addTarget:self
+                                          action:@selector(wc_nativeFloatingMenuTouchDown:)
+                                forControlEvents:UIControlEventTouchDown];
+    [self.nativeFloatingMenuTestButton addTarget:self
+                                          action:@selector(wc_nativeFloatingMenuTouchUpInside:)
+                                forControlEvents:UIControlEventTouchUpInside];
+    [self.nativeFloatingMenuTestButton addTarget:self
+                                          action:@selector(wc_nativeFloatingMenuTouchUpOutside:)
+                                forControlEvents:UIControlEventTouchUpOutside];
+    [self.nativeFloatingMenuTestButton addTarget:self
+                                          action:@selector(wc_nativeFloatingMenuTouchCancel:)
+                                forControlEvents:UIControlEventTouchCancel];
+    [self.nativeFloatingMenuTestButton addTarget:self
+                                          action:@selector(wc_nativeFloatingMenuPrimaryAction:)
+                                forControlEvents:UIControlEventPrimaryActionTriggered];
     self.nativeFloatingMenuTestButton.translatesAutoresizingMaskIntoConstraints = NO;
     [host addSubview:self.nativeFloatingMenuTestButton];
     [NSLayoutConstraint activateConstraints:@[
@@ -1377,25 +1415,85 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.nativeFloatingMenuTestButton.heightAnchor constraintEqualToConstant:56.0]
     ]];
     [host layoutIfNeeded];
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button installed button=%p frame=%@ window=%@ menu=%d primary=%d interaction=%d highlighted=%d",
+        self.nativeFloatingMenuTestButton,
+        NSStringFromCGRect(self.nativeFloatingMenuTestButton.frame),
+        self.nativeFloatingMenuTestButton.window ? NSStringFromClass(self.nativeFloatingMenuTestButton.window.class) : @"nil",
+        self.nativeFloatingMenuTestButton.menu != nil,
+        self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction,
+        self.nativeFloatingMenuTestButton.userInteractionEnabled,
+        self.nativeFloatingMenuTestButton.isHighlighted]);
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"settings willDisappear button=%p frame=%@ highlighted=%d tracking=%d",
+        self.nativeFloatingMenuTestButton,
+        NSStringFromCGRect(self.nativeFloatingMenuTestButton.frame),
+        self.nativeFloatingMenuTestButton.isHighlighted,
+        self.nativeFloatingMenuTestButton.isTracking]);
     [self.nativeFloatingMenuTestButton removeFromSuperview];
-    [WCLiquidGlassManager.sharedManager setNativeMenuTestIsolationEnabled:NO];
+}
+
+- (void)wc_nativeFloatingMenuTouchDown:(UIButton *)button {
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button touchDown=%p frame=%@ window=%@ highlighted=%d tracking=%d menu=%d",
+        button,
+        NSStringFromCGRect(button.frame),
+        button.window ? NSStringFromClass(button.window.class) : @"nil",
+        button.isHighlighted,
+        button.isTracking,
+        button.menu != nil]);
+}
+
+- (void)wc_nativeFloatingMenuTouchUpInside:(UIButton *)button {
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button touchUpInside=%p highlighted=%d tracking=%d",
+        button,
+        button.isHighlighted,
+        button.isTracking]);
+}
+
+- (void)wc_nativeFloatingMenuTouchUpOutside:(UIButton *)button {
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button touchUpOutside=%p highlighted=%d tracking=%d",
+        button,
+        button.isHighlighted,
+        button.isTracking]);
+}
+
+- (void)wc_nativeFloatingMenuTouchCancel:(UIButton *)button {
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button touchCancel=%p highlighted=%d tracking=%d",
+        button,
+        button.isHighlighted,
+        button.isTracking]);
+}
+
+- (void)wc_nativeFloatingMenuPrimaryAction:(UIButton *)button {
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"button primaryAction=%p highlighted=%d tracking=%d",
+        button,
+        button.isHighlighted,
+        button.isTracking]);
 }
 
 - (UIMenu *)wc_makeFloatingMenuTestMenu {
+    WCLiquidGlassRecordNativeMenuEvent(@"floating menu created");
     UIAction *firstAction = [UIAction actionWithTitle:@"悬浮按钮测试"
                                                  image:[UIImage systemImageNamed:@"hand.tap"]
                                             identifier:nil
                                                handler:^(__unused UIAction *action) {
+        WCLiquidGlassRecordNativeMenuEvent(@"floating action=first");
         NSLog(@"[WCLiquidGlass] native floating menu test action");
     }];
     UIAction *secondAction = [UIAction actionWithTitle:@"玻璃按钮测试"
                                                   image:[UIImage systemImageNamed:@"sparkles"]
                                              identifier:nil
                                                 handler:^(__unused UIAction *action) {
+        WCLiquidGlassRecordNativeMenuEvent(@"floating action=glass");
         NSLog(@"[WCLiquidGlass] native floating menu glass action");
     }];
     UIMenu *subMenu = [UIMenu menuWithTitle:@"更多测试"
@@ -1407,12 +1505,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                              image:[UIImage systemImageNamed:@"circle"]
                         identifier:nil
                            handler:^(__unused UIAction *action) {
+            WCLiquidGlassRecordNativeMenuEvent(@"floating action=circle");
             NSLog(@"[WCLiquidGlass] native floating menu circle action");
         }],
         [UIAction actionWithTitle:@"方形项目"
                              image:[UIImage systemImageNamed:@"square"]
                         identifier:nil
                            handler:^(__unused UIAction *action) {
+            WCLiquidGlassRecordNativeMenuEvent(@"floating action=square");
             NSLog(@"[WCLiquidGlass] native floating menu square action");
         }]
     ]];
