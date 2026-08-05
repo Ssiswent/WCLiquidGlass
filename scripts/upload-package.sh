@@ -27,12 +27,13 @@ fi
 
 package_name=$(basename "$package_file")
 remote_path="${upload_path%/}/$package_name"
-remote_file="$upload_url$remote_path"
+remote_file="$upload_url/download?path=$remote_path"
 remote_copy=$(mktemp)
 trap 'rm -f "$remote_copy"' EXIT
 
 remote_status=$(curl --show-error --silent --output "$remote_copy" --write-out '%{http_code}' \
-    --connect-timeout 3 --max-time 20 "$remote_file" || true)
+    --get --data-urlencode "path=$remote_path" \
+    --connect-timeout 3 --max-time 20 "$upload_url/download" || true)
 
 case "$remote_status" in
     200)
