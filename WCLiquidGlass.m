@@ -15,6 +15,7 @@ static void WCLiquidGlassRecordNativeMenuEvent(NSString *event) {
 
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
+#import <objc/runtime.h>
 #import <math.h>
 
 #ifndef WCLIQUIDGLASS_VERSION
@@ -1363,6 +1364,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         self,
         self.view.window ? NSStringFromClass(self.view.window.class) : @"nil",
         self.navigationController.view ? NSStringFromClass(self.navigationController.view.class) : @"nil"]);
+    Class floatingOverlayClass = NSClassFromString(@"WCLGFloatingOverlayView");
+    const char *floatingOverlayImage = floatingOverlayClass ? class_getImageName(floatingOverlayClass) : NULL;
+    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
+        @"floating overlay class=%@ image=%@",
+        floatingOverlayClass ? @"present" : @"absent",
+        floatingOverlayImage ? [NSString stringWithUTF8String:floatingOverlayImage] : @"nil"]);
     if (self.nativeFloatingMenuTestButton.superview) {
         WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
             @"button reused superview=%@ frame=%@ window=%@",
@@ -1440,31 +1447,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassRecordNativeMenuEvent(@"floating action=glass");
         NSLog(@"[WCLiquidGlass] native floating menu glass action");
     }];
-    UIMenu *subMenu = [UIMenu menuWithTitle:@"更多测试"
-                                      image:[UIImage systemImageNamed:@"wand.and.stars"]
-                                 identifier:nil
-                                    options:0
-                                   children:@[
-        [UIAction actionWithTitle:@"圆形项目"
-                             image:[UIImage systemImageNamed:@"circle"]
-                        identifier:nil
-                           handler:^(__unused UIAction *action) {
-            WCLiquidGlassRecordNativeMenuEvent(@"floating action=circle");
-            NSLog(@"[WCLiquidGlass] native floating menu circle action");
-        }],
-        [UIAction actionWithTitle:@"方形项目"
-                             image:[UIImage systemImageNamed:@"square"]
-                        identifier:nil
-                           handler:^(__unused UIAction *action) {
-            WCLiquidGlassRecordNativeMenuEvent(@"floating action=square");
-            NSLog(@"[WCLiquidGlass] native floating menu square action");
-        }]
-    ]];
     return [UIMenu menuWithTitle:@"原生悬浮菜单测试"
                             image:nil
                        identifier:nil
                           options:0
-                         children:@[firstAction, secondAction, subMenu]];
+                         children:@[firstAction, secondAction]];
 }
 
 - (UIView *)wc_makeHeaderView {
