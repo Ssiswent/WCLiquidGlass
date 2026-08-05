@@ -37,8 +37,6 @@ static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
 static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
-static NSString *const WCLiquidGlassMenuStyleKey = @"WCLiquidGlass.MenuStyle";
-static NSString *const WCLiquidGlassMenuElementSizeKey = @"WCLiquidGlass.MenuElementSize";
 static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
@@ -229,8 +227,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassSizeModeKey: @1,
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
-        WCLiquidGlassMenuStyleKey: @(WCLiquidGlassMenuStyleRing),
-        WCLiquidGlassMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
         WCLiquidGlassChatTimeGlassEnabledKey: @YES,
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
@@ -304,37 +300,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     }
     [NSUserDefaults.standardUserDefaults setInteger:clampedAppearance
                                             forKey:WCLiquidGlassGlassAppearanceKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (WCLiquidGlassMenuStyle)menuStyle {
-    NSInteger style = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuStyleKey];
-    return MIN(WCLiquidGlassMenuStyleLiquidPanel, MAX(WCLiquidGlassMenuStyleRing, style));
-}
-
-+ (void)setMenuStyle:(WCLiquidGlassMenuStyle)style {
-    NSInteger clampedStyle = MIN(WCLiquidGlassMenuStyleLiquidPanel,
-                                 MAX(WCLiquidGlassMenuStyleRing, style));
-    if ([self menuStyle] == clampedStyle) {
-        return;
-    }
-    [NSUserDefaults.standardUserDefaults setInteger:clampedStyle forKey:WCLiquidGlassMenuStyleKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (WCLiquidGlassMenuElementSize)menuElementSize {
-    NSInteger size = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuElementSizeKey];
-    return MIN(WCLiquidGlassMenuElementSizeAutomatic,
-               MAX(WCLiquidGlassMenuElementSizeSmall, size));
-}
-
-+ (void)setMenuElementSize:(WCLiquidGlassMenuElementSize)size {
-    NSInteger clampedSize = MIN(WCLiquidGlassMenuElementSizeAutomatic,
-                                MAX(WCLiquidGlassMenuElementSizeSmall, size));
-    if ([self menuElementSize] == clampedSize) {
-        return;
-    }
-    [NSUserDefaults.standardUserDefaults setInteger:clampedSize forKey:WCLiquidGlassMenuElementSizeKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -559,8 +524,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassSizeModeKey];
     [defaults removeObjectForKey:WCLiquidGlassCompactLayoutStyleKey];
     [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
-    [defaults removeObjectForKey:WCLiquidGlassMenuStyleKey];
-    [defaults removeObjectForKey:WCLiquidGlassMenuElementSizeKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornersEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornerInsetKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornerRadiusKey];

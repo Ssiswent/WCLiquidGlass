@@ -49,18 +49,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
     WCLiquidGlassGlassAppearanceTinted
 };
 
-typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStyle) {
-    WCLiquidGlassMenuStyleRing = 0,
-    WCLiquidGlassMenuStyleLiquidPanel
-};
-
-typedef NS_ENUM(NSInteger, WCLiquidGlassMenuElementSize) {
-    WCLiquidGlassMenuElementSizeSmall = 0,
-    WCLiquidGlassMenuElementSizeMedium,
-    WCLiquidGlassMenuElementSizeLarge,
-    WCLiquidGlassMenuElementSizeAutomatic
-};
-
 @interface WCLiquidGlassPreferences : NSObject
 
 + (void)registerDefaults;
@@ -72,10 +60,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassMenuElementSize) {
 + (void)setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)style;
 + (WCLiquidGlassGlassAppearance)glassAppearance;
 + (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
-+ (WCLiquidGlassMenuStyle)menuStyle;
-+ (void)setMenuStyle:(WCLiquidGlassMenuStyle)style;
-+ (WCLiquidGlassMenuElementSize)menuElementSize;
-+ (void)setMenuElementSize:(WCLiquidGlassMenuElementSize)size;
 + (BOOL)chatTimeGlassEnabled;
 + (void)setChatTimeGlassEnabled:(BOOL)enabled;
 + (BOOL)contactsIndexGlassEnabled;
