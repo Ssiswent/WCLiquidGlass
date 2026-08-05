@@ -2006,6 +2006,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 @property(nonatomic, strong) UISelectionFeedbackGenerator *selectionFeedbackGenerator;
 @property(nonatomic, weak) WCLiquidGlassOrbView *pressedOrb;
 @property(nonatomic, assign) BOOL observesInputNotifications;
+@property(nonatomic, strong) UIToolbar *nativeToolbar;
+@property(nonatomic, strong) UIBarButtonItem *nativeMenuItem;
+@property(nonatomic, strong) NSTimer *nativeHideTimer;
+@property(nonatomic, assign) BOOL nativeToolbarPartiallyHidden;
+@property(nonatomic, assign) CGRect nativePanStartFrame;
 
 - (instancetype)initWithFrame:(CGRect)frame observesInputNotifications:(BOOL)observesInputNotifications;
 - (void)reload;
@@ -2028,6 +2033,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (CGFloat)wc_optionDiameterForCount:(NSUInteger)count;
 - (void)wc_layoutOptionOrbsAnimated:(BOOL)animated;
 - (void)wc_updateAnchorVisual;
+- (BOOL)wc_shouldUseNativeMenuStyle;
+- (void)wc_installNativeMenuPanel;
+- (void)wc_removeNativeMenuPanel;
+- (UIMenu *)wc_makeNativeMenu;
+- (CGRect)wc_nativeToolbarFrame;
+- (void)wc_nativeToolbarPan:(UIPanGestureRecognizer *)gesture;
+- (void)wc_scheduleNativeHide;
+- (void)wc_cancelNativeHide;
 - (void)wc_beginPressOnOrb:(WCLiquidGlassOrbView *)orb towardPoint:(CGPoint)point;
 - (void)wc_updatePressTowardPoint:(CGPoint)point;
 - (void)wc_endPressAnimated:(BOOL)animated;
@@ -2142,6 +2155,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    if (self.nativeToolbar && !self.nativeToolbar.hidden && self.nativeToolbar.alpha > 0.01) {
+        CGPoint localPoint = [self.nativeToolbar convertPoint:point fromView:self];
+        UIView *hit = [self.nativeToolbar hitTest:localPoint withEvent:event];
+        if (hit) {
+            return hit;
+        }
+    }
     for (WCLiquidGlassOrbView *orb in self.optionOrbs.reverseObjectEnumerator) {
         if (!orb.hidden && orb.alpha > 0.01) {
             CGPoint localPoint = [orb convertPoint:point fromView:self];
@@ -2209,8 +2229,24 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)reload {
     [self wc_resetMenuImmediately];
     self.anchorIdleHidden = NO;
-    CGFloat diameter = WCLiquidGlassButtonDiameter();
     self.anchorOnLeft = WCLiquidGlassPreferences.anchorOnLeft;
+
+    if ([self wc_shouldUseNativeMenuStyle]) {
+        [self.anchorOrb removeFromSuperview];
+        self.anchorOrb = nil;
+        for (WCLiquidGlassOrbView *orb in self.optionOrbs) {
+            [orb removeFromSuperview];
+        }
+        self.optionOrbs = @[];
+        self.visibleItems = [self wc_currentVisibleItems];
+        self.glassContainer.hidden = YES;
+        [self wc_installNativeMenuPanel];
+        return;
+    }
+
+    [self wc_removeNativeMenuPanel];
+    self.glassContainer.hidden = NO;
+    CGFloat diameter = WCLiquidGlassButtonDiameter();
 
     NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
     CGFloat optionDiameter = [self wc_optionDiameterForCount:newVisibleItems.count];
@@ -2285,10 +2321,202 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    if (self.nativeToolbar) {
+        if (!self.nativeToolbarPartiallyHidden) {
+            CGRect frame = self.nativeToolbar.frame;
+            CGRect visibleFrame = [self wc_nativeToolbarFrame];
+            visibleFrame.origin.y = MIN(MAX(frame.origin.y, CGRectGetMinY(visibleFrame)),
+                                       CGRectGetMaxY(visibleFrame) - CGRectGetHeight(visibleFrame));
+            self.nativeToolbar.frame = visibleFrame;
+        }
+        return;
+    }
     if (!self.menuOpen) {
         [self wc_layoutAnchorFromPreferences];
     } else {
         [self wc_layoutOptionOrbsAnimated:NO];
+    }
+}
+
+- (BOOL)wc_shouldUseNativeMenuStyle {
+    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleLiquidPanel;
+}
+
+- (UIMenu *)wc_makeNativeMenu {
+    NSMutableArray<UIMenuElement *> *children = [NSMutableArray arrayWithCapacity:self.visibleItems.count];
+    for (NSDictionary<NSString *, id> *item in self.visibleItems) {
+        NSString *actionIdentifier = item[@"action"];
+        UIImage *image = WCLiquidGlassImageForAction(actionIdentifier, 56.0);
+        UIAction *action = [UIAction actionWithTitle:WCLiquidGlassActionTitle(actionIdentifier)
+                                                 image:image
+                                            identifier:nil
+                                               handler:^(__unused UIAction *selectedAction) {
+            WCLiquidGlassPerformAction(actionIdentifier);
+        }];
+        [children addObject:action];
+    }
+    UIMenu *menu = [UIMenu menuWithTitle:@""
+                                   image:nil
+                              identifier:nil
+                                 options:0
+                                children:children];
+    switch (WCLiquidGlassPreferences.menuElementSize) {
+        case WCLiquidGlassMenuElementSizeSmall:
+            menu.preferredElementSize = UIMenuElementSizeSmall;
+            break;
+        case WCLiquidGlassMenuElementSizeMedium:
+            menu.preferredElementSize = UIMenuElementSizeMedium;
+            break;
+        case WCLiquidGlassMenuElementSizeLarge:
+            menu.preferredElementSize = UIMenuElementSizeLarge;
+            break;
+        default:
+            if (@available(iOS 17.0, *)) {
+                menu.preferredElementSize = UIMenuElementSizeAutomatic;
+            } else {
+                menu.preferredElementSize = UIMenuElementSizeLarge;
+            }
+            break;
+    }
+    return menu;
+}
+
+- (CGRect)wc_nativeToolbarFrame {
+    CGFloat diameter = 56.0;
+    UIEdgeInsets safeArea = self.safeAreaInsets;
+    CGFloat width = CGRectGetWidth(self.bounds);
+    CGFloat x = self.anchorOnLeft
+        ? safeArea.left + 12.0
+        : width - safeArea.right - diameter - 12.0;
+    CGFloat minimumY = safeArea.top + 12.0;
+    CGFloat maximumY = MAX(minimumY,
+                           [self wc_effectiveLayoutBottom] - diameter - 12.0);
+    CGFloat y = CGRectGetHeight(self.bounds) * WCLiquidGlassPreferences.anchorYFraction - diameter * 0.5;
+    y = MIN(maximumY, MAX(minimumY, y));
+    return CGRectMake(x, y, diameter, diameter);
+}
+
+- (void)wc_installNativeMenuPanel {
+    [self wc_cancelNativeHide];
+    if (!self.nativeToolbar) {
+        self.nativeToolbar = [[UIToolbar alloc] initWithFrame:[self wc_nativeToolbarFrame]];
+        self.nativeToolbar.userInteractionEnabled = YES;
+        self.nativeToolbar.clipsToBounds = NO;
+        self.nativeToolbar.layer.masksToBounds = NO;
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
+                                                                                action:@selector(wc_nativeToolbarPan:)];
+        pan.cancelsTouchesInView = YES;
+        pan.delegate = self;
+        [self.nativeToolbar addGestureRecognizer:pan];
+        [self addSubview:self.nativeToolbar];
+    } else if (self.nativeToolbarPartiallyHidden) {
+        self.nativeToolbar.frame = [self wc_nativeToolbarFrame];
+    } else if (CGRectIsEmpty(self.nativeToolbar.bounds)) {
+        self.nativeToolbar.frame = [self wc_nativeToolbarFrame];
+    }
+    UIImage *anchorImage = WCLiquidGlassImageNamedFromCandidates(@[@"icons_filled_more",
+                                                                     @"icons_outlined_more"]);
+    if (!anchorImage) {
+        anchorImage = [UIImage systemImageNamed:@"ellipsis"];
+    }
+    self.nativeMenuItem = [[UIBarButtonItem alloc] initWithImage:anchorImage
+                                                             menu:[self wc_makeNativeMenu]];
+    self.nativeMenuItem.accessibilityLabel = @"WCLiquidGlass 菜单";
+    self.nativeToolbar.items = @[self.nativeMenuItem];
+    self.nativeToolbar.hidden = NO;
+    self.nativeToolbar.alpha = 1.0;
+    self.nativeToolbarPartiallyHidden = NO;
+    [self setNeedsLayout];
+    [self layoutIfNeeded];
+    [self wc_scheduleNativeHide];
+}
+
+- (void)wc_removeNativeMenuPanel {
+    [self wc_cancelNativeHide];
+    [self.nativeToolbar removeFromSuperview];
+    self.nativeToolbar = nil;
+    self.nativeMenuItem = nil;
+    self.nativeToolbarPartiallyHidden = NO;
+}
+
+- (void)wc_cancelNativeHide {
+    [self.nativeHideTimer invalidate];
+    self.nativeHideTimer = nil;
+}
+
+- (void)wc_scheduleNativeHide {
+    [self wc_cancelNativeHide];
+    if (!self.nativeToolbar || self.menuOpen) {
+        return;
+    }
+    __weak typeof(self) weakSelf = self;
+    self.nativeHideTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                               repeats:NO
+                                                                 block:^(__unused NSTimer *timer) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.menuOpen || !self.nativeToolbar) {
+            return;
+        }
+        self.nativeToolbarPartiallyHidden = YES;
+        CGRect frame = self.nativeToolbar.frame;
+        frame.origin.x = self.anchorOnLeft
+            ? -(CGRectGetWidth(frame) * 0.5)
+            : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) * 0.5;
+        [UIView animateWithDuration:0.32
+                              delay:0
+             usingSpringWithDamping:0.86
+              initialSpringVelocity:0.2
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
+                         animations:^{
+            self.nativeToolbar.frame = frame;
+            self.nativeToolbar.alpha = 0.72;
+        } completion:nil];
+    }];
+}
+
+- (void)wc_nativeToolbarPan:(UIPanGestureRecognizer *)gesture {
+    if (!self.nativeToolbar) {
+        return;
+    }
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        [self wc_cancelNativeHide];
+        if (self.nativeToolbarPartiallyHidden) {
+            CGRect frame = self.nativeToolbar.frame;
+            frame.origin.x = self.anchorOnLeft ? 12.0 : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) - 12.0;
+            self.nativeToolbar.frame = frame;
+            self.nativeToolbar.alpha = 1.0;
+            self.nativeToolbarPartiallyHidden = NO;
+        }
+        self.nativePanStartFrame = self.nativeToolbar.frame;
+    } else if (gesture.state == UIGestureRecognizerStateChanged) {
+        CGPoint translation = [gesture translationInView:self];
+        CGRect frame = self.nativePanStartFrame;
+        frame.origin.x += translation.x;
+        frame.origin.y += translation.y;
+        CGFloat minimumY = self.safeAreaInsets.top + 12.0;
+        CGFloat maximumY = MAX(minimumY, [self wc_effectiveLayoutBottom] - CGRectGetHeight(frame) - 12.0);
+        frame.origin.y = MIN(maximumY, MAX(minimumY, frame.origin.y));
+        self.nativeToolbar.frame = frame;
+    } else if (gesture.state == UIGestureRecognizerStateEnded ||
+               gesture.state == UIGestureRecognizerStateCancelled) {
+        CGRect frame = self.nativeToolbar.frame;
+        self.anchorOnLeft = CGRectGetMidX(frame) < CGRectGetMidX(self.bounds);
+        CGFloat centerY = CGRectGetMidY(frame);
+        CGFloat yFraction = centerY / MAX(CGRectGetHeight(self.bounds), 1.0);
+        [WCLiquidGlassPreferences setAnchorOnLeft:self.anchorOnLeft yFraction:yFraction];
+        CGRect targetFrame = [self wc_nativeToolbarFrame];
+        [UIView animateWithDuration:0.30
+                              delay:0
+             usingSpringWithDamping:0.82
+              initialSpringVelocity:0.5
+                            options:UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionAllowUserInteraction
+                         animations:^{
+            self.nativeToolbar.frame = targetFrame;
+            self.nativeToolbar.alpha = 1.0;
+        } completion:nil];
+        [self wc_scheduleNativeHide];
     }
 }
 
@@ -2961,6 +3189,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)wc_resetMenuImmediately {
     [self wc_cancelIdleHide];
+    [self wc_cancelNativeHide];
     self.contentRefreshGeneration += 1;
     self.menuTransitionGeneration += 1;
     self.menuOpen = NO;
@@ -3225,6 +3454,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+        shouldReceiveTouch:(__unused UITouch *)touch {
+    if (gestureRecognizer.view == self.nativeToolbar) {
+        [self wc_cancelNativeHide];
+    }
+    return YES;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
         shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
     return NO;
 }
@@ -3239,6 +3476,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 
 @implementation WCLiquidGlassStaticMenuPreviewView
+
+- (BOOL)wc_shouldUseNativeMenuStyle {
+    return NO;
+}
 
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame observesInputNotifications:NO];
