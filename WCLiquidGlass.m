@@ -1377,10 +1377,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         host.class,
         host.window ? NSStringFromClass(host.window.class) : @"nil",
         NSStringFromCGRect(host.bounds)]);
-    self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
     if (@available(iOS 26.0, *)) {
-        self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration glassButtonConfiguration];
+        self.nativeFloatingMenuTestButton = [UIButton buttonWithConfiguration:
+            [UIButtonConfiguration glassButtonConfiguration]
+            primaryAction:nil];
     } else {
+        self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
         self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration tintedButtonConfiguration];
     }
     UIButtonConfiguration *configuration = self.nativeFloatingMenuTestButton.configuration;
@@ -1391,21 +1393,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     self.nativeFloatingMenuTestButton.menu = [self wc_makeFloatingMenuTestMenu];
     self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction = YES;
     self.nativeFloatingMenuTestButton.accessibilityLabel = @"原生 Liquid Glass 悬浮测试菜单";
-    [self.nativeFloatingMenuTestButton addTarget:self
-                                          action:@selector(wc_nativeFloatingMenuTouchDown:)
-                                forControlEvents:UIControlEventTouchDown];
-    [self.nativeFloatingMenuTestButton addTarget:self
-                                          action:@selector(wc_nativeFloatingMenuTouchUpInside:)
-                                forControlEvents:UIControlEventTouchUpInside];
-    [self.nativeFloatingMenuTestButton addTarget:self
-                                          action:@selector(wc_nativeFloatingMenuTouchUpOutside:)
-                                forControlEvents:UIControlEventTouchUpOutside];
-    [self.nativeFloatingMenuTestButton addTarget:self
-                                          action:@selector(wc_nativeFloatingMenuTouchCancel:)
-                                forControlEvents:UIControlEventTouchCancel];
-    [self.nativeFloatingMenuTestButton addTarget:self
-                                          action:@selector(wc_nativeFloatingMenuPrimaryAction:)
-                                forControlEvents:UIControlEventPrimaryActionTriggered];
     self.nativeFloatingMenuTestButton.translatesAutoresizingMaskIntoConstraints = NO;
     [host addSubview:self.nativeFloatingMenuTestButton];
     [NSLayoutConstraint activateConstraints:@[
@@ -1435,49 +1422,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         self.nativeFloatingMenuTestButton.isHighlighted,
         self.nativeFloatingMenuTestButton.isTracking]);
     [self.nativeFloatingMenuTestButton removeFromSuperview];
-}
-
-- (void)wc_nativeFloatingMenuTouchDown:(UIButton *)button {
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button touchDown=%p frame=%@ window=%@ highlighted=%d tracking=%d menu=%d",
-        button,
-        NSStringFromCGRect(button.frame),
-        button.window ? NSStringFromClass(button.window.class) : @"nil",
-        button.isHighlighted,
-        button.isTracking,
-        button.menu != nil]);
-}
-
-- (void)wc_nativeFloatingMenuTouchUpInside:(UIButton *)button {
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button touchUpInside=%p highlighted=%d tracking=%d",
-        button,
-        button.isHighlighted,
-        button.isTracking]);
-}
-
-- (void)wc_nativeFloatingMenuTouchUpOutside:(UIButton *)button {
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button touchUpOutside=%p highlighted=%d tracking=%d",
-        button,
-        button.isHighlighted,
-        button.isTracking]);
-}
-
-- (void)wc_nativeFloatingMenuTouchCancel:(UIButton *)button {
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button touchCancel=%p highlighted=%d tracking=%d",
-        button,
-        button.isHighlighted,
-        button.isTracking]);
-}
-
-- (void)wc_nativeFloatingMenuPrimaryAction:(UIButton *)button {
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button primaryAction=%p highlighted=%d tracking=%d",
-        button,
-        button.isHighlighted,
-        button.isTracking]);
 }
 
 - (UIMenu *)wc_makeFloatingMenuTestMenu {
