@@ -2416,7 +2416,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         self.nativeToolbar.layer.masksToBounds = NO;
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
                                                                                 action:@selector(wc_nativeToolbarPan:)];
-        pan.cancelsTouchesInView = NO;
+        pan.cancelsTouchesInView = YES;
         pan.delegate = self;
         [self.nativeToolbar addGestureRecognizer:pan];
         [self addSubview:self.nativeToolbar];
@@ -2454,11 +2454,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     if (!self.nativeToolbar || !self.nativeMenuItem) {
         return;
     }
-    NSArray<NSDictionary<NSString *, id> *> *newVisibleItems = [self wc_currentVisibleItems];
-    if ([newVisibleItems isEqualToArray:self.visibleItems]) {
-        return;
-    }
-    self.visibleItems = newVisibleItems;
+    self.visibleItems = [self wc_currentVisibleItems];
     self.nativeMenuItem.menu = [self wc_makeNativeMenu];
 }
 
@@ -3474,15 +3470,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     if (index != NSNotFound) {
         [self wc_emitSelectionFeedback];
     }
-}
-
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (gestureRecognizer.view == self.nativeToolbar &&
-        [gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class]) {
-        CGPoint translation = [(UIPanGestureRecognizer *)gestureRecognizer translationInView:self];
-        return hypot(translation.x, translation.y) > 10.0;
-    }
-    return YES;
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
