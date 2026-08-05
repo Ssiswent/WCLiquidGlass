@@ -3472,6 +3472,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
 }
 
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer.view == self.nativeToolbar &&
+        [gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class]) {
+        CGPoint translation = [(UIPanGestureRecognizer *)gestureRecognizer translationInView:self];
+        return hypot(translation.x, translation.y) > 10.0;
+    }
+    return YES;
+}
+
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
         shouldReceiveTouch:(__unused UITouch *)touch {
     if (gestureRecognizer.view == self.nativeToolbar) {
