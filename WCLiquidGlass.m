@@ -1384,19 +1384,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         host.class,
         host.window ? NSStringFromClass(host.window.class) : @"nil",
         NSStringFromCGRect(host.bounds)]);
-    if (@available(iOS 26.0, *)) {
-        self.nativeFloatingMenuTestButton = [UIButton buttonWithConfiguration:
-            [UIButtonConfiguration glassButtonConfiguration]
-            primaryAction:nil];
-    } else {
-        self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        self.nativeFloatingMenuTestButton.configuration = [UIButtonConfiguration tintedButtonConfiguration];
-    }
-    UIButtonConfiguration *configuration = self.nativeFloatingMenuTestButton.configuration;
-    configuration.image = [UIImage systemImageNamed:@"ellipsis"];
-    configuration.preferredSymbolConfigurationForImage = [UIImageSymbolConfiguration configurationWithPointSize:22.0 weight:UIImageSymbolWeightMedium];
-    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
-    self.nativeFloatingMenuTestButton.configuration = configuration;
+    self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    UIImage *image = [UIImage systemImageNamed:@"ellipsis"
+                               withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:22.0
+                                                                                                    weight:UIImageSymbolWeightMedium]];
+    [self.nativeFloatingMenuTestButton setImage:image forState:UIControlStateNormal];
     self.nativeFloatingMenuTestButton.menu = [self wc_makeFloatingMenuTestMenu];
     self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction = YES;
     self.nativeFloatingMenuTestButton.accessibilityLabel = @"原生 Liquid Glass 悬浮测试菜单";
