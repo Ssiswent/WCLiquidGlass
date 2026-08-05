@@ -430,6 +430,22 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 %end
 
+%hook UIViewController
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    if (!WCLiquidGlassPreferences.enabled ||
+        WCLiquidGlassPreferences.menuStyle != WCLiquidGlassMenuStyleLiquidPanel ||
+        [NSStringFromClass(self.class) hasPrefix:@"WCLiquidGlass"]) {
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [WCLiquidGlassManager.sharedManager reload];
+    });
+}
+
+%end
+
 %ctor {
     @autoreleasepool {
         NSString *bundleIdentifier = NSBundle.mainBundle.bundleIdentifier;

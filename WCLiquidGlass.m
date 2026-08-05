@@ -7,15 +7,8 @@
 
 static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
-static void WCLiquidGlassRecordNativeMenuEvent(NSString *event) {
-    NSString *thread = NSThread.isMainThread ? @"main" : @"background";
-    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
-        @"NativeMenuTest thread=%@ %@", thread, event]];
-}
-
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
-#import <objc/runtime.h>
 #import <math.h>
 
 #ifndef WCLIQUIDGLASS_VERSION
@@ -1270,7 +1263,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
-@property(nonatomic, strong) UIButton *nativeFloatingMenuTestButton;
 
 @end
 
@@ -1284,7 +1276,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"WCLiquidGlass";
-    self.navigationItem.rightBarButtonItem = [self wc_makeNativeMenuTestItem];
     WCLiquidGlassConfigureTableBackground(self);
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 66.0;
@@ -1295,33 +1286,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                                            selector:@selector(wc_preferencesChanged:)
                                            name:WCLiquidGlassPreferencesDidChangeNotification
                                            object:nil];
-}
-
-- (UIBarButtonItem *)wc_makeNativeMenuTestItem {
-    WCLiquidGlassRecordNativeMenuEvent(@"nav item created");
-    UIAction *firstAction = [UIAction actionWithTitle:@"Liquid Glass 测试"
-                                                 image:[UIImage systemImageNamed:@"sparkles"]
-                                            identifier:nil
-                                               handler:^(__unused UIAction *action) {
-        WCLiquidGlassRecordNativeMenuEvent(@"nav action=first");
-        NSLog(@"[WCLiquidGlass] native menu test action");
-    }];
-    UIAction *secondAction = [UIAction actionWithTitle:@"第二个测试项"
-                                                  image:[UIImage systemImageNamed:@"circle"]
-                                             identifier:nil
-                                                handler:^(__unused UIAction *action) {
-        WCLiquidGlassRecordNativeMenuEvent(@"nav action=second");
-        NSLog(@"[WCLiquidGlass] native menu second test action");
-    }];
-    UIMenu *menu = [UIMenu menuWithTitle:@"Liquid Glass 测试菜单"
-                                   image:nil
-                              identifier:nil
-                                 options:0
-                                children:@[firstAction, secondAction]];
-    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
-                                                                menu:menu];
-    item.accessibilityLabel = @"Liquid Glass 测试菜单";
-    return item;
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -1355,95 +1319,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self.tableView reloadData];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"settings didAppear controller=%p viewWindow=%@ navView=%@",
-        self,
-        self.view.window ? NSStringFromClass(self.view.window.class) : @"nil",
-        self.navigationController.view ? NSStringFromClass(self.navigationController.view.class) : @"nil"]);
-    Class floatingOverlayClass = NSClassFromString(@"WCLGFloatingOverlayView");
-    const char *floatingOverlayImage = floatingOverlayClass ? class_getImageName(floatingOverlayClass) : NULL;
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"floating overlay class=%@ image=%@",
-        floatingOverlayClass ? @"present" : @"absent",
-        floatingOverlayImage ? [NSString stringWithUTF8String:floatingOverlayImage] : @"nil"]);
-    if (self.nativeFloatingMenuTestButton.superview) {
-        WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-            @"button reused superview=%@ frame=%@ window=%@",
-            self.nativeFloatingMenuTestButton.superview.class,
-            NSStringFromCGRect(self.nativeFloatingMenuTestButton.frame),
-            self.nativeFloatingMenuTestButton.window ? NSStringFromClass(self.nativeFloatingMenuTestButton.window.class) : @"nil"]);
-        return;
-    }
-    UIView *host = self.navigationController.view ?: self.view.superview ?: self.view;
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button host=%@ hostWindow=%@ hostFrame=%@",
-        host.class,
-        host.window ? NSStringFromClass(host.window.class) : @"nil",
-        NSStringFromCGRect(host.bounds)]);
-    self.nativeFloatingMenuTestButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    UIImage *image = [UIImage systemImageNamed:@"ellipsis"
-                               withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:22.0
-                                                                                                    weight:UIImageSymbolWeightMedium]];
-    [self.nativeFloatingMenuTestButton setImage:image forState:UIControlStateNormal];
-    self.nativeFloatingMenuTestButton.menu = [self wc_makeFloatingMenuTestMenu];
-    self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction = YES;
-    self.nativeFloatingMenuTestButton.accessibilityLabel = @"原生 Liquid Glass 悬浮测试菜单";
-    self.nativeFloatingMenuTestButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [host addSubview:self.nativeFloatingMenuTestButton];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.nativeFloatingMenuTestButton.trailingAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.trailingAnchor constant:-20.0],
-        [self.nativeFloatingMenuTestButton.bottomAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.bottomAnchor constant:-20.0],
-        [self.nativeFloatingMenuTestButton.widthAnchor constraintEqualToConstant:56.0],
-        [self.nativeFloatingMenuTestButton.heightAnchor constraintEqualToConstant:56.0]
-    ]];
-    [host layoutIfNeeded];
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"button installed button=%p frame=%@ window=%@ menu=%d primary=%d interaction=%d highlighted=%d",
-        self.nativeFloatingMenuTestButton,
-        NSStringFromCGRect(self.nativeFloatingMenuTestButton.frame),
-        self.nativeFloatingMenuTestButton.window ? NSStringFromClass(self.nativeFloatingMenuTestButton.window.class) : @"nil",
-        self.nativeFloatingMenuTestButton.menu != nil,
-        self.nativeFloatingMenuTestButton.showsMenuAsPrimaryAction,
-        self.nativeFloatingMenuTestButton.userInteractionEnabled,
-        self.nativeFloatingMenuTestButton.isHighlighted]);
-}
-
-- (void)viewWillDisappear:(BOOL)animated {
-    [super viewWillDisappear:animated];
-    WCLiquidGlassRecordNativeMenuEvent([NSString stringWithFormat:
-        @"settings willDisappear button=%p frame=%@ highlighted=%d tracking=%d",
-        self.nativeFloatingMenuTestButton,
-        NSStringFromCGRect(self.nativeFloatingMenuTestButton.frame),
-        self.nativeFloatingMenuTestButton.isHighlighted,
-        self.nativeFloatingMenuTestButton.isTracking]);
-    [self.nativeFloatingMenuTestButton removeFromSuperview];
-}
-
-- (UIMenu *)wc_makeFloatingMenuTestMenu {
-    WCLiquidGlassRecordNativeMenuEvent(@"floating menu created");
-    UIAction *firstAction = [UIAction actionWithTitle:@"悬浮按钮测试"
-                                                 image:[UIImage systemImageNamed:@"hand.tap"]
-                                            identifier:nil
-                                               handler:^(__unused UIAction *action) {
-        WCLiquidGlassRecordNativeMenuEvent(@"floating action=first");
-        NSLog(@"[WCLiquidGlass] native floating menu test action");
-    }];
-    UIAction *secondAction = [UIAction actionWithTitle:@"玻璃按钮测试"
-                                                  image:[UIImage systemImageNamed:@"sparkles"]
-                                             identifier:nil
-                                                handler:^(__unused UIAction *action) {
-        WCLiquidGlassRecordNativeMenuEvent(@"floating action=glass");
-        NSLog(@"[WCLiquidGlass] native floating menu glass action");
-    }];
-    return [UIMenu menuWithTitle:@"原生悬浮菜单测试"
-                            image:nil
-                       identifier:nil
-                          options:0
-                         children:@[firstAction, secondAction]];
 }
 
 - (UIView *)wc_makeHeaderView {
@@ -1540,7 +1415,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) {
-        return 4;
+        return 6;
     }
     if (section == 1) {
         return 6;
@@ -1562,7 +1437,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
+        return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
         return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引与长按菜单跟随本插件材质设置；消息通知和首页圆角与液态可分别管理各自的圆角、间距与材质。");
@@ -1578,7 +1453,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 72.0);
+        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 88.0);
     }
     if (section == 1) {
         return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引与长按菜单跟随本插件材质设置；消息通知和首页圆角与液态可分别管理各自的圆角、间距与材质。", 104.0);
@@ -1599,7 +1474,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 
     if (indexPath.section == 0 && indexPath.row == 0) {
-        WCLiquidGlassConfigureCell(cell, @"启用全局环形菜单", nil,
+        WCLiquidGlassConfigureCell(cell, @"启用全局菜单", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
         self.enabledSwitch = [[UISwitch alloc] init];
         self.enabledSwitch.on = WCLiquidGlassPreferences.enabled;
@@ -1613,6 +1488,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.section == 0 && indexPath.row == 2) {
         WCLiquidGlassConfigureCell(cell, @"紧凑布局", [self wc_compactLayoutStyleTitle],
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 0 && indexPath.row == 3) {
+        WCLiquidGlassConfigureCell(cell, @"菜单样式", [self wc_menuStyleTitle],
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 0 && indexPath.row == 4) {
+        WCLiquidGlassConfigureCell(cell, @"面板菜单大小", [self wc_menuElementSizeTitle],
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 0) {
         WCLiquidGlassConfigureCell(cell, @"液态效果", [self wc_glassAppearanceTitle],
@@ -1699,6 +1582,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.section == 0 && indexPath.row == 2) {
         [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 0 && indexPath.row == 3) {
+        [self wc_presentMenuStylePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
+    } else if (indexPath.section == 0 && indexPath.row == 4) {
+        [self wc_presentMenuElementSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
+    } else if (indexPath.section == 0 && indexPath.row == 5) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
@@ -1776,6 +1663,25 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     return WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance);
 }
 
+- (NSString *)wc_menuStyleTitle {
+    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleLiquidPanel
+        ? @"液态面板"
+        : @"环形菜单";
+}
+
+- (NSString *)wc_menuElementSizeTitle {
+    switch (WCLiquidGlassPreferences.menuElementSize) {
+        case WCLiquidGlassMenuElementSizeSmall:
+            return @"Small";
+        case WCLiquidGlassMenuElementSizeMedium:
+            return @"Medium";
+        case WCLiquidGlassMenuElementSizeLarge:
+            return @"Large";
+        default:
+            return @"Automatic";
+    }
+}
+
 - (void)wc_presentSizePickerFromView:(UIView *)sourceView {
     UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"按钮大小"
                                                                      message:nil
@@ -1814,9 +1720,45 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [self presentViewController:picker animated:YES completion:nil];
 }
 
+- (void)wc_presentMenuStylePickerFromView:(UIView *)sourceView {
+    UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"菜单样式"
+                                                                     message:@"环形菜单仅显示图标；液态面板使用系统 Liquid Glass 菜单。"
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    NSArray<NSString *> *titles = @[@"环形菜单", @"液态面板"];
+    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
+        [picker addAction:[UIAlertAction actionWithTitle:title
+                                                    style:UIAlertActionStyleDefault
+                                                  handler:^(__unused UIAlertAction *action) {
+            [WCLiquidGlassPreferences setMenuStyle:(WCLiquidGlassMenuStyle)index];
+        }]];
+    }];
+    [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    picker.popoverPresentationController.sourceView = sourceView;
+    picker.popoverPresentationController.sourceRect = sourceView.bounds;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)wc_presentMenuElementSizePickerFromView:(UIView *)sourceView {
+    UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"面板菜单大小"
+                                                                     message:@"仅影响液态面板样式的原生菜单。"
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    NSArray<NSString *> *titles = @[@"Small", @"Medium", @"Large", @"Automatic"];
+    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
+        [picker addAction:[UIAlertAction actionWithTitle:title
+                                                    style:UIAlertActionStyleDefault
+                                                  handler:^(__unused UIAlertAction *action) {
+            [WCLiquidGlassPreferences setMenuElementSize:(WCLiquidGlassMenuElementSize)index];
+        }]];
+    }];
+    [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    picker.popoverPresentationController.sourceView = sourceView;
+    picker.popoverPresentationController.sourceRect = sourceView.bounds;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
 - (void)wc_confirmRestore {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认设置？"
-                                                                   message:@"开关、按钮大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
+                                                                   message:@"开关、菜单样式与大小、按钮大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"恢复"
