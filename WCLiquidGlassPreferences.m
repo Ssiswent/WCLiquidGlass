@@ -39,6 +39,7 @@ static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.Comp
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
 static NSString *const WCLiquidGlassMenuStyleKey = @"WCLiquidGlass.MenuStyle";
 static NSString *const WCLiquidGlassMenuElementSizeKey = @"WCLiquidGlass.MenuElementSize";
+static NSString *const WCLiquidGlassFloatingMenuStrategyKey = @"WCLiquidGlass.FloatingMenuStrategy";
 static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
@@ -231,6 +232,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
         WCLiquidGlassMenuStyleKey: @(WCLiquidGlassMenuStyleRing),
         WCLiquidGlassMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
+        WCLiquidGlassFloatingMenuStrategyKey: @(WCLiquidGlassFloatingMenuStrategyPreflightSpring),
         WCLiquidGlassChatTimeGlassEnabledKey: @YES,
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
@@ -335,6 +337,22 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         return;
     }
     [NSUserDefaults.standardUserDefaults setInteger:clampedSize forKey:WCLiquidGlassMenuElementSizeKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassFloatingMenuStrategy)floatingMenuStrategy {
+    NSInteger strategy = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassFloatingMenuStrategyKey];
+    return MIN(WCLiquidGlassFloatingMenuStrategyPreflightSpring,
+               MAX(WCLiquidGlassFloatingMenuStrategyHiddenAnchor, strategy));
+}
+
++ (void)setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)strategy {
+    NSInteger clampedStrategy = MIN(WCLiquidGlassFloatingMenuStrategyPreflightSpring,
+                                    MAX(WCLiquidGlassFloatingMenuStrategyHiddenAnchor, strategy));
+    if ([self floatingMenuStrategy] == clampedStrategy) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedStrategy forKey:WCLiquidGlassFloatingMenuStrategyKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -561,6 +579,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
     [defaults removeObjectForKey:WCLiquidGlassMenuStyleKey];
     [defaults removeObjectForKey:WCLiquidGlassMenuElementSizeKey];
+    [defaults removeObjectForKey:WCLiquidGlassFloatingMenuStrategyKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornersEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornerInsetKey];
     [defaults removeObjectForKey:WCLiquidGlassHomeCornerRadiusKey];

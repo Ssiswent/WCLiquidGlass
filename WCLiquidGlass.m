@@ -1415,7 +1415,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) {
-        return 6;
+        return 7;
     }
     if (section == 1) {
         return 6;
@@ -1496,6 +1496,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.section == 0 && indexPath.row == 4) {
         WCLiquidGlassConfigureCell(cell, @"面板菜单大小", [self wc_menuElementSizeTitle],
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 0 && indexPath.row == 5) {
+        WCLiquidGlassConfigureCell(cell, @"悬浮按钮轨迹", [self wc_floatingMenuStrategyTitle],
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 0) {
         WCLiquidGlassConfigureCell(cell, @"液态效果", [self wc_glassAppearanceTitle],
@@ -1586,6 +1590,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.section == 0 && indexPath.row == 4) {
         [self wc_presentMenuElementSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 0 && indexPath.row == 5) {
+        [self wc_presentFloatingMenuStrategyPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
+    } else if (indexPath.section == 0 && indexPath.row == 6) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
@@ -1682,6 +1688,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
+- (NSString *)wc_floatingMenuStrategyTitle {
+    return WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring
+        ? @"H · 命中前同步归位"
+        : @"F · 隐藏位置开菜单";
+}
+
 - (void)wc_presentSizePickerFromView:(UIView *)sourceView {
     UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"按钮大小"
                                                                      message:nil
@@ -1748,6 +1760,24 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                     style:UIAlertActionStyleDefault
                                                   handler:^(__unused UIAlertAction *action) {
             [WCLiquidGlassPreferences setMenuElementSize:(WCLiquidGlassMenuElementSize)index];
+        }]];
+    }];
+    [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    picker.popoverPresentationController.sourceView = sourceView;
+    picker.popoverPresentationController.sourceRect = sourceView.bounds;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)wc_presentFloatingMenuStrategyPickerFromView:(UIView *)sourceView {
+    UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"悬浮按钮轨迹"
+                                                                     message:@"仅影响液态面板的悬浮按钮隐藏、归位与菜单命中方式。"
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    NSArray<NSString *> *titles = @[@"F · 隐藏位置开菜单", @"H · 命中前同步归位"];
+    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
+        [picker addAction:[UIAlertAction actionWithTitle:title
+                                                    style:UIAlertActionStyleDefault
+                                                  handler:^(__unused UIAlertAction *action) {
+            [WCLiquidGlassPreferences setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)index];
         }]];
     }];
     [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];

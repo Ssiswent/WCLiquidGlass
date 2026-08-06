@@ -61,6 +61,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassMenuElementSize) {
     WCLiquidGlassMenuElementSizeAutomatic
 };
 
+typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
+    WCLiquidGlassFloatingMenuStrategyHiddenAnchor = 0,
+    WCLiquidGlassFloatingMenuStrategyPreflightSpring
+};
+
 @interface WCLiquidGlassPreferences : NSObject
 
 + (void)registerDefaults;
@@ -76,6 +81,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassMenuElementSize) {
 + (void)setMenuStyle:(WCLiquidGlassMenuStyle)style;
 + (WCLiquidGlassMenuElementSize)menuElementSize;
 + (void)setMenuElementSize:(WCLiquidGlassMenuElementSize)size;
++ (WCLiquidGlassFloatingMenuStrategy)floatingMenuStrategy;
++ (void)setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)strategy;
 + (BOOL)chatTimeGlassEnabled;
 + (void)setChatTimeGlassEnabled:(BOOL)enabled;
 + (BOOL)contactsIndexGlassEnabled;
