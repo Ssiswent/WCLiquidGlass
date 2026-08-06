@@ -2533,7 +2533,18 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (CGRect)wc_nativeToolbarFrame {
-    return [self wc_nativeToolbarVisibleFrameForLeft:NO];
+    CGFloat diameter = 56.0;
+    UIEdgeInsets safeArea = self.safeAreaInsets;
+    CGFloat width = CGRectGetWidth(self.bounds);
+    CGFloat x = self.anchorOnLeft
+        ? safeArea.left + 16.0
+        : width - safeArea.right - diameter - 16.0;
+    CGFloat minimumY = safeArea.top + 16.0;
+    CGFloat maximumY = MAX(minimumY,
+                           [self wc_effectiveLayoutBottom] - diameter - 16.0);
+    CGFloat y = CGRectGetHeight(self.bounds) * WCLiquidGlassPreferences.anchorYFraction - diameter * 0.5;
+    y = MIN(maximumY, MAX(minimumY, y));
+    return CGRectMake(x, y, diameter, diameter);
 }
 
 - (CGRect)wc_nativeToolbarVisibleFrameForLeft:(BOOL)left {
@@ -2544,7 +2555,11 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     CGFloat x = left
         ? insets.left + 16.0
         : CGRectGetWidth(self.bounds) - insets.right - 16.0 - diameter;
-    CGFloat y = CGRectGetHeight(self.bounds) - insets.bottom - 16.0 - diameter;
+    CGFloat minY = insets.top + 16.0;
+    CGFloat maxY = MAX(minY,
+                       [self wc_effectiveLayoutBottom] - 16.0 - diameter);
+    CGFloat y = CGRectGetHeight(self.bounds) * WCLiquidGlassPreferences.anchorYFraction - diameter * 0.5;
+    y = MIN(maxY, MAX(minY, y));
     return CGRectMake(x, y, diameter, diameter);
 }
 
@@ -2553,7 +2568,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         return;
     }
     self.nativeToolbar.frame = [self wc_nativeToolbarFrame];
-    self.nativeToolbarSnapLeft = NO;
+    self.nativeToolbarSnapLeft = self.anchorOnLeft;
     self.nativeToolbarPartiallyHidden = NO;
     self.nativeToolbarPositioned = YES;
 }
@@ -2824,6 +2839,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                gesture.state == UIGestureRecognizerStateFailed) {
         CGRect frame = self.nativeToolbar.frame;
         self.nativeToolbarSnapLeft = CGRectGetMidX(frame) < CGRectGetMidX(self.bounds);
+        self.anchorOnLeft = self.nativeToolbarSnapLeft;
+        CGFloat centerY = CGRectGetMidY(frame);
+        CGFloat yFraction = centerY / MAX(CGRectGetHeight(self.bounds), 1.0);
+        [WCLiquidGlassPreferences setAnchorOnLeft:self.anchorOnLeft yFraction:yFraction];
         CGRect targetFrame = [self wc_nativeToolbarVisibleFrameForLeft:self.nativeToolbarSnapLeft];
         targetFrame.origin.y = frame.origin.y;
         self.nativeToolbarPartiallyHidden = NO;
