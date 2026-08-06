@@ -1690,8 +1690,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSString *)wc_floatingMenuStrategyTitle {
     return WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring
-        ? @"H · 命中前同步归位"
-        : @"F · 隐藏位置开菜单";
+        ? @"点击时先自动归位"
+        : @"隐藏位置直接打开菜单";
 }
 
 - (void)wc_presentSizePickerFromView:(UIView *)sourceView {
@@ -1772,7 +1772,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"悬浮按钮轨迹"
                                                                      message:@"仅影响液态面板的悬浮按钮隐藏、归位与菜单命中方式。"
                                                               preferredStyle:UIAlertControllerStyleActionSheet];
-    NSArray<NSString *> *titles = @[@"F · 隐藏位置开菜单", @"H · 命中前同步归位"];
+    NSArray<NSString *> *titles = @[@"隐藏位置直接打开菜单", @"点击时先自动归位"];
     [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
         [picker addAction:[UIAlertAction actionWithTitle:title
                                                     style:UIAlertActionStyleDefault

@@ -1030,6 +1030,9 @@ UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonD
     if (!image) {
         image = WCLiquidGlassWeChatAssetImage(actionIdentifier);
     }
+    if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins] && image) {
+        image = WCLiquidGlassImageWithMaximumSide(image, floor(buttonDiameter * 0.42));
+    }
     if (!image && [actionIdentifier hasPrefix:@"tab."]) {
         NSInteger index = [[actionIdentifier substringFromIndex:4] integerValue];
         image = WCLiquidGlassNativeTabImage(WCLiquidGlassCurrentTabController(), index);
