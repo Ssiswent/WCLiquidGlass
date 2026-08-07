@@ -1261,6 +1261,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *chatTimeGlassSwitch;
 @property(nonatomic, strong) UISwitch *contactsIndexGlassSwitch;
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
+@property(nonatomic, strong) UISwitch *unreadMessageTipGlassSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 
@@ -1418,7 +1419,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return 7;
     }
     if (section == 1) {
-        return 6;
+        return 7;
     }
     if (section == 2) {
         return 2;
@@ -1440,7 +1441,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引与长按菜单跟随本插件材质设置；消息通知和首页圆角与液态可分别管理各自的圆角、间距与材质。");
+        return WCLiquidGlassFooterLabel(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引、消息通知与未读消息提示跟随本插件材质设置；首页圆角与液态可分别管理各自的圆角、间距与材质。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
@@ -1456,7 +1457,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；闲置时自动吸附并半隐藏到屏幕边缘。空间不足时自动使用所选紧凑布局。", 88.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引与长按菜单跟随本插件材质设置；消息通知和首页圆角与液态可分别管理各自的圆角、间距与材质。", 104.0);
+        return WCLiquidGlassFooterHeight(@"在“按钮与动作”页面点按编辑，即可添加、删除或拖动调整按钮顺序。聊天时间条、通讯录 A–Z 索引、消息通知与未读消息提示跟随本插件材质设置；首页圆角与液态可分别管理各自的圆角、间距与材质。", 104.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。", 88.0);
@@ -1538,6 +1539,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassConfigureCell(cell, @"通知圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 1 && indexPath.row == 5) {
+        WCLiquidGlassConfigureCell(cell, @"未读消息提示液态", nil,
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
+        self.unreadMessageTipGlassSwitch = [[UISwitch alloc] init];
+        self.unreadMessageTipGlassSwitch.on = WCLiquidGlassPreferences.unreadMessageTipGlassEnabled;
+        [self.unreadMessageTipGlassSwitch addTarget:self action:@selector(wc_unreadMessageTipGlassChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = self.unreadMessageTipGlassSwitch;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1) {
         WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
@@ -1597,7 +1606,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 4) {
         [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
-    } else if (indexPath.section == 1 && indexPath.row == 5) {
+    } else if (indexPath.section == 1 && indexPath.row == 6) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
@@ -1620,6 +1629,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_wcGlassLongPressMenuChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setWCGlassLongPressMenuEnabled:sender.isOn];
+}
+
+- (void)wc_unreadMessageTipGlassChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setUnreadMessageTipGlassEnabled:sender.isOn];
 }
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {

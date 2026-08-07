@@ -44,6 +44,7 @@ static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.Ch
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
 static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
+static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquidGlass.UnreadMessageTipGlassEnabled";
 static NSString *const WCLiquidGlassMessageNotificationCornerRadiusKey = @"WCLiquidGlass.MessageNotification.CornerRadius";
 static NSString *const WCLiquidGlassMessageNotificationPaddingKey = @"WCLiquidGlass.MessageNotification.Padding";
 static NSString *const WCLiquidGlassMessageNotificationGlassAppearanceKey = @"WCLiquidGlass.MessageNotification.GlassAppearance";
@@ -237,6 +238,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
         WCLiquidGlassMessageNotificationGlassEnabledKey: @YES,
+        WCLiquidGlassUnreadMessageTipGlassEnabledKey: @NO,
         WCLiquidGlassMessageNotificationCornerRadiusKey: @36.0,
         WCLiquidGlassMessageNotificationPaddingKey: @8.0,
         WCLiquidGlassMessageNotificationGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceBalanced),
@@ -389,6 +391,15 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setMessageNotificationGlassEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)unreadMessageTipGlassEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
+}
+
++ (void)setUnreadMessageTipGlassEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -590,6 +601,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassContactsIndexGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassWCGlassLongPressMenuEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
+    [defaults removeObjectForKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationCornerRadiusKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationPaddingKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
