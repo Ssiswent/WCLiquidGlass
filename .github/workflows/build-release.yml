@@ -64,6 +64,13 @@ jobs:
           release_tag="${INPUT_RELEASE_TAG:-${GITHUB_REF_NAME}}"
           package_version="$(sed -n 's/^Version:[[:space:]]*//p' control)"
           scripts/release-version.sh --validate-tag "$package_version" "$release_tag"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            tag_commit="$(git rev-list -n 1 "$release_tag")"
+            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+              echo "Release tag $release_tag points to $tag_commit, expected $GITHUB_SHA." >&2
+              exit 77
+            fi
+          fi
           release_channel="$(scripts/release-version.sh --channel "$package_version")"
 
           release_notes_file="$(mktemp)"
@@ -87,7 +94,7 @@ jobs:
           fi
           if gh release view "$release_tag" >/dev/null 2>&1; then
             gh release upload "$release_tag" packages/*.deb --clobber
-            gh release edit "$release_tag" --title "$release_title" --notes-file "$release_notes_file" "${release_state[@]}"
+            gh release edit "$release_tag" --target "$GITHUB_SHA" --title "$release_title" --notes-file "$release_notes_file" "${release_state[@]}"
           else
             gh release create "$release_tag" packages/*.deb --target "$GITHUB_SHA" --title "$release_title" --notes-file "$release_notes_file" "${release_state[@]}"
           fi
