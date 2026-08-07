@@ -1,5 +1,12 @@
 # 更新日志
 
+## [1.9.3~unread-message-liquid.4] - 2026-08-07
+
+### 未读消息提示液态
+
+- 根据聊天页点击诊断，将液态背景精确应用到 `MMEdgeTipsView.bgButton`。
+- 保留 ThemeBox 背景的关闭开关行为，避免同时修改聊天页顶部其他提示视图。
+
 ## [1.9.3~unread-message-liquid.2] - 2026-08-07
 
 ### 未读消息提示液态

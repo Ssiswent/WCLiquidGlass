@@ -289,12 +289,7 @@ static void WCLiquidGlassUnreadMessageTipHookClass(Class viewClass) {
 
 void WCLiquidGlassInstallUnreadMessageTipHooks(void) {
     NSArray<NSString *> *classNames = @[
-        @"MMMsgHeaderTipsView",
-        @"MMMsgTipsView",
-        @"MMMsgCommonTipsView",
-        @"MMMsgTipsExpandView",
-        @"MMMsgTipsMixedListExpandView",
-        @"MMMsgTipsExpandMultiHeadCardView"
+        @"MMEdgeTipsView"
     ];
     BOOL installed = NO;
     for (NSString *className in classNames) {
