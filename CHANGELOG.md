@@ -1,5 +1,13 @@
 # 更新日志
 
+## [未发布]
+
+### 未读消息提示液态
+
+- 新增“未读消息提示液态”设置，接管 `QuickReplyMsgNotifyView` 的消息提示背景。
+- 兼容 ThemeBox 当前主题目录中的 `msg_tip_bg.png` 与 `msg_tip_bg_Dark.png`，并直接覆盖其 `bgButton`、`backgroundImageView` 等背景层。
+- ThemeBox 未安装或主题资源不存在时，继续使用现有运行时视图识别与原生背景回退。
+
 ## [1.9.2] - 2026-08-06
 
 ### 原生 Liquid Glass 菜单

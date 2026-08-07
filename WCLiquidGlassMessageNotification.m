@@ -3,6 +3,7 @@
 #import <CydiaSubstrate.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 #import "WCLiquidGlassMenu.h"
@@ -14,6 +15,65 @@ static BOOL WCLiquidGlassMessageNotificationHooksInstalled = NO;
 static BOOL WCLiquidGlassMessageNotificationHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassMessageNotificationHookInstallAttempts = 0;
 static Class WCLiquidGlassMessageNotificationViewClass = Nil;
+
+static id WCLiquidGlassMessageNotificationThemeBoxValue(id target, SEL selector) {
+    if (!target || !selector || ![target respondsToSelector:selector]) {
+        return nil;
+    }
+    @try {
+        return ((id (*)(id, SEL))objc_msgSend)(target, selector);
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
+static NSString *WCLiquidGlassMessageNotificationThemeBoxDIYPath(void) {
+    Class managerClass = NSClassFromString(@"ThemeBoxMgr");
+    SEL sharedSelector = NSSelectorFromString(@"shared");
+    SEL diyPathSelector = NSSelectorFromString(@"currentThemeDIYPath");
+    if (!managerClass || ![managerClass respondsToSelector:sharedSelector]) {
+        return nil;
+    }
+    id manager = WCLiquidGlassMessageNotificationThemeBoxValue(managerClass, sharedSelector);
+    id path = WCLiquidGlassMessageNotificationThemeBoxValue(manager, diyPathSelector);
+    return [path isKindOfClass:NSString.class] ? path : nil;
+}
+
+static UIImage *WCLiquidGlassMessageNotificationThemeBoxTipImage(UIView *view) {
+    NSString *diyPath = WCLiquidGlassMessageNotificationThemeBoxDIYPath();
+    NSString *fileName = view.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
+        ? @"msg_tip_bg_Dark.png"
+        : @"msg_tip_bg.png";
+    static NSCache<NSString *, UIImage *> *imageCache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        imageCache = [[NSCache alloc] init];
+    });
+    UIImage *image = nil;
+    if (diyPath.length > 0) {
+        NSString *path = [diyPath stringByAppendingPathComponent:fileName];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
+            image = [imageCache objectForKey:path];
+            if (!image) {
+                image = [UIImage imageWithContentsOfFile:path];
+                if (image) {
+                    [imageCache setObject:image forKey:path];
+                }
+            }
+        }
+    }
+    if (!image) {
+        Class themeClass = NSClassFromString(@"ThemeBoxTheme");
+        id theme = WCLiquidGlassMessageNotificationThemeBoxValue(themeClass,
+                                                                  NSSelectorFromString(@"shared"));
+        id themeImage = WCLiquidGlassMessageNotificationThemeBoxValue(theme,
+                                                                       NSSelectorFromString(@"msgTipBG"));
+        if ([themeImage isKindOfClass:UIImage.class]) {
+            image = themeImage;
+        }
+    }
+    return image;
+}
 
 @interface WCLiquidGlassMessageNotificationBackgroundState : NSObject
 @property(nonatomic, weak) UIView *view;
@@ -69,6 +129,16 @@ static Ivar WCLiquidGlassMessageNotificationFindIvar(Class viewClass, const char
     return NULL;
 }
 
+static void WCLiquidGlassMessageNotificationAppendBackgroundValue(
+    id value,
+    NSMutableArray<UIView *> *backgroundViews,
+    UIView *owner) {
+    if ([value isKindOfClass:UIView.class] && value != owner &&
+        ![backgroundViews containsObject:value]) {
+        [backgroundViews addObject:value];
+    }
+}
+
 static WCLiquidGlassMessageNotificationBackgroundState *WCLiquidGlassMessageNotificationBackgroundStateForView(
     WCLiquidGlassMessageNotificationState *state,
     UIView *view) {
@@ -111,6 +181,7 @@ static void WCLiquidGlassMessageNotificationCollectCoveringViews(
     UIView *container,
     UIView *bannerView,
     UIView *glassView,
+    UIImage *themeBoxImage,
     NSUInteger depth,
     NSMutableArray<UIView *> *backgroundViews) {
     if (depth > 6) {
@@ -120,6 +191,11 @@ static void WCLiquidGlassMessageNotificationCollectCoveringViews(
         if (subview == glassView) {
             continue;
         }
+        if (themeBoxImage && [subview isKindOfClass:UIImageView.class] &&
+            ((UIImageView *)subview).image == themeBoxImage &&
+            ![backgroundViews containsObject:subview]) {
+            [backgroundViews addObject:subview];
+        }
         if (WCLiquidGlassMessageNotificationViewCoversBanner(subview, bannerView) &&
             ![backgroundViews containsObject:subview]) {
             [backgroundViews addObject:subview];
@@ -127,6 +203,7 @@ static void WCLiquidGlassMessageNotificationCollectCoveringViews(
         WCLiquidGlassMessageNotificationCollectCoveringViews(subview,
                                                               bannerView,
                                                               glassView,
+                                                              themeBoxImage,
                                                               depth + 1,
                                                               backgroundViews);
     }
@@ -136,11 +213,18 @@ static NSArray<UIView *> *WCLiquidGlassMessageNotificationNativeBackgroundViews(
     UIView *view,
     UIView *glassView) {
     NSMutableArray<UIView *> *backgroundViews = [NSMutableArray array];
+    UIImage *themeBoxImage = WCLiquidGlassMessageNotificationThemeBoxTipImage(view);
     const char *ivarNames[] = {
         "m_backgroundView",
         "_backgroundView",
         "m_bgImageView",
-        "_bgImageView"
+        "_bgImageView",
+        "m_bgButton",
+        "_bgButton",
+        "m_backgroundImageView",
+        "_backgroundImageView",
+        "m_backgroundEffectView",
+        "_backgroundEffectView"
     };
     for (NSUInteger index = 0; index < sizeof(ivarNames) / sizeof(ivarNames[0]); index += 1) {
         Ivar ivar = WCLiquidGlassMessageNotificationFindIvar(view.class, ivarNames[index]);
@@ -151,9 +235,22 @@ static NSArray<UIView *> *WCLiquidGlassMessageNotificationNativeBackgroundViews(
             [backgroundViews addObject:candidate];
         }
     }
+    const char *selectorNames[] = {
+        "bgButton",
+        "backgroundImageView",
+        "backgroundView",
+        "backgroundEffectView"
+    };
+    for (NSUInteger index = 0; index < sizeof(selectorNames) / sizeof(selectorNames[0]); index += 1) {
+        id candidate = WCLiquidGlassMessageNotificationThemeBoxValue(
+            view,
+            sel_registerName(selectorNames[index]));
+        WCLiquidGlassMessageNotificationAppendBackgroundValue(candidate, backgroundViews, view);
+    }
     WCLiquidGlassMessageNotificationCollectCoveringViews(view,
                                                           view,
                                                           glassView,
+                                                          themeBoxImage,
                                                           0,
                                                           backgroundViews);
     return backgroundViews.copy;

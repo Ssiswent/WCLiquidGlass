@@ -28,7 +28,7 @@ static NSString *WCLiquidGlassMessageNotificationAppearanceTitle(
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"消息通知液态";
+    self.title = @"未读消息提示液态";
     WCLiquidGlassConfigureSettingsTableBackground(self);
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64.0;
@@ -59,7 +59,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    return WCLiquidGlassSettingsSectionHeader(@"前台新消息弹窗");
+    return WCLiquidGlassSettingsSectionHeader(@"未读消息提示");
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
@@ -67,11 +67,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-    return WCLiquidGlassSettingsFooter(@"圆角与四周内边距仅调整液态背景，不改变微信原有头像、文字和按钮布局。液态效果为消息通知单独保存。");
+    return WCLiquidGlassSettingsFooter(@"圆角与四周内边距仅调整液态背景，不改变微信原有头像、文字和按钮布局。液态效果为未读消息提示单独保存。");
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    return WCLiquidGlassSettingsFooterHeight(@"圆角与四周内边距仅调整液态背景，不改变微信原有头像、文字和按钮布局。液态效果为消息通知单独保存。", 76.0);
+    return WCLiquidGlassSettingsFooterHeight(@"圆角与四周内边距仅调整液态背景，不改变微信原有头像、文字和按钮布局。液态效果为未读消息提示单独保存。", 76.0);
 }
 
 - (UITableViewCell *)wc_cellWithTitle:(NSString *)title
@@ -118,8 +118,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     BOOL active = WCLiquidGlassPreferences.messageNotificationGlassEnabled;
     switch (indexPath.row) {
         case 0: {
-            UITableViewCell *cell = [self wc_cellWithTitle:@"启用消息通知液态"
-                                                     detail:@"微信前台新消息弹窗"
+            UITableViewCell *cell = [self wc_cellWithTitle:@"启用未读消息提示液态"
+                                                     detail:@"微信前台未读消息提示"
                                                     enabled:YES
                                                  identifier:@"WCLiquidGlassMessageNotificationSwitchCell"];
             UISwitch *toggle = [[UISwitch alloc] init];
