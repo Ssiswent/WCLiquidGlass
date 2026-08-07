@@ -219,14 +219,16 @@ static void WCLiquidGlassUnreadMessageTipUpdate(UIView *view) {
         [state.glassView removeFromSuperview];
         [surface insertSubview:state.glassView atIndex:0];
     }
-    state.glassView.frame = surface.bounds;
+    CGRect glassBounds = surface.bounds;
+    glassBounds.origin.x -= 8.0;
+    glassBounds.size.width += 16.0;
+    state.glassView.frame = glassBounds;
     CGFloat radius = surface.layer.cornerRadius;
     if (radius <= 0.0) {
         radius = MIN(CGRectGetWidth(surface.bounds), CGRectGetHeight(surface.bounds)) * 0.5;
     }
     state.glassView.layer.cornerRadius = radius;
-    state.glassView.layer.maskedCorners = surface.layer.maskedCorners ?:
-        (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner);
+    state.glassView.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMinXMaxYCorner;
     NSInteger effectState = WCLiquidGlassPreferences.glassAppearance * 10 +
         surface.traitCollection.userInterfaceStyle;
     if (state.effectState != effectState) {

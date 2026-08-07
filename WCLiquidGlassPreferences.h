@@ -93,8 +93,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)setMessageNotificationGlassEnabled:(BOOL)enabled;
 + (BOOL)unreadMessageTipGlassEnabled;
 + (void)setUnreadMessageTipGlassEnabled:(BOOL)enabled;
-+ (BOOL)chatPageDiagnosticsEnabled;
-+ (void)setChatPageDiagnosticsEnabled:(BOOL)enabled;
 + (CGFloat)messageNotificationCornerRadius;
 + (void)setMessageNotificationCornerRadius:(CGFloat)radius;
 + (CGFloat)messageNotificationPadding;

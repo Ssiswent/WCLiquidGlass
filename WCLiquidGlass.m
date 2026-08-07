@@ -1263,7 +1263,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
 @property(nonatomic, strong) UISwitch *unreadMessageTipGlassSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
-@property(nonatomic, strong) UISwitch *chatPageDiagnosticsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 
 @end
@@ -1425,7 +1424,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 2) {
         return 2;
     }
-    return section == 3 ? 3 : 1;
+    return section == 3 ? 2 : 1;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1448,7 +1447,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
     }
     if (section == 3) {
-        return WCLiquidGlassFooterLabel(@"基础诊断始终开启且不记录聊天内容。开启聊天页诊断后，进入聊天页会记录布局，随后捕获一次真实点击命中视图；日志可在“崩溃日志”中分享。");
+        return WCLiquidGlassFooterLabel(@"基础诊断始终开启且不记录聊天内容；日志可在“崩溃日志”中分享。");
     }
     return nil;
 }
@@ -1464,7 +1463,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。", 88.0);
     }
     return section == 3
-        ? WCLiquidGlassFooterHeight(@"基础诊断始终开启且不记录聊天内容。开启聊天页诊断后，进入聊天页会记录布局，随后捕获一次真实点击命中视图；日志可在“崩溃日志”中分享。", 92.0)
+        ? WCLiquidGlassFooterHeight(@"基础诊断始终开启且不记录聊天内容；日志可在“崩溃日志”中分享。", 64.0)
         : CGFLOAT_MIN;
 }
 
@@ -1537,10 +1536,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.contactsIndexGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1 && indexPath.row == 4) {
-        WCLiquidGlassConfigureCell(cell, @"通知圆角与液态", nil,
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 1 && indexPath.row == 5) {
         WCLiquidGlassConfigureCell(cell, @"未读消息提示液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         self.unreadMessageTipGlassSwitch = [[UISwitch alloc] init];
@@ -1548,6 +1543,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.unreadMessageTipGlassSwitch addTarget:self action:@selector(wc_unreadMessageTipGlassChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = self.unreadMessageTipGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else if (indexPath.section == 1 && indexPath.row == 5) {
+        WCLiquidGlassConfigureCell(cell, @"通知圆角与液态", nil,
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.section == 1) {
         WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
@@ -1582,14 +1581,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassConfigureCell(cell, @"崩溃日志", detail,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashLogs, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    } else if (indexPath.section == 3) {
-        WCLiquidGlassConfigureCell(cell, @"聊天页诊断日志", @"进入聊天页后点击一次未读提示，再到“崩溃日志”分享",
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashLogs, 32.0), UIColor.labelColor);
-        self.chatPageDiagnosticsSwitch = [[UISwitch alloc] init];
-        self.chatPageDiagnosticsSwitch.on = WCLiquidGlassPreferences.chatPageDiagnosticsEnabled;
-        [self.chatPageDiagnosticsSwitch addTarget:self action:@selector(wc_chatPageDiagnosticsChanged:) forControlEvents:UIControlEventValueChanged];
-        cell.accessoryView = self.chatPageDiagnosticsSwitch;
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else {
         WCLiquidGlassConfigureCell(cell, @"恢复默认设置", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindRestore, 32.0), UIColor.systemRedColor);
@@ -1613,7 +1604,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
-    } else if (indexPath.section == 1 && indexPath.row == 4) {
+    } else if (indexPath.section == 1 && indexPath.row == 5) {
         [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 6) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
@@ -1642,10 +1633,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_unreadMessageTipGlassChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setUnreadMessageTipGlassEnabled:sender.isOn];
-}
-
-- (void)wc_chatPageDiagnosticsChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setChatPageDiagnosticsEnabled:sender.isOn];
 }
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {
