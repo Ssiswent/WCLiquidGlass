@@ -230,7 +230,7 @@ static void WCLiquidGlassUnreadMessageTipUpdate(UIView *view) {
         [surface insertSubview:state.glassView atIndex:0];
     }
     CGRect glassBounds = surface.bounds;
-    glassBounds.size.width += 16.0;
+    glassBounds.size.width += 24.0;
     state.glassView.frame = glassBounds;
     CGFloat radius = surface.layer.cornerRadius;
     if (radius <= 0.0) {
