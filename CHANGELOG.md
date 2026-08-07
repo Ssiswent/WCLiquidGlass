@@ -5,8 +5,8 @@
 ### 未读消息提示液态
 
 - 新增“未读消息提示液态”设置，接管 `QuickReplyMsgNotifyView` 的消息提示背景。
-- 兼容 ThemeBox 当前主题目录中的 `msg_tip_bg.png` 与 `msg_tip_bg_Dark.png`，并直接覆盖其 `bgButton`、`backgroundImageView` 等背景层。
-- ThemeBox 未安装或主题资源不存在时，继续使用现有运行时视图识别与原生背景回退。
+- 独立识别并覆盖消息提示的原生及其它插件背景层，不依赖 ThemeBox 或其主题资源。
+- 开启时由本插件提供液态背景；关闭时释放接管状态，恢复微信或 ThemeBox 原有背景。
 
 ## [1.9.2] - 2026-08-06
 

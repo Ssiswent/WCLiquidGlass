@@ -16,7 +16,7 @@ static BOOL WCLiquidGlassMessageNotificationHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassMessageNotificationHookInstallAttempts = 0;
 static Class WCLiquidGlassMessageNotificationViewClass = Nil;
 
-static id WCLiquidGlassMessageNotificationThemeBoxValue(id target, SEL selector) {
+static id WCLiquidGlassMessageNotificationObjectValue(id target, SEL selector) {
     if (!target || !selector || ![target respondsToSelector:selector]) {
         return nil;
     }
@@ -25,54 +25,6 @@ static id WCLiquidGlassMessageNotificationThemeBoxValue(id target, SEL selector)
     } @catch (__unused NSException *exception) {
         return nil;
     }
-}
-
-static NSString *WCLiquidGlassMessageNotificationThemeBoxDIYPath(void) {
-    Class managerClass = NSClassFromString(@"ThemeBoxMgr");
-    SEL sharedSelector = NSSelectorFromString(@"shared");
-    SEL diyPathSelector = NSSelectorFromString(@"currentThemeDIYPath");
-    if (!managerClass || ![managerClass respondsToSelector:sharedSelector]) {
-        return nil;
-    }
-    id manager = WCLiquidGlassMessageNotificationThemeBoxValue(managerClass, sharedSelector);
-    id path = WCLiquidGlassMessageNotificationThemeBoxValue(manager, diyPathSelector);
-    return [path isKindOfClass:NSString.class] ? path : nil;
-}
-
-static UIImage *WCLiquidGlassMessageNotificationThemeBoxTipImage(UIView *view) {
-    NSString *diyPath = WCLiquidGlassMessageNotificationThemeBoxDIYPath();
-    NSString *fileName = view.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark
-        ? @"msg_tip_bg_Dark.png"
-        : @"msg_tip_bg.png";
-    static NSCache<NSString *, UIImage *> *imageCache;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        imageCache = [[NSCache alloc] init];
-    });
-    UIImage *image = nil;
-    if (diyPath.length > 0) {
-        NSString *path = [diyPath stringByAppendingPathComponent:fileName];
-        if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-            image = [imageCache objectForKey:path];
-            if (!image) {
-                image = [UIImage imageWithContentsOfFile:path];
-                if (image) {
-                    [imageCache setObject:image forKey:path];
-                }
-            }
-        }
-    }
-    if (!image) {
-        Class themeClass = NSClassFromString(@"ThemeBoxTheme");
-        id theme = WCLiquidGlassMessageNotificationThemeBoxValue(themeClass,
-                                                                  NSSelectorFromString(@"shared"));
-        id themeImage = WCLiquidGlassMessageNotificationThemeBoxValue(theme,
-                                                                       NSSelectorFromString(@"msgTipBG"));
-        if ([themeImage isKindOfClass:UIImage.class]) {
-            image = themeImage;
-        }
-    }
-    return image;
 }
 
 @interface WCLiquidGlassMessageNotificationBackgroundState : NSObject
@@ -181,7 +133,6 @@ static void WCLiquidGlassMessageNotificationCollectCoveringViews(
     UIView *container,
     UIView *bannerView,
     UIView *glassView,
-    UIImage *themeBoxImage,
     NSUInteger depth,
     NSMutableArray<UIView *> *backgroundViews) {
     if (depth > 6) {
@@ -191,11 +142,6 @@ static void WCLiquidGlassMessageNotificationCollectCoveringViews(
         if (subview == glassView) {
             continue;
         }
-        if (themeBoxImage && [subview isKindOfClass:UIImageView.class] &&
-            ((UIImageView *)subview).image == themeBoxImage &&
-            ![backgroundViews containsObject:subview]) {
-            [backgroundViews addObject:subview];
-        }
         if (WCLiquidGlassMessageNotificationViewCoversBanner(subview, bannerView) &&
             ![backgroundViews containsObject:subview]) {
             [backgroundViews addObject:subview];
@@ -203,7 +149,6 @@ static void WCLiquidGlassMessageNotificationCollectCoveringViews(
         WCLiquidGlassMessageNotificationCollectCoveringViews(subview,
                                                               bannerView,
                                                               glassView,
-                                                              themeBoxImage,
                                                               depth + 1,
                                                               backgroundViews);
     }
@@ -213,7 +158,6 @@ static NSArray<UIView *> *WCLiquidGlassMessageNotificationNativeBackgroundViews(
     UIView *view,
     UIView *glassView) {
     NSMutableArray<UIView *> *backgroundViews = [NSMutableArray array];
-    UIImage *themeBoxImage = WCLiquidGlassMessageNotificationThemeBoxTipImage(view);
     const char *ivarNames[] = {
         "m_backgroundView",
         "_backgroundView",
@@ -242,7 +186,7 @@ static NSArray<UIView *> *WCLiquidGlassMessageNotificationNativeBackgroundViews(
         "backgroundEffectView"
     };
     for (NSUInteger index = 0; index < sizeof(selectorNames) / sizeof(selectorNames[0]); index += 1) {
-        id candidate = WCLiquidGlassMessageNotificationThemeBoxValue(
+        id candidate = WCLiquidGlassMessageNotificationObjectValue(
             view,
             sel_registerName(selectorNames[index]));
         WCLiquidGlassMessageNotificationAppendBackgroundValue(candidate, backgroundViews, view);
@@ -250,7 +194,6 @@ static NSArray<UIView *> *WCLiquidGlassMessageNotificationNativeBackgroundViews(
     WCLiquidGlassMessageNotificationCollectCoveringViews(view,
                                                           view,
                                                           glassView,
-                                                          themeBoxImage,
                                                           0,
                                                           backgroundViews);
     return backgroundViews.copy;
@@ -318,6 +261,10 @@ static void WCLiquidGlassUpdateMessageNotificationGlass(UIView *view) {
     if (!WCLiquidGlassPreferences.messageNotificationGlassEnabled) {
         if (state) {
             WCLiquidGlassMessageNotificationRestoreNativeBackground(view, state);
+            objc_setAssociatedObject(view,
+                                     WCLiquidGlassMessageNotificationStateKey,
+                                     nil,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         return;
     }
