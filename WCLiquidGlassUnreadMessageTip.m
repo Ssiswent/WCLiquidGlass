@@ -92,6 +92,16 @@ static NSArray<UIView *> *WCLiquidGlassUnreadMessageTipBackgroundViews(UIView *v
     if (surface && ![views containsObject:surface]) {
         [views addObject:surface];
     }
+    if (surface) {
+        CGRect surfaceBounds = surface.bounds;
+        for (UIView *subview in surface.subviews) {
+            if (![subview isKindOfClass:UIImageView.class] || [views containsObject:subview]) continue;
+            CGRect frame = subview.frame;
+            BOOL fillsSurface = fabs(CGRectGetWidth(frame) - CGRectGetWidth(surfaceBounds)) < 0.5 &&
+                                 fabs(CGRectGetHeight(frame) - CGRectGetHeight(surfaceBounds)) < 0.5;
+            if (fillsSurface) [views addObject:subview];
+        }
+    }
     return views.copy;
 }
 
@@ -220,7 +230,6 @@ static void WCLiquidGlassUnreadMessageTipUpdate(UIView *view) {
         [surface insertSubview:state.glassView atIndex:0];
     }
     CGRect glassBounds = surface.bounds;
-    glassBounds.origin.x -= 8.0;
     glassBounds.size.width += 16.0;
     state.glassView.frame = glassBounds;
     CGFloat radius = surface.layer.cornerRadius;
