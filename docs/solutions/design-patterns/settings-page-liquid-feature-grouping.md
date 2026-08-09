@@ -14,4 +14,4 @@ tags: [ios, settings, liquid-glass, uikit, message-swipe]
 
 “左滑引用/复读”是独立二级页面，集中管理整行左滑开关和左滑菜单大小。它继续使用 `WCLiquidGlassMessageSwipe` 的运行时实现与主题图标，不在设置页复制运行时逻辑。
 
-所有选择器继续使用 `UIAlertControllerStyleActionSheet` 的系统底部弹窗；全局菜单和左滑菜单仍由 `UIMenu` 负责呈现，避免设置 UI 与运行时菜单实现耦合。
+设置选择器和主要二级页面使用 UIKit 的 `UIModalPresentationPageSheet` + `UISheetPresentationController`：通过 `detents` 提供 medium/large 高度、`prefersGrabberVisible` 显示拖拽条、`preferredCornerRadius` 保持系统圆角。全局菜单和左滑菜单仍由 `UIMenu` 负责呈现，避免设置 UI 与运行时菜单实现耦合。
