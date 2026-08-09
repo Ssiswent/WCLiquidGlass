@@ -320,7 +320,6 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
             ? @[[UISheetPresentationControllerDetent mediumDetent], [UISheetPresentationControllerDetent largeDetent]]
             : @[[UISheetPresentationControllerDetent largeDetent]];
         sheet.prefersGrabberVisible = YES;
-        sheet.preferredCornerRadius = 52.0;
         sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
         if (allowsMediumDetent) {
             sheet.selectedDetentIdentifier = UISheetPresentationControllerDetentIdentifierMedium;
