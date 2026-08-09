@@ -332,6 +332,13 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         return;
     }
     if (@available(iOS 15.0, *)) {
+        if (@available(iOS 26.0, *)) {
+            sheet.prefersPageSizing = NO;
+            sheet.prefersGrabberVisible = YES;
+            sheet.preferredCornerRadius = 28.0;
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
+            return;
+        }
         UISheetPresentationControllerDetent *mediumDetent = [UISheetPresentationControllerDetent mediumDetent];
         UISheetPresentationControllerDetent *largeDetent = [UISheetPresentationControllerDetent largeDetent];
         if (@available(iOS 16.0, *)) {
@@ -370,11 +377,21 @@ static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
     navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
+        if (@available(iOS 26.0, *)) {
+            CGFloat screenHeight = presenter.view.bounds.size.height;
+            CGFloat preferredHeight = allowsMediumDetent ? screenHeight * 0.54 : screenHeight - 48.0;
+            CGSize preferredSize = CGSizeMake(MAX(0.0, presenter.view.bounds.size.width - 24.0),
+                                               MAX(0.0, preferredHeight));
+            navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
+            navigationController.preferredContentSize = preferredSize;
+            content.preferredContentSize = preferredSize;
+        }
         UISheetPresentationController *sheet = navigationController.sheetPresentationController;
         WCLiquidGlassConfigureSheet(sheet, allowsMediumDetent);
         if (@available(iOS 26.0, *)) {
-            CGFloat estimatedHeight = MAX(0.0, presenter.view.bounds.size.height * 0.54 - 48.0);
-            CGFloat centerY = MAX(0.0, presenter.view.bounds.size.height - 48.0 - estimatedHeight * 0.5);
+            CGFloat preferredHeight = allowsMediumDetent ? presenter.view.bounds.size.height * 0.54
+                                                         : presenter.view.bounds.size.height - 48.0;
+            CGFloat centerY = MAX(0.0, presenter.view.bounds.size.height - 48.0 - preferredHeight * 0.5);
             UIView *positioningView = [[UIView alloc] initWithFrame:CGRectMake(presenter.view.bounds.size.width * 0.5 - 0.5,
                                                                                   centerY - 0.5,
                                                                                   1.0,
