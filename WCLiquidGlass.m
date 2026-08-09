@@ -1262,6 +1262,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @property(nonatomic, strong) UISwitch *contactsIndexGlassSwitch;
 @property(nonatomic, strong) UISwitch *wcGlassLongPressMenuSwitch;
 @property(nonatomic, strong) UISwitch *unreadMessageTipGlassSwitch;
+@property(nonatomic, strong) UISwitch *messageSwipeActionsSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 
@@ -1419,7 +1420,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return 7;
     }
     if (section == 1) {
-        return 7;
+        return 8;
     }
     if (section == 2) {
         return 2;
@@ -1544,6 +1545,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.unreadMessageTipGlassSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1 && indexPath.row == 5) {
+        WCLiquidGlassConfigureCell(cell, @"左滑引用/复读消息", @"整行左滑，选择引用或复读",
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindActions, 32.0), UIColor.labelColor);
+        self.messageSwipeActionsSwitch = [[UISwitch alloc] init];
+        self.messageSwipeActionsSwitch.on = WCLiquidGlassPreferences.messageSwipeActionsEnabled;
+        [self.messageSwipeActionsSwitch addTarget:self action:@selector(wc_messageSwipeActionsChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = self.messageSwipeActionsSwitch;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else if (indexPath.section == 1 && indexPath.row == 6) {
         WCLiquidGlassConfigureCell(cell, @"通知圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -1604,9 +1613,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
-    } else if (indexPath.section == 1 && indexPath.row == 5) {
-        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 6) {
+        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
+    } else if (indexPath.section == 1 && indexPath.row == 7) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
@@ -1633,6 +1642,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_unreadMessageTipGlassChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setUnreadMessageTipGlassEnabled:sender.isOn];
+}
+
+- (void)wc_messageSwipeActionsChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setMessageSwipeActionsEnabled:sender.isOn];
 }
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {
