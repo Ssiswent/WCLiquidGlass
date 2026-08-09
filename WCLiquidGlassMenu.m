@@ -9,6 +9,7 @@
 
 static const CGFloat WCLiquidGlassContainerSpacing = 8.0;
 static const CGFloat WCLiquidGlassSelectedScale = 1.5;
+static const CGFloat WCLiquidGlassFloatingButtonDiameter = 48.0;
 static const NSUInteger WCLiquidGlassCompactMinimumCount = 7;
 static const NSUInteger WCLiquidGlassDoubleCrescentMinimumCount = 8;
 NSString *const WCLiquidGlassManualTextEditNotification = @"WCLiquidGlassManualTextEditNotification";
@@ -259,14 +260,7 @@ UIVisualEffect *WCLiquidGlassCurrentGlassContainerEffect(void) {
 }
 
 static CGFloat WCLiquidGlassButtonDiameter(void) {
-    switch (WCLiquidGlassPreferences.sizeMode) {
-        case 0:
-            return 53.0;
-        case 2:
-            return 66.0;
-        default:
-            return 60.0;
-    }
+    return WCLiquidGlassFloatingButtonDiameter;
 }
 
 static UIWindow *WCLiquidGlassApplicationWindow(void) {
@@ -1803,6 +1797,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)setSelectedAppearance:(BOOL)selected animated:(BOOL)animated;
 - (void)setDraggedAppearanceTowardPoint:(CGPoint)point inView:(UIView *)view;
 - (void)setToggleActiveAppearance:(BOOL)active;
+- (void)wc_refreshGlassAppearance;
 
 @end
 
@@ -1900,6 +1895,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             [self setAnchorAppearance];
         }
     }
+}
+
+- (void)wc_refreshGlassAppearance {
+    self.effect = WCLiquidGlassMakeEffect();
+    [self setNeedsLayout];
+    [self.contentView setNeedsLayout];
 }
 
 - (void)layoutSubviews {
@@ -2533,7 +2534,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 }
 
 - (CGRect)wc_nativeToolbarFrame {
-    CGFloat diameter = 56.0;
+    CGFloat diameter = WCLiquidGlassButtonDiameter();
     UIEdgeInsets safeArea = self.safeAreaInsets;
     CGFloat width = CGRectGetWidth(self.bounds);
     CGFloat x = self.anchorOnLeft
@@ -2550,7 +2551,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (CGRect)wc_nativeToolbarVisibleFrameForLeft:(BOOL)left {
     CGFloat diameter = self.nativeToolbar.bounds.size.width > 0.0
         ? self.nativeToolbar.bounds.size.width
-        : 56.0;
+        : WCLiquidGlassButtonDiameter();
     UIEdgeInsets insets = self.safeAreaInsets;
     CGFloat x = left
         ? insets.left + 16.0
@@ -2604,7 +2605,8 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         return;
     }
     if (!self.nativeToolbar) {
-        WCLiquidGlassNativeToolbar *toolbar = [[WCLiquidGlassNativeToolbar alloc] initWithFrame:CGRectMake(0.0, 0.0, 56.0, 56.0)];
+        CGFloat diameter = WCLiquidGlassButtonDiameter();
+        WCLiquidGlassNativeToolbar *toolbar = [[WCLiquidGlassNativeToolbar alloc] initWithFrame:CGRectMake(0.0, 0.0, diameter, diameter)];
         __weak typeof(self) weakSelf = self;
         toolbar.touchBeganHandler = ^{
             if (WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring) {
@@ -3095,21 +3097,25 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             return;
         }
         self.anchorIdleHidden = YES;
+        [self.anchorOrb wc_refreshGlassAppearance];
         [UIView animateWithDuration:0.36
                               delay:0
              usingSpringWithDamping:0.82
               initialSpringVelocity:0.4
-                            options:UIViewAnimationOptionAllowUserInteraction |
+                         options:UIViewAnimationOptionAllowUserInteraction |
                                     UIViewAnimationOptionBeginFromCurrentState
                          animations:^{
             [self wc_layoutAnchorFromPreferences];
-        } completion:nil];
+        } completion:^(__unused BOOL finished) {
+            [self.anchorOrb wc_refreshGlassAppearance];
+        }];
     });
 }
 
 - (void)wc_revealAnchorAnimated:(BOOL)animated {
     [self wc_cancelIdleHide];
     self.anchorIdleHidden = NO;
+    [self.anchorOrb wc_refreshGlassAppearance];
     void (^changes)(void) = ^{
         [self wc_layoutAnchorFromPreferences];
     };
@@ -3124,7 +3130,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                         options:UIViewAnimationOptionAllowUserInteraction |
                                 UIViewAnimationOptionBeginFromCurrentState
                      animations:changes
-                     completion:nil];
+                     completion:^(__unused BOOL finished) {
+        [self.anchorOrb wc_refreshGlassAppearance];
+    }];
 }
 
 - (NSArray<NSValue *> *)wc_fittedCompactCentersFromOffsets:(NSArray<NSValue *> *)offsets
@@ -3681,6 +3689,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                          animations:^{
             [self wc_layoutAnchorFromPreferences];
         } completion:^(__unused BOOL finished) {
+            [self.anchorOrb wc_refreshGlassAppearance];
             [self wc_scheduleIdleHide];
         }];
     }

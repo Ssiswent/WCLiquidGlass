@@ -71,8 +71,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)registerDefaults;
 + (BOOL)enabled;
 + (void)setEnabled:(BOOL)enabled;
-+ (NSInteger)sizeMode;
-+ (void)setSizeMode:(NSInteger)sizeMode;
 + (WCLiquidGlassCompactLayoutStyle)compactLayoutStyle;
 + (void)setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)style;
 + (WCLiquidGlassGlassAppearance)glassAppearance;

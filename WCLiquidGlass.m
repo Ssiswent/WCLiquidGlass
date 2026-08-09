@@ -316,9 +316,16 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         return;
     }
     if (@available(iOS 15.0, *)) {
+        UISheetPresentationControllerDetent *largeDetent = [UISheetPresentationControllerDetent largeDetent];
+        if (@available(iOS 16.0, *)) {
+            largeDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassLargeDetent"
+                                                                                     resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
+                return MAX(0.0, context.maximumDetentValue - 12.0);
+            }];
+        }
         sheet.detents = allowsMediumDetent
-            ? @[[UISheetPresentationControllerDetent mediumDetent], [UISheetPresentationControllerDetent largeDetent]]
-            : @[[UISheetPresentationControllerDetent largeDetent]];
+            ? @[[UISheetPresentationControllerDetent mediumDetent], largeDetent]
+            : @[largeDetent];
         sheet.prefersGrabberVisible = YES;
         sheet.preferredCornerRadius = 28.0;
         sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
@@ -333,6 +340,8 @@ static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
                                               BOOL allowsMediumDetent) {
     UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:content];
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
+    content.additionalSafeAreaInsets = UIEdgeInsetsMake(0.0, 0.0, 12.0, 0.0);
+    navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
         WCLiquidGlassConfigureSheet(navigationController.sheetPresentationController, allowsMediumDetent);
     }
@@ -1835,7 +1844,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSArray<NSString *> *)wc_menuRowKeys {
-    NSMutableArray<NSString *> *keys = [NSMutableArray arrayWithArray:@[@"enabled", @"buttonSize", @"menuStyle"]];
+    NSMutableArray<NSString *> *keys = [NSMutableArray arrayWithArray:@[@"enabled", @"menuStyle"]];
     if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
         [keys addObject:@"compactLayout"];
     } else {
@@ -1923,10 +1932,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             [self.enabledSwitch addTarget:self action:@selector(wc_enabledChanged:) forControlEvents:UIControlEventValueChanged];
             cell.accessoryView = self.enabledSwitch;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        } else if ([key isEqualToString:@"buttonSize"]) {
-            WCLiquidGlassConfigureCell(cell, @"按钮大小", [self wc_sizeModeTitle],
-                                       WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if ([key isEqualToString:@"menuStyle"]) {
             WCLiquidGlassConfigureCell(cell, @"菜单样式", [self wc_menuStyleTitle],
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
@@ -2001,9 +2006,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == 0) {
         NSString *key = self.wc_menuRowKeys[indexPath.row];
-        if ([key isEqualToString:@"buttonSize"]) {
-            [self wc_presentSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
-        } else if ([key isEqualToString:@"menuStyle"]) {
+        if ([key isEqualToString:@"menuStyle"]) {
             [self wc_presentMenuStylePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
         } else if ([key isEqualToString:@"compactLayout"]) {
             [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
@@ -2057,17 +2060,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_materialFileProtectionChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setMaterialFileProtectionEnabled:sender.isOn];
-}
-
-- (NSString *)wc_sizeModeTitle {
-    switch (WCLiquidGlassPreferences.sizeMode) {
-        case 0:
-            return @"紧凑 · 53pt";
-        case 2:
-            return @"大 · 66pt";
-        default:
-            return @"标准 · 60pt";
-    }
 }
 
 - (NSString *)wc_compactLayoutStyleTitle {
@@ -2125,17 +2117,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         : @"隐藏位置直接打开菜单";
 }
 
-- (void)wc_presentSizePickerFromView:(UIView *)sourceView {
-    (void)sourceView;
-    WCLiquidGlassPresentOptionSheet(self,
-                                    @"按钮大小",
-                                    @[@"紧凑 · 53pt", @"标准 · 60pt", @"大 · 66pt"],
-                                    WCLiquidGlassPreferences.sizeMode,
-                                    ^(NSUInteger index) {
-        [WCLiquidGlassPreferences setSizeMode:index];
-    });
-}
-
 - (void)wc_presentCompactLayoutPickerFromView:(UIView *)sourceView {
     (void)sourceView;
     WCLiquidGlassPresentOptionSheet(self,
@@ -2186,7 +2167,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_confirmRestore {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认设置？"
-                                                                   message:@"开关、菜单样式与大小、按钮大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
+                                                                   message:@"开关、菜单样式与大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"恢复"

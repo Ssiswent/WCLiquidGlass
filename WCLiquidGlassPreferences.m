@@ -34,7 +34,6 @@ NSString *const WCLiquidGlassActionFullInput = @"full_input";
 NSString *const WCLiquidGlassActionPageHierarchyDiagnostics = @"page_hierarchy_diagnostics";
 
 static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
-static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
 static NSString *const WCLiquidGlassMenuStyleKey = @"WCLiquidGlass.MenuStyle";
@@ -230,7 +229,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         ?: @(WCLiquidGlassGlassAppearanceBalanced);
     [defaults registerDefaults:@{
         WCLiquidGlassEnabledKey: @NO,
-        WCLiquidGlassSizeModeKey: @1,
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
         WCLiquidGlassMenuStyleKey: @(WCLiquidGlassMenuStyleRing),
@@ -272,16 +270,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (NSInteger)sizeMode {
-    return MIN(2, MAX(0, [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassSizeModeKey]));
-}
-
-+ (void)setSizeMode:(NSInteger)sizeMode {
-    [NSUserDefaults.standardUserDefaults setInteger:MIN(2, MAX(0, sizeMode))
-                                            forKey:WCLiquidGlassSizeModeKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -614,7 +602,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 + (void)restoreDefaults {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
     [defaults removeObjectForKey:WCLiquidGlassEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassSizeModeKey];
     [defaults removeObjectForKey:WCLiquidGlassCompactLayoutStyleKey];
     [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
     [defaults removeObjectForKey:WCLiquidGlassMenuStyleKey];
