@@ -10,7 +10,6 @@
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassMaterialFileProtection.h"
-#import "WCLiquidGlassMessageSwipe.h"
 #import "WCLiquidGlassMessageNotification.h"
 #import "WCLiquidGlassUnreadMessageTip.h"
 #import "WCLiquidGlassMenu.h"
@@ -456,7 +455,6 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             WCLiquidGlassInstallChatTimeGlassHooks();
             WCLiquidGlassInstallHomeCornersHooks();
             WCLiquidGlassInstallContactsIndexHooks();
-            WCLiquidGlassInstallMessageSwipeHooks();
             WCLiquidGlassInstallMessageNotificationHooks();
             WCLiquidGlassInstallUnreadMessageTipHooks();
             [WCLiquidGlassManager.sharedManager start];

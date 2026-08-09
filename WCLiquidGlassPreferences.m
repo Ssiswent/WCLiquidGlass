@@ -46,6 +46,8 @@ static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidG
 static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
 static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquidGlass.UnreadMessageTipGlassEnabled";
 static NSString *const WCLiquidGlassMessageSwipeActionsEnabledKey = @"WCLiquidGlass.MessageSwipeActionsEnabled";
+static NSString *const WCHookSwipeQuoteEnabledKey = @"com.wchook.swipeQuoteEnabled";
+static NSNotificationName const WCHookSwipeQuoteStateDidChangeNotification = @"com.wchook.notification.swipeQuoteStateDidChange";
 static NSString *const WCLiquidGlassMessageNotificationCornerRadiusKey = @"WCLiquidGlass.MessageNotification.CornerRadius";
 static NSString *const WCLiquidGlassMessageNotificationPaddingKey = @"WCLiquidGlass.MessageNotification.Padding";
 static NSString *const WCLiquidGlassMessageNotificationGlassAppearanceKey = @"WCLiquidGlass.MessageNotification.GlassAppearance";
@@ -75,6 +77,12 @@ static void WCLiquidGlassPostMaterialFileProtectionChanged(void) {
                                          NULL,
                                          NULL,
                                          YES);
+}
+
+static void WCLiquidGlassSetWCHookSwipeQuoteEnabled(BOOL enabled) {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCHookSwipeQuoteEnabledKey];
+    [NSUserDefaults.standardUserDefaults synchronize];
+    [NSNotificationCenter.defaultCenter postNotificationName:WCHookSwipeQuoteStateDidChangeNotification object:nil];
 }
 
 static NSArray<NSDictionary<NSString *, id> *> *WCLiquidGlassDefaultButtonItems(void) {
@@ -261,6 +269,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         [defaults setInteger:currentGlassAppearance.integerValue
                       forKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
     }
+    WCLiquidGlassSetWCHookSwipeQuoteEnabled([defaults boolForKey:WCLiquidGlassMessageSwipeActionsEnabledKey]);
     WCLiquidGlassMigrateButtonItemsIfNeeded();
 }
 
@@ -411,6 +420,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setMessageSwipeActionsEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+    WCLiquidGlassSetWCHookSwipeQuoteEnabled(enabled);
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -614,6 +624,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+    WCLiquidGlassSetWCHookSwipeQuoteEnabled(NO);
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationCornerRadiusKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationPaddingKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
