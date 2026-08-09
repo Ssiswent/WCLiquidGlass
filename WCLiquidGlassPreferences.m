@@ -46,6 +46,7 @@ static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidG
 static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
 static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquidGlass.UnreadMessageTipGlassEnabled";
 static NSString *const WCLiquidGlassMessageSwipeActionsEnabledKey = @"WCLiquidGlass.MessageSwipeActionsEnabled";
+static NSString *const WCLiquidGlassMessageSwipeMenuElementSizeKey = @"WCLiquidGlass.MessageSwipe.MenuElementSize";
 static NSString *const WCLiquidGlassMessageNotificationCornerRadiusKey = @"WCLiquidGlass.MessageNotification.CornerRadius";
 static NSString *const WCLiquidGlassMessageNotificationPaddingKey = @"WCLiquidGlass.MessageNotification.Padding";
 static NSString *const WCLiquidGlassMessageNotificationGlassAppearanceKey = @"WCLiquidGlass.MessageNotification.GlassAppearance";
@@ -241,6 +242,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassMessageNotificationGlassEnabledKey: @YES,
         WCLiquidGlassUnreadMessageTipGlassEnabledKey: @NO,
         WCLiquidGlassMessageSwipeActionsEnabledKey: @NO,
+        WCLiquidGlassMessageSwipeMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
         WCLiquidGlassMessageNotificationCornerRadiusKey: @36.0,
         WCLiquidGlassMessageNotificationPaddingKey: @8.0,
         WCLiquidGlassMessageNotificationGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceBalanced),
@@ -411,6 +413,22 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setMessageSwipeActionsEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassMenuElementSize)messageSwipeMenuElementSize {
+    NSInteger size = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMessageSwipeMenuElementSizeKey];
+    return MIN(WCLiquidGlassMenuElementSizeAutomatic,
+               MAX(WCLiquidGlassMenuElementSizeSmall, size));
+}
+
++ (void)setMessageSwipeMenuElementSize:(WCLiquidGlassMenuElementSize)size {
+    NSInteger clampedSize = MIN(WCLiquidGlassMenuElementSizeAutomatic,
+                                MAX(WCLiquidGlassMenuElementSizeSmall, size));
+    if ([self messageSwipeMenuElementSize] == clampedSize) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedSize forKey:WCLiquidGlassMessageSwipeMenuElementSizeKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -614,6 +632,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+    [defaults removeObjectForKey:WCLiquidGlassMessageSwipeMenuElementSizeKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationCornerRadiusKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationPaddingKey];
     [defaults removeObjectForKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];

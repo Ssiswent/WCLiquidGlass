@@ -1420,7 +1420,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return 7;
     }
     if (section == 1) {
-        return 8;
+        return 9;
     }
     if (section == 2) {
         return 2;
@@ -1553,6 +1553,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.messageSwipeActionsSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 1 && indexPath.row == 6) {
+        WCLiquidGlassConfigureCell(cell, @"左滑菜单大小", [self wc_messageSwipeMenuElementSizeTitle],
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.section == 1 && indexPath.row == 7) {
         WCLiquidGlassConfigureCell(cell, @"通知圆角与液态", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
@@ -1614,8 +1618,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.section == 1 && indexPath.row == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
     } else if (indexPath.section == 1 && indexPath.row == 6) {
-        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
+        [self wc_presentMessageSwipeMenuElementSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 1 && indexPath.row == 7) {
+        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
+    } else if (indexPath.section == 1 && indexPath.row == 8) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
@@ -1714,6 +1720,19 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
+- (NSString *)wc_messageSwipeMenuElementSizeTitle {
+    switch (WCLiquidGlassPreferences.messageSwipeMenuElementSize) {
+        case WCLiquidGlassMenuElementSizeSmall:
+            return @"Small";
+        case WCLiquidGlassMenuElementSizeMedium:
+            return @"Medium";
+        case WCLiquidGlassMenuElementSizeLarge:
+            return @"Large";
+        default:
+            return @"Automatic";
+    }
+}
+
 - (NSString *)wc_floatingMenuStrategyTitle {
     return WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring
         ? @"点击时先自动归位"
@@ -1786,6 +1805,24 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                     style:UIAlertActionStyleDefault
                                                   handler:^(__unused UIAlertAction *action) {
             [WCLiquidGlassPreferences setMenuElementSize:(WCLiquidGlassMenuElementSize)index];
+        }]];
+    }];
+    [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    picker.popoverPresentationController.sourceView = sourceView;
+    picker.popoverPresentationController.sourceRect = sourceView.bounds;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)wc_presentMessageSwipeMenuElementSizePickerFromView:(UIView *)sourceView {
+    UIAlertController *picker = [UIAlertController alertControllerWithTitle:@"左滑菜单大小"
+                                                                     message:@"仅影响左滑“引用 / 复读”的原生液态面板。"
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    NSArray<NSString *> *titles = @[@"Small", @"Medium", @"Large", @"Automatic"];
+    [titles enumerateObjectsUsingBlock:^(NSString *title, NSUInteger index, __unused BOOL *stop) {
+        [picker addAction:[UIAlertAction actionWithTitle:title
+                                                    style:UIAlertActionStyleDefault
+                                                  handler:^(__unused UIAlertAction *action) {
+            [WCLiquidGlassPreferences setMessageSwipeMenuElementSize:(WCLiquidGlassMenuElementSize)index];
         }]];
     }];
     [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
