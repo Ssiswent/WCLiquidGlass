@@ -110,28 +110,150 @@ static id WCLiquidGlassMessageSwipeValue(id object, NSString *key) {
     }
 }
 
+static id WCLiquidGlassMessageSwipeService(Class serviceClass) {
+    Class serviceCenterClass = NSClassFromString(@"MMServiceCenter");
+    SEL defaultCenterSelector = NSSelectorFromString(@"defaultCenter");
+    SEL getServiceSelector = NSSelectorFromString(@"getService:");
+    if (!serviceClass || ![serviceCenterClass respondsToSelector:defaultCenterSelector]) {
+        return nil;
+    }
+    id serviceCenter = ((id (*)(id, SEL))objc_msgSend)(serviceCenterClass, defaultCenterSelector);
+    return [serviceCenter respondsToSelector:getServiceSelector]
+        ? ((id (*)(id, SEL, Class))objc_msgSend)(serviceCenter, getServiceSelector, serviceClass)
+        : nil;
+}
+
+static BOOL WCLiquidGlassMessageSwipeRepeat(id messageWrap) {
+    @try {
+        id contactManager = WCLiquidGlassMessageSwipeService(NSClassFromString(@"CContactMgr"));
+        id selfContact = [contactManager respondsToSelector:NSSelectorFromString(@"getSelfContact")]
+            ? ((id (*)(id, SEL))objc_msgSend)(contactManager, NSSelectorFromString(@"getSelfContact"))
+            : nil;
+        NSString *selfUserName = WCLiquidGlassMessageSwipeValue(selfContact, @"m_nsUsrName")
+            ?: WCLiquidGlassMessageSwipeValue(selfContact, @"m_nsUserName")
+            ?: WCLiquidGlassMessageSwipeValue(selfContact, @"userName");
+        NSString *fromUserName = WCLiquidGlassMessageSwipeValue(messageWrap, @"m_nsFromUsr");
+        NSString *toUserName = WCLiquidGlassMessageSwipeValue(messageWrap, @"m_nsToUsr");
+        NSString *targetUserName = [fromUserName isEqualToString:selfUserName] ? toUserName : fromUserName;
+        SEL contactSelector = NSSelectorFromString(@"getContactByName:");
+        id targetContact = targetUserName.length > 0 && [contactManager respondsToSelector:contactSelector]
+            ? ((id (*)(id, SEL, id))objc_msgSend)(contactManager, contactSelector, targetUserName)
+            : nil;
+        Class logicClass = NSClassFromString(@"ForwardMessageLogicController");
+        id logic = targetContact && logicClass ? [logicClass new] : nil;
+        if (!logic) {
+            return NO;
+        }
+        if ([logic respondsToSelector:NSSelectorFromString(@"setBShowSendSuccessView:")]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(logic, NSSelectorFromString(@"setBShowSendSuccessView:"), NO);
+        }
+        if ([logic respondsToSelector:NSSelectorFromString(@"setBHiddenSendSuccessToastView:")]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(logic, NSSelectorFromString(@"setBHiddenSendSuccessToastView:"), YES);
+        }
+        SEL forwardSelector = NSSelectorFromString(@"ForwardMsg:ToContact:");
+        if ([logic respondsToSelector:forwardSelector]) {
+            ((void (*)(id, SEL, id, id))objc_msgSend)(logic, forwardSelector, messageWrap, targetContact);
+            return YES;
+        }
+        forwardSelector = NSSelectorFromString(@"ForwardMsg:ToContact:NeedSrcInfo:");
+        if ([logic respondsToSelector:forwardSelector]) {
+            ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(logic,
+                                                           forwardSelector,
+                                                           messageWrap,
+                                                           targetContact,
+                                                           NO);
+            return YES;
+        }
+    } @catch (__unused NSException *exception) {
+    }
+    return NO;
+}
+
+@interface WCLiquidGlassMessageSwipeMenuDelegate : NSObject <UIContextMenuInteractionDelegate>
+@property(nonatomic, weak) UIView *cell;
+@property(nonatomic, strong) id messageWrap;
+@property(nonatomic, weak) UIViewController *chatController;
+@property(nonatomic, strong) UIView *previewAnchor;
+@end
+
+@implementation WCLiquidGlassMessageSwipeMenuDelegate
+
+- (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+                        configurationForMenuAtLocation:(CGPoint)location {
+    (void)interaction;
+    (void)location;
+    __weak typeof(self) weakSelf = self;
+    return [UIContextMenuConfiguration configurationWithIdentifier:nil
+                                                   previewProvider:nil
+                                                    actionProvider:^UIMenu *(__unused NSArray<UIMenuElement *> *suggestedActions) {
+        UIAction *quoteAction = [UIAction actionWithTitle:@"引用"
+                                                   image:[UIImage systemImageNamed:@"arrowshape.turn.up.left"]
+                                              identifier:nil
+                                                 handler:^(__unused UIAction *action) {
+            typeof(self) strongSelf = weakSelf;
+            SEL quoteSelector = NSSelectorFromString(@"onShowMsgReplyMenuItem:");
+            if ([strongSelf.cell respondsToSelector:quoteSelector]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(strongSelf.cell, quoteSelector, nil);
+                return;
+            }
+            SEL replySelector = NSSelectorFromString(@"onReplyMsg:");
+            if ([strongSelf.chatController respondsToSelector:replySelector]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(strongSelf.chatController,
+                                                      replySelector,
+                                                      strongSelf.messageWrap);
+            }
+        }];
+        UIAction *repeatAction = [UIAction actionWithTitle:@"复读"
+                                                    image:[UIImage systemImageNamed:@"repeat"]
+                                               identifier:nil
+                                                  handler:^(__unused UIAction *action) {
+            WCLiquidGlassMessageSwipeRepeat(weakSelf.messageWrap);
+        }];
+        UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[quoteAction, repeatAction]];
+        if (@available(iOS 16.0, *)) {
+            menu.preferredElementSize = UIMenuElementSizeMedium;
+        }
+        return menu;
+    }];
+}
+
+- (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+ previewForHighlightingMenuWithConfiguration:(UIContextMenuConfiguration *)configuration {
+    (void)interaction;
+    (void)configuration;
+    return self.previewAnchor ? [[UITargetedPreview alloc] initWithView:self.previewAnchor] : nil;
+}
+
+- (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+ previewForDismissingMenuWithConfiguration:(UIContextMenuConfiguration *)configuration {
+    (void)interaction;
+    (void)configuration;
+    return self.previewAnchor ? [[UITargetedPreview alloc] initWithView:self.previewAnchor] : nil;
+}
+
+@end
+
 static void WCLiquidGlassMessageSwipeTriggerActionMenu(UIView *view) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             id viewModel = WCLiquidGlassMessageSwipeValue(view, @"viewModel");
             id messageWrap = WCLiquidGlassMessageSwipeValue(viewModel, @"messageWrap");
-            Class delegateClass = NSClassFromString(@"WCLGMessageSwipeMenuDelegate");
             SEL presentSelector = NSSelectorFromString(@"_presentMenuAtLocation:");
-            if (messageWrap && delegateClass) {
+            if (messageWrap) {
                 UIContextMenuInteraction *oldInteraction = objc_getAssociatedObject(view, WCLiquidGlassMessageSwipeMenuInteractionKey);
                 if (oldInteraction) {
                     [view removeInteraction:oldInteraction];
                 }
                 [objc_getAssociatedObject(view, WCLiquidGlassMessageSwipeMenuAnchorKey) removeFromSuperview];
 
-                id delegate = [delegateClass new];
-                [delegate setValue:view forKey:@"cell"];
-                [delegate setValue:messageWrap forKey:@"frozenWrap"];
+                WCLiquidGlassMessageSwipeMenuDelegate *delegate = [WCLiquidGlassMessageSwipeMenuDelegate new];
+                delegate.cell = view;
+                delegate.messageWrap = messageWrap;
 
                 UIResponder *responder = view;
                 while ((responder = responder.nextResponder)) {
                     if ([responder isKindOfClass:UIViewController.class]) {
-                        [delegate setValue:responder forKey:@"chatController"];
+                        delegate.chatController = (UIViewController *)responder;
                         break;
                     }
                 }
@@ -142,7 +264,7 @@ static void WCLiquidGlassMessageSwipeTriggerActionMenu(UIView *view) {
                 anchor.userInteractionEnabled = NO;
                 anchor.accessibilityElementsHidden = YES;
                 [view addSubview:anchor];
-                [delegate setValue:anchor forKey:@"previewAnchor"];
+                delegate.previewAnchor = anchor;
 
                 UIContextMenuInteraction *interaction = [[UIContextMenuInteraction alloc] initWithDelegate:delegate];
                 [view addInteraction:interaction];
