@@ -320,7 +320,7 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         if (@available(iOS 16.0, *)) {
             largeDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassLargeDetent"
                                                                                      resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
-                return MAX(0.0, context.maximumDetentValue - 12.0);
+                return MAX(0.0, context.maximumDetentValue - 48.0);
             }];
         }
         sheet.detents = allowsMediumDetent
@@ -340,7 +340,7 @@ static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
                                               BOOL allowsMediumDetent) {
     UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:content];
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
-    content.additionalSafeAreaInsets = UIEdgeInsetsMake(0.0, 0.0, 12.0, 0.0);
+    content.additionalSafeAreaInsets = UIEdgeInsetsMake(0.0, 0.0, 48.0, 0.0);
     navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
         WCLiquidGlassConfigureSheet(navigationController.sheetPresentationController, allowsMediumDetent);

@@ -1797,7 +1797,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 - (void)setSelectedAppearance:(BOOL)selected animated:(BOOL)animated;
 - (void)setDraggedAppearanceTowardPoint:(CGPoint)point inView:(UIView *)view;
 - (void)setToggleActiveAppearance:(BOOL)active;
-- (void)wc_refreshGlassAppearance;
 
 @end
 
@@ -1895,12 +1894,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             [self setAnchorAppearance];
         }
     }
-}
-
-- (void)wc_refreshGlassAppearance {
-    self.effect = WCLiquidGlassMakeEffect();
-    [self setNeedsLayout];
-    [self.contentView setNeedsLayout];
 }
 
 - (void)layoutSubviews {
@@ -3097,7 +3090,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             return;
         }
         self.anchorIdleHidden = YES;
-        [self.anchorOrb wc_refreshGlassAppearance];
         [UIView animateWithDuration:0.36
                               delay:0
              usingSpringWithDamping:0.82
@@ -3106,16 +3098,13 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                                     UIViewAnimationOptionBeginFromCurrentState
                          animations:^{
             [self wc_layoutAnchorFromPreferences];
-        } completion:^(__unused BOOL finished) {
-            [self.anchorOrb wc_refreshGlassAppearance];
-        }];
+        } completion:nil];
     });
 }
 
 - (void)wc_revealAnchorAnimated:(BOOL)animated {
     [self wc_cancelIdleHide];
     self.anchorIdleHidden = NO;
-    [self.anchorOrb wc_refreshGlassAppearance];
     void (^changes)(void) = ^{
         [self wc_layoutAnchorFromPreferences];
     };
@@ -3130,9 +3119,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                         options:UIViewAnimationOptionAllowUserInteraction |
                                 UIViewAnimationOptionBeginFromCurrentState
                      animations:changes
-                     completion:^(__unused BOOL finished) {
-        [self.anchorOrb wc_refreshGlassAppearance];
-    }];
+                     completion:nil];
 }
 
 - (NSArray<NSValue *> *)wc_fittedCompactCentersFromOffsets:(NSArray<NSValue *> *)offsets
@@ -3689,7 +3676,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                          animations:^{
             [self wc_layoutAnchorFromPreferences];
         } completion:^(__unused BOOL finished) {
-            [self.anchorOrb wc_refreshGlassAppearance];
             [self wc_scheduleIdleHide];
         }];
     }
