@@ -329,6 +329,9 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         sheet.prefersGrabberVisible = YES;
         sheet.preferredCornerRadius = 28.0;
         sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
+        if (@available(iOS 17.0, *)) {
+            sheet.prefersPageSizing = NO;
+        }
         if (allowsMediumDetent) {
             sheet.selectedDetentIdentifier = UISheetPresentationControllerDetentIdentifierMedium;
         }
@@ -340,7 +343,9 @@ static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
                                               BOOL allowsMediumDetent) {
     UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:content];
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
-    content.additionalSafeAreaInsets = UIEdgeInsetsMake(0.0, 0.0, 48.0, 0.0);
+    CGSize screenSize = UIScreen.mainScreen.bounds.size;
+    navigationController.preferredContentSize = CGSizeMake(MAX(0.0, screenSize.width - 24.0),
+                                                            MAX(0.0, screenSize.height - 48.0));
     navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
         WCLiquidGlassConfigureSheet(navigationController.sheetPresentationController, allowsMediumDetent);
