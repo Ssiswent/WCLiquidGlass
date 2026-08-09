@@ -10,6 +10,9 @@
 static const void *WCLiquidGlassMessageSwipeGestureKey = &WCLiquidGlassMessageSwipeGestureKey;
 static const void *WCLiquidGlassMessageSwipeFeedbackKey = &WCLiquidGlassMessageSwipeFeedbackKey;
 static const void *WCLiquidGlassMessageSwipeFeedbackTriggeredKey = &WCLiquidGlassMessageSwipeFeedbackTriggeredKey;
+static const void *WCLiquidGlassMessageSwipeMenuDelegateKey = &WCLiquidGlassMessageSwipeMenuDelegateKey;
+static const void *WCLiquidGlassMessageSwipeMenuInteractionKey = &WCLiquidGlassMessageSwipeMenuInteractionKey;
+static const void *WCLiquidGlassMessageSwipeMenuAnchorKey = &WCLiquidGlassMessageSwipeMenuAnchorKey;
 static void (*WCLiquidGlassOriginalCommonMessageCellDidMoveToWindow)(id, SEL) = NULL;
 static BOOL (*WCLiquidGlassOriginalGestureRecognizerShouldBegin)(id, SEL, UIGestureRecognizer *) = NULL;
 static BOOL (*WCLiquidGlassOriginalShouldRecognizeSimultaneously)(id, SEL, UIGestureRecognizer *, UIGestureRecognizer *) = NULL;
@@ -99,15 +102,63 @@ static void WCLiquidGlassMessageSwipeTriggerFeedback(UIView *view) {
     WCLiquidGlassSetMessageSwipeFeedbackTriggered(view, YES);
 }
 
+static id WCLiquidGlassMessageSwipeValue(id object, NSString *key) {
+    @try {
+        return [object valueForKey:key];
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
 static void WCLiquidGlassMessageSwipeTriggerActionMenu(UIView *view) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            SEL menuSelector = NSSelectorFromString(@"wclg_handleQuoteSwipe:");
-            if ([view respondsToSelector:menuSelector]) {
-                UISwipeGestureRecognizer *swipe = [[UISwipeGestureRecognizer alloc] init];
-                swipe.direction = UISwipeGestureRecognizerDirectionLeft;
-                ((void (*)(id, SEL, id))objc_msgSend)(view, menuSelector, swipe);
-                return;
+            id viewModel = WCLiquidGlassMessageSwipeValue(view, @"viewModel");
+            id messageWrap = WCLiquidGlassMessageSwipeValue(viewModel, @"messageWrap");
+            Class delegateClass = NSClassFromString(@"WCLGMessageSwipeMenuDelegate");
+            SEL presentSelector = NSSelectorFromString(@"_presentMenuAtLocation:");
+            if (messageWrap && delegateClass) {
+                UIContextMenuInteraction *oldInteraction = objc_getAssociatedObject(view, WCLiquidGlassMessageSwipeMenuInteractionKey);
+                if (oldInteraction) {
+                    [view removeInteraction:oldInteraction];
+                }
+                [objc_getAssociatedObject(view, WCLiquidGlassMessageSwipeMenuAnchorKey) removeFromSuperview];
+
+                id delegate = [delegateClass new];
+                [delegate setValue:view forKey:@"cell"];
+                [delegate setValue:messageWrap forKey:@"frozenWrap"];
+
+                UIResponder *responder = view;
+                while ((responder = responder.nextResponder)) {
+                    if ([responder isKindOfClass:UIViewController.class]) {
+                        [delegate setValue:responder forKey:@"chatController"];
+                        break;
+                    }
+                }
+
+                UIView *anchor = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 1.0, 1.0)];
+                anchor.center = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds));
+                anchor.backgroundColor = UIColor.clearColor;
+                anchor.userInteractionEnabled = NO;
+                anchor.accessibilityElementsHidden = YES;
+                [view addSubview:anchor];
+                [delegate setValue:anchor forKey:@"previewAnchor"];
+
+                UIContextMenuInteraction *interaction = [[UIContextMenuInteraction alloc] initWithDelegate:delegate];
+                [view addInteraction:interaction];
+                objc_setAssociatedObject(view, WCLiquidGlassMessageSwipeMenuDelegateKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(view, WCLiquidGlassMessageSwipeMenuInteractionKey, interaction, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(view, WCLiquidGlassMessageSwipeMenuAnchorKey, anchor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+                NSMethodSignature *signature = [interaction methodSignatureForSelector:presentSelector];
+                if ([interaction respondsToSelector:presentSelector] &&
+                    signature.numberOfArguments == 3 &&
+                    strcmp([signature getArgumentTypeAtIndex:2], @encode(CGPoint)) == 0) {
+                    ((void (*)(id, SEL, CGPoint))objc_msgSend)(interaction,
+                                                               presentSelector,
+                                                               CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds)));
+                    return;
+                }
             }
             SEL quoteSelector = NSSelectorFromString(@"onShowMsgReplyMenuItem:");
             if ([view respondsToSelector:quoteSelector]) {
