@@ -207,7 +207,17 @@ static UIMenu *WCLiquidGlassMessageSwipeNativeMenu(UIView *cell, id messageWrap,
                                               handler:^(__unused UIAction *action) {
         WCLiquidGlassMessageSwipeRepeat(messageWrap);
     }];
-    UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[quoteAction, repeatAction]];
+    UIAction *forwardAction = [UIAction actionWithTitle:@"转发"
+                                                 image:[UIImage systemImageNamed:@"arrowshape.turn.up.right"]
+                                            identifier:nil
+                                               handler:^(__unused UIAction *action) {
+        UIView *strongCell = weakCell;
+        SEL forwardSelector = NSSelectorFromString(@"onForward:");
+        if ([strongCell respondsToSelector:forwardSelector]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(strongCell, forwardSelector, nil);
+        }
+    }];
+    UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[quoteAction, repeatAction, forwardAction]];
     if (@available(iOS 16.0, *)) {
         menu.preferredElementSize = WCLiquidGlassMessageSwipeNativeMenuElementSize();
     }
