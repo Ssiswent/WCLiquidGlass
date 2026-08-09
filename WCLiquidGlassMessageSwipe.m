@@ -214,13 +214,64 @@ static UIMenu *WCLiquidGlassMessageSwipeNativeMenu(UIView *cell, id messageWrap,
     return menu;
 }
 
+static void WCLiquidGlassMessageSwipeRemoveMenuAnchor(UIView *view) {
+    [objc_getAssociatedObject(view, WCLiquidGlassMessageSwipeMenuAnchorKey) removeFromSuperview];
+    objc_setAssociatedObject(view,
+                             WCLiquidGlassMessageSwipeMenuAnchorKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static UIContextMenuInteraction *WCLiquidGlassMessageSwipeMenuInteractionInView(UIView *view) {
+    for (id<UIInteraction> interaction in view.interactions) {
+        if ([interaction isKindOfClass:UIContextMenuInteraction.class]) {
+            return (UIContextMenuInteraction *)interaction;
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        UIContextMenuInteraction *interaction = WCLiquidGlassMessageSwipeMenuInteractionInView(subview);
+        if (interaction) {
+            return interaction;
+        }
+    }
+    return nil;
+}
+
+static BOOL WCLiquidGlassMessageSwipePresentMenuFromToolbar(UIView *view, UIToolbar *toolbar) {
+    UIContextMenuInteraction *interaction = WCLiquidGlassMessageSwipeMenuInteractionInView(toolbar);
+    UIView *sourceView = interaction.view;
+    if (!interaction || !view.window || !toolbar.window || !sourceView.window ||
+        view.window != toolbar.window || toolbar.window != sourceView.window) {
+        return NO;
+    }
+    SEL presentSelector = NSSelectorFromString(@"_presentMenuAtLocation:");
+    NSMethodSignature *signature = [interaction respondsToSelector:presentSelector]
+        ? [interaction methodSignatureForSelector:presentSelector]
+        : nil;
+    const char *argumentType = signature.numberOfArguments == 3
+        ? [signature getArgumentTypeAtIndex:2]
+        : NULL;
+    const char *returnType = signature.methodReturnType;
+    if (!signature || !argumentType || !returnType || strcmp(argumentType, @encode(CGPoint)) != 0 ||
+        returnType[0] != 'v' || signature.methodReturnLength != 0) {
+        return NO;
+    }
+    @try {
+        CGPoint location = CGPointMake(CGRectGetMidX(sourceView.bounds), CGRectGetMidY(sourceView.bounds));
+        ((void (*)(id, SEL, CGPoint))objc_msgSend)(interaction, presentSelector, location);
+    } @catch (__unused NSException *exception) {
+        return NO;
+    }
+    return YES;
+}
+
 static void WCLiquidGlassMessageSwipeTriggerActionMenu(UIView *view) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             id viewModel = WCLiquidGlassMessageSwipeValue(view, @"viewModel");
             id messageWrap = WCLiquidGlassMessageSwipeValue(viewModel, @"messageWrap");
             if (messageWrap) {
-                [objc_getAssociatedObject(view, WCLiquidGlassMessageSwipeMenuAnchorKey) removeFromSuperview];
+                WCLiquidGlassMessageSwipeRemoveMenuAnchor(view);
                 UIResponder *responder = view;
                 UIViewController *chatController = nil;
                 while ((responder = responder.nextResponder)) {
@@ -229,17 +280,39 @@ static void WCLiquidGlassMessageSwipeTriggerActionMenu(UIView *view) {
                         break;
                     }
                 }
-                UIButton *anchor = [UIButton buttonWithType:UIButtonTypeSystem];
-                anchor.frame = CGRectMake(0.0, 0.0, 56.0, 56.0);
-                anchor.center = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds));
-                anchor.alpha = 0.01;
-                anchor.menu = WCLiquidGlassMessageSwipeNativeMenu(view, messageWrap, chatController);
-                anchor.showsMenuAsPrimaryAction = YES;
-                anchor.userInteractionEnabled = YES;
-                anchor.accessibilityElementsHidden = YES;
-                [view addSubview:anchor];
-                objc_setAssociatedObject(view, WCLiquidGlassMessageSwipeMenuAnchorKey, anchor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                [anchor sendActionsForControlEvents:UIControlEventTouchUpInside];
+                UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0.0, 0.0, 56.0, 56.0)];
+                toolbar.center = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds));
+                toolbar.alpha = 0.01;
+                toolbar.accessibilityElementsHidden = YES;
+                toolbar.items = @[[[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis"]
+                                                                     menu:WCLiquidGlassMessageSwipeNativeMenu(view, messageWrap, chatController)]];
+                [view addSubview:toolbar];
+                objc_setAssociatedObject(view,
+                                         WCLiquidGlassMessageSwipeMenuAnchorKey,
+                                         toolbar,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                [view setNeedsLayout];
+                [view layoutIfNeeded];
+                [toolbar setNeedsLayout];
+                [toolbar layoutIfNeeded];
+                if (!WCLiquidGlassMessageSwipePresentMenuFromToolbar(view, toolbar)) {
+                    __weak UIView *weakView = view;
+                    __weak UIToolbar *weakToolbar = toolbar;
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        UIView *strongView = weakView;
+                        UIToolbar *strongToolbar = weakToolbar;
+                        if (strongView && strongToolbar &&
+                            objc_getAssociatedObject(strongView, WCLiquidGlassMessageSwipeMenuAnchorKey) == strongToolbar) {
+                            if (WCLiquidGlassMessageSwipePresentMenuFromToolbar(strongView, strongToolbar)) {
+                                strongToolbar.userInteractionEnabled = NO;
+                            } else {
+                                WCLiquidGlassMessageSwipeRemoveMenuAnchor(strongView);
+                            }
+                        }
+                    });
+                } else {
+                    toolbar.userInteractionEnabled = NO;
+                }
                 return;
             }
             SEL quoteSelector = NSSelectorFromString(@"onShowMsgReplyMenuItem:");
@@ -336,6 +409,7 @@ static void WCLiquidGlassMessageSwipeSetup(UIView *view) {
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     if (!view.window) {
+        WCLiquidGlassMessageSwipeRemoveMenuAnchor(view);
         WCLiquidGlassMessageSwipeReset(view, NO);
     }
 }
