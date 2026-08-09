@@ -310,6 +310,22 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 @end
 
+@interface WCLiquidGlassSheetNavigationController : UINavigationController
+
+@property(nonatomic, weak) UIView *positioningView;
+
+@end
+
+@implementation WCLiquidGlassSheetNavigationController
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    [self.positioningView removeFromSuperview];
+    self.positioningView = nil;
+}
+
+@end
+
 static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
                                          BOOL allowsMediumDetent) {
     if (!sheet) {
@@ -350,11 +366,25 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
 static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
                                               UIViewController *content,
                                               BOOL allowsMediumDetent) {
-    UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:content];
+    WCLiquidGlassSheetNavigationController *navigationController = [[WCLiquidGlassSheetNavigationController alloc] initWithRootViewController:content];
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
     navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
-        WCLiquidGlassConfigureSheet(navigationController.sheetPresentationController, allowsMediumDetent);
+        UISheetPresentationController *sheet = navigationController.sheetPresentationController;
+        WCLiquidGlassConfigureSheet(sheet, allowsMediumDetent);
+        if (@available(iOS 26.0, *)) {
+            CGFloat estimatedHeight = MAX(0.0, presenter.view.bounds.size.height * 0.54 - 48.0);
+            CGFloat centerY = MAX(0.0, presenter.view.bounds.size.height - 48.0 - estimatedHeight * 0.5);
+            UIView *positioningView = [[UIView alloc] initWithFrame:CGRectMake(presenter.view.bounds.size.width * 0.5 - 0.5,
+                                                                                  centerY - 0.5,
+                                                                                  1.0,
+                                                                                  1.0)];
+            positioningView.alpha = 0.0;
+            positioningView.userInteractionEnabled = NO;
+            [presenter.view addSubview:positioningView];
+            navigationController.positioningView = positioningView;
+            sheet.sourceView = positioningView;
+        }
     }
     [presenter presentViewController:navigationController animated:YES completion:nil];
 }
