@@ -99,14 +99,20 @@ static void WCLiquidGlassMessageSwipeTriggerFeedback(UIView *view) {
     WCLiquidGlassSetMessageSwipeFeedbackTriggered(view, YES);
 }
 
-static void WCLiquidGlassMessageSwipeTriggerQuoteReply(UIView *view) {
-    SEL selector = NSSelectorFromString(@"onShowMsgReplyMenuItem:");
-    if (![view respondsToSelector:selector]) {
-        return;
-    }
+static void WCLiquidGlassMessageSwipeTriggerActionMenu(UIView *view) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            ((void (*)(id, SEL, id))objc_msgSend)(view, selector, nil);
+            SEL menuSelector = NSSelectorFromString(@"wclg_handleQuoteSwipe:");
+            if ([view respondsToSelector:menuSelector]) {
+                UISwipeGestureRecognizer *swipe = [[UISwipeGestureRecognizer alloc] init];
+                swipe.direction = UISwipeGestureRecognizerDirectionLeft;
+                ((void (*)(id, SEL, id))objc_msgSend)(view, menuSelector, swipe);
+                return;
+            }
+            SEL quoteSelector = NSSelectorFromString(@"onShowMsgReplyMenuItem:");
+            if ([view respondsToSelector:quoteSelector]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(view, quoteSelector, nil);
+            }
         } @catch (__unused NSException *exception) {
         }
     });
@@ -154,7 +160,7 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
         case UIGestureRecognizerStateCancelled:
             if (WCLiquidGlassMessageSwipeShouldTrigger(translation, velocity, threshold)) {
                 WCLiquidGlassMessageSwipeTriggerFeedback(view);
-                WCLiquidGlassMessageSwipeTriggerQuoteReply(view);
+                WCLiquidGlassMessageSwipeTriggerActionMenu(view);
             }
             WCLiquidGlassMessageSwipeReset(view, YES);
             break;
