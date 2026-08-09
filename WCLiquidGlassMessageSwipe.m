@@ -5,6 +5,7 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 
+#import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 
 static const void *WCLiquidGlassMessageSwipeGestureKey = &WCLiquidGlassMessageSwipeGestureKey;
@@ -186,8 +187,14 @@ static UIMenuElementSize WCLiquidGlassMessageSwipeNativeMenuElementSize(void) {
 static UIMenu *WCLiquidGlassMessageSwipeNativeMenu(UIView *cell, id messageWrap, UIViewController *chatController) {
     __weak UIView *weakCell = cell;
     __weak UIViewController *weakChatController = chatController;
+    UIImage *quoteImage = WCLiquidGlassImageNamedFromCandidates(@[@"icons_filled_quote"])
+        ?: [UIImage systemImageNamed:@"arrowshape.turn.up.left"];
+    UIImage *forwardImage = WCLiquidGlassImageNamedFromCandidates(@[@"share_filled", @"icons_filled_share"])
+        ?: [UIImage systemImageNamed:@"arrowshape.turn.up.right"];
+    UIImage *repeatImage = WCLiquidGlassImageNamedFromCandidates(@[@"icons_outlined_addoutline", @"icons_filled_add"])
+        ?: [UIImage systemImageNamed:@"repeat"];
     UIAction *quoteAction = [UIAction actionWithTitle:@"引用"
-                                               image:[UIImage systemImageNamed:@"arrowshape.turn.up.left"]
+                                               image:quoteImage
                                           identifier:nil
                                              handler:^(__unused UIAction *action) {
         UIView *strongCell = weakCell;
@@ -202,13 +209,13 @@ static UIMenu *WCLiquidGlassMessageSwipeNativeMenu(UIView *cell, id messageWrap,
         }
     }];
     UIAction *repeatAction = [UIAction actionWithTitle:@"复读"
-                                                image:[UIImage systemImageNamed:@"repeat"]
+                                                image:repeatImage
                                            identifier:nil
                                               handler:^(__unused UIAction *action) {
         WCLiquidGlassMessageSwipeRepeat(messageWrap);
     }];
     UIAction *forwardAction = [UIAction actionWithTitle:@"转发"
-                                                 image:[UIImage systemImageNamed:@"arrowshape.turn.up.right"]
+                                                 image:forwardImage
                                             identifier:nil
                                                handler:^(__unused UIAction *action) {
         UIView *strongCell = weakCell;
@@ -217,7 +224,7 @@ static UIMenu *WCLiquidGlassMessageSwipeNativeMenu(UIView *cell, id messageWrap,
             ((void (*)(id, SEL, id))objc_msgSend)(strongCell, forwardSelector, nil);
         }
     }];
-    UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[quoteAction, repeatAction, forwardAction]];
+    UIMenu *menu = [UIMenu menuWithTitle:@"" children:@[quoteAction, forwardAction, repeatAction]];
     if (@available(iOS 16.0, *)) {
         menu.preferredElementSize = WCLiquidGlassMessageSwipeNativeMenuElementSize();
     }

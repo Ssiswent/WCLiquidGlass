@@ -657,7 +657,7 @@ static UIColor *WCLiquidGlassDynamicIconColor(void) {
         : UIColor.blackColor;
 }
 
-static UIImage *WCLiquidGlassImageNamedFromCandidates(NSArray<NSString *> *assetNames) {
+UIImage *WCLiquidGlassImageNamedFromCandidates(NSArray<NSString *> *assetNames) {
     id themeManager = WCLiquidGlassThemeManager();
     SEL svgSelector = NSSelectorFromString(@"svgImageNamed:color:");
     for (NSString *assetName in assetNames) {

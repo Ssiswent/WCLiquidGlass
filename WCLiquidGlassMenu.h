@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonDiameter);
+UIImage * _Nullable WCLiquidGlassImageNamedFromCandidates(NSArray<NSString *> *assetNames);
 UIImage *WCLiquidGlassBrandIconImage(CGFloat size, BOOL includesBackground);
 UIVisualEffect *WCLiquidGlassCurrentGlassEffect(void);
 UIVisualEffect *WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearance appearance);
