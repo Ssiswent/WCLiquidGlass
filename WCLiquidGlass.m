@@ -316,15 +316,22 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         return;
     }
     if (@available(iOS 15.0, *)) {
+        UISheetPresentationControllerDetent *mediumDetent = [UISheetPresentationControllerDetent mediumDetent];
         UISheetPresentationControllerDetent *largeDetent = [UISheetPresentationControllerDetent largeDetent];
         if (@available(iOS 16.0, *)) {
+            mediumDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassMediumDetent"
+                                                                                      resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
+                CGFloat systemValue = [[UISheetPresentationControllerDetent mediumDetent] resolvedValueInContext:context];
+                return MAX(0.0, systemValue - 48.0);
+            }];
             largeDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassLargeDetent"
                                                                                      resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
-                return MAX(0.0, context.maximumDetentValue - 48.0);
+                CGFloat systemValue = [[UISheetPresentationControllerDetent largeDetent] resolvedValueInContext:context];
+                return MAX(0.0, systemValue - 48.0);
             }];
         }
         sheet.detents = allowsMediumDetent
-            ? @[[UISheetPresentationControllerDetent mediumDetent], largeDetent]
+            ? @[mediumDetent, largeDetent]
             : @[largeDetent];
         sheet.prefersGrabberVisible = YES;
         sheet.preferredCornerRadius = 28.0;
@@ -335,7 +342,7 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
             sheet.prefersPageSizing = NO;
         }
         if (allowsMediumDetent) {
-            sheet.selectedDetentIdentifier = UISheetPresentationControllerDetentIdentifierMedium;
+            sheet.selectedDetentIdentifier = mediumDetent.identifier;
         }
     }
 }
