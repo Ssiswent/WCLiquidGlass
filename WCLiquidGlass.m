@@ -310,62 +310,20 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 @end
 
-@interface WCLiquidGlassSheetNavigationController : UINavigationController
-
-@property(nonatomic, weak) UIView *positioningView;
-
-@end
-
-@implementation WCLiquidGlassSheetNavigationController
-
-- (void)viewDidDisappear:(BOOL)animated {
-    [super viewDidDisappear:animated];
-    [self.positioningView removeFromSuperview];
-    self.positioningView = nil;
-}
-
-@end
-
 static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
                                          BOOL allowsMediumDetent) {
     if (!sheet) {
         return;
     }
     if (@available(iOS 15.0, *)) {
-        if (@available(iOS 26.0, *)) {
-            sheet.prefersPageSizing = NO;
-            sheet.prefersGrabberVisible = YES;
-            sheet.preferredCornerRadius = 28.0;
-            sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
-            return;
-        }
-        UISheetPresentationControllerDetent *mediumDetent = [UISheetPresentationControllerDetent mediumDetent];
-        UISheetPresentationControllerDetent *largeDetent = [UISheetPresentationControllerDetent largeDetent];
-        if (@available(iOS 16.0, *)) {
-            mediumDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassMediumDetent"
-                                                                                      resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
-                CGFloat systemValue = [[UISheetPresentationControllerDetent mediumDetent] resolvedValueInContext:context];
-                return MAX(0.0, systemValue - 48.0);
-            }];
-            largeDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassLargeDetent"
-                                                                                     resolver:^CGFloat(id<UISheetPresentationControllerDetentResolutionContext> context) {
-                CGFloat systemValue = [[UISheetPresentationControllerDetent largeDetent] resolvedValueInContext:context];
-                return MAX(0.0, systemValue - 48.0);
-            }];
-        }
         sheet.detents = allowsMediumDetent
-            ? @[mediumDetent, largeDetent]
-            : @[largeDetent];
+            ? @[[UISheetPresentationControllerDetent mediumDetent], [UISheetPresentationControllerDetent largeDetent]]
+            : @[[UISheetPresentationControllerDetent largeDetent]];
         sheet.prefersGrabberVisible = YES;
-        sheet.preferredCornerRadius = 28.0;
+        sheet.preferredCornerRadius = 52.0;
         sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
-        if (@available(iOS 26.0, *)) {
-            sheet.prefersPageSizing = YES;
-        } else if (@available(iOS 17.0, *)) {
-            sheet.prefersPageSizing = NO;
-        }
         if (allowsMediumDetent) {
-            sheet.selectedDetentIdentifier = mediumDetent.identifier;
+            sheet.selectedDetentIdentifier = UISheetPresentationControllerDetentIdentifierMedium;
         }
     }
 }
@@ -373,35 +331,10 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
 static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
                                               UIViewController *content,
                                               BOOL allowsMediumDetent) {
-    WCLiquidGlassSheetNavigationController *navigationController = [[WCLiquidGlassSheetNavigationController alloc] initWithRootViewController:content];
+    UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:content];
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
-    navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
-        if (@available(iOS 26.0, *)) {
-            CGFloat screenHeight = presenter.view.bounds.size.height;
-            CGFloat preferredHeight = allowsMediumDetent ? screenHeight * 0.54 : screenHeight - 48.0;
-            CGSize preferredSize = CGSizeMake(MAX(0.0, presenter.view.bounds.size.width - 24.0),
-                                               MAX(0.0, preferredHeight));
-            navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
-            navigationController.preferredContentSize = preferredSize;
-            content.preferredContentSize = preferredSize;
-        }
-        UISheetPresentationController *sheet = navigationController.sheetPresentationController;
-        WCLiquidGlassConfigureSheet(sheet, allowsMediumDetent);
-        if (@available(iOS 26.0, *)) {
-            CGFloat preferredHeight = allowsMediumDetent ? presenter.view.bounds.size.height * 0.54
-                                                         : presenter.view.bounds.size.height - 48.0;
-            CGFloat centerY = MAX(0.0, presenter.view.bounds.size.height - 48.0 - preferredHeight * 0.5);
-            UIView *positioningView = [[UIView alloc] initWithFrame:CGRectMake(presenter.view.bounds.size.width * 0.5 - 0.5,
-                                                                                  centerY - 0.5,
-                                                                                  1.0,
-                                                                                  1.0)];
-            positioningView.alpha = 0.0;
-            positioningView.userInteractionEnabled = NO;
-            [presenter.view addSubview:positioningView];
-            navigationController.positioningView = positioningView;
-            sheet.sourceView = positioningView;
-        }
+        WCLiquidGlassConfigureSheet(navigationController.sheetPresentationController, allowsMediumDetent);
     }
     [presenter presentViewController:navigationController animated:YES completion:nil];
 }
