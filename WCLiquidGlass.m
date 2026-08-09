@@ -316,13 +316,6 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         return;
     }
     if (@available(iOS 15.0, *)) {
-        if (@available(iOS 26.0, *)) {
-            sheet.prefersPageSizing = NO;
-            sheet.prefersGrabberVisible = YES;
-            sheet.preferredCornerRadius = 28.0;
-            sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
-            return;
-        }
         UISheetPresentationControllerDetent *largeDetent = [UISheetPresentationControllerDetent largeDetent];
         if (@available(iOS 16.0, *)) {
             largeDetent = [UISheetPresentationControllerDetent customDetentWithIdentifier:@"WCLiquidGlassLargeDetent"
@@ -336,7 +329,9 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
         sheet.prefersGrabberVisible = YES;
         sheet.preferredCornerRadius = 28.0;
         sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
-        if (@available(iOS 17.0, *)) {
+        if (@available(iOS 26.0, *)) {
+            sheet.prefersPageSizing = YES;
+        } else if (@available(iOS 17.0, *)) {
             sheet.prefersPageSizing = NO;
         }
         if (allowsMediumDetent) {
@@ -350,13 +345,6 @@ static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
                                               BOOL allowsMediumDetent) {
     UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:content];
     navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
-    CGSize screenSize = UIScreen.mainScreen.bounds.size;
-    CGFloat preferredHeight = allowsMediumDetent ? screenSize.height * 0.54 : screenSize.height - 48.0;
-    if (@available(iOS 26.0, *)) {
-        navigationController.modalPresentationStyle = UIModalPresentationFormSheet;
-    }
-    navigationController.preferredContentSize = CGSizeMake(MAX(0.0, screenSize.width - 24.0),
-                                                            MAX(0.0, preferredHeight));
     navigationController.view.backgroundColor = UIColor.clearColor;
     if (@available(iOS 15.0, *)) {
         WCLiquidGlassConfigureSheet(navigationController.sheetPresentationController, allowsMediumDetent);
