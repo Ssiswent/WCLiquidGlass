@@ -4,6 +4,7 @@
 #import "WCLiquidGlassMessageNotificationSettings.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
@@ -185,12 +186,15 @@ static UIFont *WCLiquidGlassFont(CGFloat size, UIFontWeight weight) {
 
 static UILabel *WCLiquidGlassSectionLabel(NSString *text, UIColor *color) {
     UIFont *font = WCLiquidGlassFont(13.0, UIFontWeightSemibold);
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 4.0, 300.0,
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20.0, 4.0,
+                                                                UIScreen.mainScreen.bounds.size.width - 40.0,
                                                                 ceil(font.lineHeight + 4.0))];
+    label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     label.text = text;
     label.font = font;
     label.adjustsFontForContentSizeCategory = YES;
     label.textColor = color;
+    label.numberOfLines = 1;
     return label;
 }
 
@@ -294,6 +298,17 @@ static void WCLiquidGlassPresentActionSheet(UIViewController *controller,
     picker.popoverPresentationController.sourceView = sourceView;
     picker.popoverPresentationController.sourceRect = sourceView.bounds;
     [controller presentViewController:picker animated:YES completion:nil];
+}
+
+static UIAlertController *WCLiquidGlassMakeActionSheet(UIView *sourceView,
+                                                        NSString *title,
+                                                        NSString *message) {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title
+                                                                     message:message
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    sheet.popoverPresentationController.sourceView = sourceView;
+    sheet.popoverPresentationController.sourceRect = sourceView.bounds;
+    return sheet;
 }
 
 static void WCLiquidGlassPresentMessageSwipeSizePicker(UIViewController *controller, UIView *sourceView) {
@@ -965,18 +980,18 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }];
 }
 
-- (void)wc_confirmRestoreButtons {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认按钮？"
-                                                                   message:@"按钮顺序和已添加动作会恢复，其他设置不受影响。"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"恢复"
+- (void)wc_confirmRestoreButtonsFromView:(UIView *)sourceView {
+    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(sourceView,
+                                                             @"恢复默认按钮？",
+                                                             @"按钮顺序和已添加动作会恢复，其他设置不受影响。");
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"恢复"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassPreferences restoreDefaultButtonItems];
         [self wc_reloadItems];
     }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -1157,7 +1172,7 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == 3) {
-        [self wc_confirmRestoreButtons];
+        [self wc_confirmRestoreButtonsFromView:[tableView cellForRowAtIndexPath:indexPath]];
     }
 }
 
@@ -1248,11 +1263,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    static NSString *identifier = @"WCLiquidGlassCrashLogCell";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-    if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-    }
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
     NSURL *URL = self.logURLs[indexPath.row];
     NSNumber *fileSize = nil;
     NSDate *modifiedAt = nil;
@@ -1268,9 +1279,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                       countStyle:NSByteCountFormatterCountStyleFile]];
     WCLiquidGlassConfigureCell(cell, title, detail,
                                WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashLogs, 32.0), UIColor.labelColor);
-    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
     cell.accessibilityHint = URL.lastPathComponent;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
     return cell;
 }
 
@@ -1309,16 +1320,17 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 }
 
 - (void)wc_confirmDeleteAll {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"清空全部日志？"
-                                                                   message:@"删除后无法恢复。"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"清空"
+    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(self.tableView,
+                                                             @"清空全部日志？",
+                                                             @"删除后无法恢复。");
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"清空"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassCrashLogger.sharedLogger deleteAllLogs];
     }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    sheet.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItem;
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 @end
@@ -1360,17 +1372,33 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         : @"这些开关分别控制微信页面中的液态适配；通知圆角与首页圆角可进入子页面继续调整。";
 }
 
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    return WCLiquidGlassSectionLabel([self tableView:tableView titleForHeaderInSection:section],
+                                     UIColor.secondaryLabelColor);
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    return WCLiquidGlassSectionHeaderHeight();
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
+    return WCLiquidGlassFooterLabel([self tableView:tableView titleForFooterInSection:section]);
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+    return WCLiquidGlassFooterHeight([self tableView:tableView titleForFooterInSection:section], 48.0);
+}
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCellStyle cellStyle = indexPath.section == 0 ? UITableViewCellStyleValue1 : UITableViewCellStyleDefault;
-    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:cellStyle reuseIdentifier:nil];
-    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
-    cell.imageView.image = [UIImage systemImageNamed:@"circle.lefthalf.filled"];
-    cell.imageView.tintColor = UIColor.secondaryLabelColor;
-    cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    UIImage *image = [UIImage systemImageNamed:@"circle.lefthalf.filled"];
 
     if (indexPath.section == 0) {
-        cell.textLabel.text = @"液态效果";
-        cell.detailTextLabel.text = WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance);
+        WCLiquidGlassConfigureCell(cell,
+                                   @"液态效果",
+                                   WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance),
+                                   image,
+                                   UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         return cell;
     }
@@ -1383,7 +1411,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         @"通知圆角与液态",
         @"首页圆角与液态"
     ];
-    cell.textLabel.text = titles[indexPath.row];
+    WCLiquidGlassConfigureCell(cell, titles[indexPath.row], nil, image, UIColor.labelColor);
     if (indexPath.row < 4) {
         UISwitch *toggle = [[UISwitch alloc] init];
         switch (indexPath.row) {
@@ -1612,10 +1640,18 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     return section == 1 ? @"液态面板 · 菜单大小" : @"液态面板 · 悬浮按钮轨迹";
 }
 
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    return WCLiquidGlassSectionLabel([self tableView:tableView titleForHeaderInSection:section],
+                                     UIColor.secondaryLabelColor);
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    return WCLiquidGlassSectionHeaderHeight();
+}
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                                        reuseIdentifier:nil];
-    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
 
     NSArray<NSString *> *titles;
     NSInteger selectedIndex = NSNotFound;
@@ -1633,9 +1669,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         selectedIndex = WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyHiddenAnchor ? 0 : 1;
     }
 
-    cell.textLabel.text = titles[indexPath.row];
-    cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-    cell.textLabel.adjustsFontForContentSizeCategory = YES;
+    WCLiquidGlassConfigureCell(cell, titles[indexPath.row], nil, nil, UIColor.labelColor);
     cell.accessoryView = indexPath.row == selectedIndex ? WCLiquidGlassSelectedCheckmarkView() : nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
@@ -1678,16 +1712,19 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 @end
 
 
-@interface WCLiquidGlass ()
+@interface WCLiquidGlass () <UIDocumentPickerDelegate>
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
+@property(nonatomic, weak) UIView *configurationActionSourceView;
 
 - (NSString *)wc_menuStylePresentationTitle;
 - (UIMenu *)wc_menuStyleHierarchyMenu;
 - (void)wc_presentMenuStyleSheet;
 - (void)wc_presentMenuStylePresentationPickerFromView:(UIView *)sourceView;
+- (void)wc_exportConfigurationFromView:(UIView *)sourceView;
+- (void)wc_importConfigurationFromView:(UIView *)sourceView;
 
 @end
 
@@ -1856,7 +1893,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 2) {
         return 2;
     }
-    return section == 3 ? 2 : 1;
+    return section == 3 ? 2 : 3;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -2000,6 +2037,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassConfigureCell(cell, @"崩溃日志", detail,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashLogs, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.row == 0) {
+        WCLiquidGlassConfigureCell(cell, @"备份插件配置", @"导出 JSON 配置文件",
+                                   [UIImage systemImageNamed:@"square.and.arrow.up"], UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (indexPath.row == 1) {
+        WCLiquidGlassConfigureCell(cell, @"恢复插件配置", @"从 JSON 配置文件导入",
+                                   [UIImage systemImageNamed:@"square.and.arrow.down"], UIColor.labelColor);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else {
         WCLiquidGlassConfigureCell(cell, @"恢复默认设置", nil,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindRestore, 32.0), UIColor.systemRedColor);
@@ -2033,8 +2078,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         WCLiquidGlassPresentSettingsSheet(self,
                                           [[WCLiquidGlassCrashLogsController alloc] init],
                                           YES);
+    } else if (indexPath.section == 4 && indexPath.row == 0) {
+        [self wc_exportConfigurationFromView:[tableView cellForRowAtIndexPath:indexPath]];
+    } else if (indexPath.section == 4 && indexPath.row == 1) {
+        [self wc_importConfigurationFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 4) {
-        [self wc_confirmRestore];
+        [self wc_confirmRestoreFromView:[tableView cellForRowAtIndexPath:indexPath]];
     }
 }
 
@@ -2044,13 +2093,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_fullCrashReportsChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setFullCrashReportsEnabled:sender.isOn];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"重启微信后生效"
-                                                                   message:sender.isOn
-                                                                        ? @"完整崩溃采集会在下次启动微信时启用。它能提供更完整的原生崩溃信息，但可能与其他崩溃采集插件竞争异常处理权。"
-                                                                        : @"完整崩溃采集会在下次启动微信时关闭；基础 Objective-C 异常诊断仍会保留。"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
+    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(sender,
+                                                             @"重启微信后生效",
+                                                             sender.isOn
+                                                                 ? @"完整崩溃采集会在下次启动微信时启用。它能提供更完整的原生崩溃信息，但可能与其他崩溃采集插件竞争异常处理权。"
+                                                                 : @"完整崩溃采集会在下次启动微信时关闭；基础 Objective-C 异常诊断仍会保留。");
+    [sheet addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)wc_wcGlassCompatibilityChanged:(UISwitch *)sender {
@@ -2205,18 +2254,75 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     WCLiquidGlassPresentMessageSwipeSizePicker(self, sourceView);
 }
 
-- (void)wc_confirmRestore {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复默认设置？"
-                                                                   message:@"开关、菜单样式与大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复。"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"恢复"
+- (void)wc_presentConfigurationError:(NSError *)error {
+    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(self.configurationActionSourceView ?: self.tableView,
+                                                             @"配置操作失败",
+                                                             error.localizedDescription);
+    [sheet addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)wc_exportConfigurationFromView:(UIView *)sourceView {
+    self.configurationActionSourceView = sourceView;
+    NSError *error = nil;
+    NSData *data = [WCLiquidGlassPreferences configurationExportData:&error];
+    NSURL *URL = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"WCLiquidGlass-Configuration.json"]];
+    if (!data || ![data writeToURL:URL options:NSDataWritingAtomic error:&error]) {
+        [self wc_presentConfigurationError:error];
+        return;
+    }
+    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[URL]
+                                                                        applicationActivities:nil];
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:4]];
+    share.popoverPresentationController.sourceView = cell ?: self.view;
+    share.popoverPresentationController.sourceRect = cell ? cell.bounds : self.view.bounds;
+    [self presentViewController:share animated:YES completion:nil];
+}
+
+- (void)wc_importConfigurationFromView:(UIView *)sourceView {
+    self.configurationActionSourceView = sourceView;
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeJSON]
+                                                                                                           asCopy:YES];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+didPickDocumentsAtURLs:(NSArray<NSURL *> *)URLs {
+    NSURL *URL = URLs.firstObject;
+    if (!URL) {
+        [self wc_presentConfigurationError:[NSError errorWithDomain:@"WCLiquidGlass" code:1 userInfo:@{NSLocalizedDescriptionKey: @"未选择配置文件。"}]];
+        return;
+    }
+    BOOL accessing = [URL startAccessingSecurityScopedResource];
+    NSError *error = nil;
+    NSData *data = [NSData dataWithContentsOfURL:URL options:0 error:&error];
+    if (accessing) {
+        [URL stopAccessingSecurityScopedResource];
+    }
+    if (!data || ![WCLiquidGlassPreferences restoreConfigurationFromData:data error:&error]) {
+        [self wc_presentConfigurationError:error];
+        return;
+    }
+    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(self.configurationActionSourceView ?: self.tableView,
+                                                             @"配置已恢复",
+                                                             @"已应用备份中的 WCLiquidGlass 设置。");
+    [sheet addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)wc_confirmRestoreFromView:(UIView *)sourceView {
+    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(sourceView,
+                                                             @"恢复默认设置？",
+                                                             @"开关、菜单样式与大小、紧凑布局、入口位置、按钮动作、素材保护、兼容性和诊断选项都会恢复，且无法撤销。");
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"恢复"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassPreferences restoreDefaults];
-        [self.tableView reloadData];
     }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)wc_preferencesChanged:(NSNotification *)notification {

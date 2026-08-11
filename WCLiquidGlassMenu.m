@@ -976,8 +976,16 @@ static UIImage *WCLiquidGlassActionBrandImage(CGFloat side) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
 }
 
+static Class WCLiquidGlassWCGlassSettingsControllerClass(void) {
+    Class legacyClass = NSClassFromString(@"WCLGSettingsViewController");
+    if (legacyClass) {
+        return legacyClass;
+    }
+    return NSClassFromString(@"qfquiuz2ve533qtztzsnfk2f");
+}
+
 static UIImage *WCLiquidGlassWCGlassSettingsImage(CGFloat buttonDiameter) {
-    Class settingsClass = NSClassFromString(@"WCLGSettingsViewController");
+    Class settingsClass = WCLiquidGlassWCGlassSettingsControllerClass();
     NSBundle *bundle = settingsClass ? [NSBundle bundleForClass:settingsClass] : nil;
     if (!bundle) {
         return nil;
@@ -1098,11 +1106,13 @@ static void WCLiquidGlassShowActionError(NSString *message) {
     if (!controller) {
         return;
     }
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"WCLiquidGlass"
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"WCLiquidGlass"
                                                                    message:message
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
-    [controller presentViewController:alert animated:YES completion:nil];
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
+    sheet.popoverPresentationController.sourceView = controller.view;
+    sheet.popoverPresentationController.sourceRect = controller.view.bounds;
+    [controller presentViewController:sheet animated:YES completion:nil];
 }
 
 static BOOL WCLiquidGlassInvokeSelectorOnTarget(id target, NSArray<NSString *> *selectorNames) {
@@ -1639,7 +1649,7 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
             [availableActions addObject:actionIdentifier];
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-            if (navigationController && NSClassFromString(@"WCLGSettingsViewController")) {
+            if (navigationController && WCLiquidGlassWCGlassSettingsControllerClass()) {
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins]) {
@@ -1725,7 +1735,10 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
 
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-        if (WCLiquidGlassOpenControllerNamed(@[@"WCLGSettingsViewController"])) {
+        if (WCLiquidGlassOpenControllerNamed(@[
+            @"WCLGSettingsViewController",
+            @"qfquiuz2ve533qtztzsnfk2f"
+        ])) {
             return;
         }
         WCLiquidGlassShowActionError(@"没有找到 WCGlass 设置页面，请确认 WCGlass 已启用。");
@@ -2119,6 +2132,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     self.clipsToBounds = NO;
     _highlightedIndex = NSNotFound;
     _keyboardTop = CGFLOAT_MAX;
+    _anchorIdleHidden = YES;
     _selectionFeedbackGenerator = [[UISelectionFeedbackGenerator alloc] init];
     _observesInputNotifications = observesInputNotifications;
     if (observesInputNotifications) {
@@ -2295,7 +2309,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
 - (void)reload {
     [self wc_resetMenuImmediately];
-    self.anchorIdleHidden = NO;
     self.anchorOnLeft = WCLiquidGlassPreferences.anchorOnLeft;
 
     if ([self wc_shouldUseNativeMenuStyle]) {
@@ -2563,7 +2576,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
     self.nativeToolbar.frame = [self wc_nativeToolbarFrame];
     self.nativeToolbarSnapLeft = self.anchorOnLeft;
-    self.nativeToolbarPartiallyHidden = NO;
+    CGRect frame = self.nativeToolbar.frame;
+    frame.origin.x = self.nativeToolbarSnapLeft
+        ? -(CGRectGetWidth(frame) * 0.5)
+        : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) * 0.5;
+    self.nativeToolbar.frame = frame;
+    self.nativeToolbarPartiallyHidden = YES;
     self.nativeToolbarPositioned = YES;
 }
 
@@ -2595,6 +2613,7 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
             WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring;
         [self wc_positionNativeToolbarIfNeeded];
         [self wc_refreshNativeMenuImmediately];
+        [self wc_scheduleNativeHide];
         return;
     }
     if (!self.nativeToolbar) {
@@ -2759,7 +2778,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                                     UIViewAnimationOptionAllowUserInteraction
                          animations:^{
             self.nativeToolbar.frame = frame;
-            self.nativeToolbar.alpha = 0.72;
         } completion:^(__unused BOOL finished) {
             ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = NO;
         }];

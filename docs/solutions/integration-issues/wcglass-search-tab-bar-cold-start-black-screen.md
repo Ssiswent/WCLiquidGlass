@@ -14,6 +14,7 @@ root_cause: competing_tab_selection_paths
 resolution_type: narrow_runtime_hook
 related_components:
   - "WCLGSearchTabBarOverlay"
+  - "qz64vfjsximzq3xbay5woqdm (WCGlass 3.0.4-6)"
   - "UITabBarController"
   - "WCGlass bottom search tab bar mode"
 tags: [ios-27, wcglass, wechat-plugin, tab-bar, cold-start, black-screen, runtime-hook]
@@ -25,7 +26,7 @@ tags: [ios-27, wcglass, wechat-plugin, tab-bar, cold-start, black-screen, runtim
 
 这是 WCGlass 3.0.1 的“底栏搜索框模式”在冷启动首次切换普通标签页时的兼容性问题。真机确认：即使不注入 WCLiquidGlass，WCGlass 仍会复现；相反，WCLiquidGlass 环形菜单直接切换微信原生 TabController 时不会复现。
 
-本修复只接管 WCGlass `WCLGSearchTabBarOverlay` 的 `selectIndex:`。它不替换底栏搜索框、不改变菜单几何、材质、图标、触感或高亮样式，也不处理 WCGlass 的内部特殊选项。
+本修复只接管 WCGlass 搜索底栏 overlay 的 `selectIndex:`。WCGlass 3.0.4-5 使用 `WCLGSearchTabBarOverlay`，已确认的 3.0.4-6 使用混淆类名 `qz64vfjsximzq3xbay5woqdm`；运行时始终优先旧类名，再回退至已确认的新类名。它不替换底栏搜索框、不改变菜单几何、材质、图标、触感或高亮样式，也不处理 WCGlass 的内部特殊选项。
 
 ## 已确认行为
 
@@ -42,7 +43,7 @@ WCGlass 的搜索框底栏在选择一个普通标签页时，会先更新自身
 
 当且仅当以下条件同时满足时，兼容层接管一次选择：
 
-- 运行时存在 `WCLGSearchTabBarOverlay` 和 `selectIndex:`；
+- 运行时存在兼容的搜索底栏 overlay 和 `selectIndex:`；
 - 当前索引是 0 至 3 的普通微信标签页；
 - 能取得具有对应 `viewControllers` 的真实 TabController；
 - 目标页不是当前已选中的页面；
@@ -54,7 +55,7 @@ WCGlass 的搜索框底栏在选择一个普通标签页时，会先更新自身
 [tabController setSelectedIndex:index];
 ```
 
-随后请求 overlay 布局，并在 0.26 秒后释放短暂的选择保护。若运行时对象尚未加载，安装最多延后重试 20 次，每次 0.5 秒；成功安装后不再重复 Hook。
+随后请求 overlay 布局，并在 0.26 秒后释放短暂的选择保护。若运行时对象尚未加载，安装最多延后重试 20 次，每次 0.5 秒；查询方法前先确认类存在，成功安装后不再重复 Hook。
 
 以下情况一律继续调用 WCGlass 原实现：
 

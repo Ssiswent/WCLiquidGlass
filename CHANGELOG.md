@@ -209,6 +209,15 @@
 
 ## [Unreleased]
 
+### 设置页
+
+- 恢复默认、配置导入导出和崩溃日志相关操作统一使用原生 Action Sheet，并锚定到实际触发的 cell 或按钮，保留 iOS 26 的系统 Liquid Glass 展示与转场动画。
+- 增加插件配置 JSON 备份与恢复；恢复前校验配置格式、版本和已知设置键，避免误导入其他文件。
+
+### WCGlass 兼容
+
+- 兼容 WCGlass 3.0.4-6 对设置页和搜索底栏 overlay 的类名混淆；保留 3.0.4-5 的原类名优先路径，类尚未加载时安全重试，不再因空类查询阻断微信启动。
+
 ### 发布流程
 
 - 普通编译不再自动分发；仅通过 `scripts/build-device-package.sh` 或 `WCLIQUIDGLASS_DISTRIBUTE=1` 生成的可安装构建才会分发到手机。

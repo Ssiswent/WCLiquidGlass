@@ -132,6 +132,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems;
 + (void)setButtonItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
 + (void)restoreDefaultButtonItems;
++ (nullable NSData *)configurationExportData:(NSError * _Nullable * _Nullable)error;
++ (BOOL)restoreConfigurationFromData:(NSData *)data error:(NSError * _Nullable * _Nullable)error;
 + (void)restoreDefaults;
 
 @end
