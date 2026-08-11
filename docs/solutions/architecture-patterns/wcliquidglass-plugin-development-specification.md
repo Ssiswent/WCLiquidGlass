@@ -157,6 +157,17 @@ flowchart TD
 
 当前已彻底移除的旧动作包括粘贴、搜表情和旧搜索入口（`paste`、`emoji_search`、`search`）。`tab.0` 至 `tab.3` 已作为微信、通讯录、发现、我四个主页 Tab 的稳定 identifier 恢复使用，不得改作其它含义。
 
+#### 4.3 配置备份与恢复
+
+设置页提供插件配置 JSON 的备份与恢复，不包含崩溃日志、聊天内容或其它文件。导出文档使用固定的
+`format`（`com.ssiswent.wcliquidglass.configuration`）、`version`（当前为 `1`）和
+`preferences` 顶层结构；`preferences` 只包含本节列出的设置键。
+
+- 导出通过系统分享面板完成，文件名和 MIME 类型应表明这是 JSON 配置文件。
+- 导入先解析 JSON，再校验格式标识、版本、已知设置键、数值类型和按钮动作 identifier；失败时不写入任何偏好。
+- 导入只覆盖文件中存在的合法键，缺失键保留当前值；成功后统一发送偏好变更通知并刷新相关设置页。
+- “恢复默认设置”继续清理业务键和 migration flag，并使用原生确认 Action Sheet 防止误触。
+
 ### 5. 动作系统
 
 #### 5.1 当前动作目录

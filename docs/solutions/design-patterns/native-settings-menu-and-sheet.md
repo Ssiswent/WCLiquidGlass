@@ -64,6 +64,16 @@ navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
 `UIBarButtonItemStyleDone` 的“完成”按钮关闭页面。
 除标准 Page Sheet 的 medium/large detent 与 grabber 外，不添加整页材质、背景或自定义转场控制。
 
+## 原生 Action Sheet
+
+恢复默认、配置导入导出、日志清理和开关说明等短操作使用
+`UIAlertControllerStyleActionSheet`。`sourceView` 与 `sourceRect` 必须来自实际触发的 cell、按钮或
+开关；不能把整张 table 作为锚点，也不能退回居中的 `UIAlertControllerStyleAlert`。这样系统才能在
+iOS 26+ 自动提供正确的 Liquid Glass 气泡位置、动画和转场，并在 iPad/横屏时保持安全的 popover 锚点。
+
+配置备份通过系统分享面板导出 JSON；配置恢复通过系统文件选择器读取，并在写入偏好前校验固定格式、版本
+和已知键。无效文件只显示信息 Action Sheet，不改变当前配置。
+
 ## `.29` 原生分组背景修复与 `.30` 归因追踪
 
 2026-08-11 真机验证确认：在 `.28` 及更早版本，菜单样式和液态功能 Sheet 的 cell 可能出现
