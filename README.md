@@ -202,4 +202,4 @@ scripts/build-device-package.sh
 
 `control` 的 `Version` 是唯一包版本来源；GitHub tag 和 Release 状态由它自动推导，禁止手工拼接另一套版本名。
 
-`Version` 只能是 `MAJOR.MINOR.PATCH`，例如 `1.9.26`；对应 tag 必须是 `v1.9.26`。本地脚本和 GitHub Actions 都会拒绝后缀、手工 tag 和缺少对应 `CHANGELOG.md` 条目的发布。仅推送这个纯版本 tag 会触发 Actions；工作流在安装 Theos 和编译前校验 tag、`control` 和更新日志，然后创建新的 latest Release，绝不覆盖已有 Release 或资产。
+`Version` 只能是 `MAJOR.MINOR.PATCH`，例如 `2.0.0`；对应 tag 必须是 `v2.0.0`。本地脚本和 GitHub Actions 都会拒绝后缀、手工 tag 和缺少对应 `CHANGELOG.md` 条目的发布。仅推送这个纯版本 tag 会触发 Actions；工作流在安装 Theos 和编译前校验 tag、`control` 和更新日志，然后创建新的 latest Release，绝不覆盖已有 Release 或资产。
