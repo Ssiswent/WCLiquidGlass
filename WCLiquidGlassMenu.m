@@ -2636,9 +2636,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         self.nativeToolbar.userInteractionEnabled = YES;
         self.nativeToolbar.clipsToBounds = NO;
         self.nativeToolbar.layer.masksToBounds = NO;
-        UIImage *image = [UIImage systemImageNamed:@"ellipsis"
-                              withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:20.0
-                                                                                                   weight:UIImageSymbolWeightSemibold]];
+        UIImage *image = WCLiquidGlassImageNamedFromCandidates(@[@"icons_filled_more"]);
+        if (!image) {
+            image = [UIImage systemImageNamed:@"ellipsis"
+                                  withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:20.0
+                                                                                                       weight:UIImageSymbolWeightSemibold]];
+        }
         self.nativeMenuItem = [[UIBarButtonItem alloc] initWithImage:image menu:nil];
         self.nativeMenuItem.accessibilityLabel = @"WCLiquidGlass 菜单";
         self.nativeToolbar.items = @[self.nativeMenuItem];
