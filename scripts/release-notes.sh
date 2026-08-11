@@ -5,13 +5,15 @@ set -eu
 version="${1:?Expected a release version}"
 changelog_file="${2:-CHANGELOG.md}"
 
+scripts/release-version.sh --tag "$version" >/dev/null
+
 if [ ! -f "$changelog_file" ]; then
     echo "Missing $changelog_file" >&2
     exit 66
 fi
 
 awk -v version="$version" '
-    $0 ~ "^##[[:space:]]+\\[?v?" version "\\]?([[:space:]]|$)" {
+    $0 == "## [" version "]" || index($0, "## [" version "] ") == 1 {
         found = 1
         next
     }
@@ -20,12 +22,16 @@ awk -v version="$version" '
     }
     found {
         print
+        if ($0 ~ /[^[:space:]]/) content = 1
     }
     END {
         if (!found) {
-            printf "## WCLiquidGlass %s\n\n", version
-            print "- 自动构建包：未找到对应 CHANGELOG 条目。"
-            print "- 详细改动请参阅仓库提交记录。"
+            print "Missing CHANGELOG entry for " version > "/dev/stderr"
+            exit 67
+        }
+        if (!content) {
+            print "CHANGELOG entry for " version " is empty" > "/dev/stderr"
+            exit 68
         }
     }
 ' "$changelog_file"

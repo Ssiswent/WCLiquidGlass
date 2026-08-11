@@ -5,16 +5,16 @@ set -eu
 upload_url="${WCLIQUIDGLASS_UPLOAD_URL:-http://192.168.1.145:8088}"
 upload_path="${WCLIQUIDGLASS_UPLOAD_PATH:-/Plugins/}"
 
-if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ "${WCLIQUIDGLASS_SKIP_UPLOAD:-}" = "1" ]; then
-    echo "Skipping local HTTP package upload"
-    exit 0
-fi
-
 upload_url=${upload_url%/}
 
 if [ "${1:-}" = "--check" ]; then
-    curl --fail --show-error --silent --connect-timeout 3 --max-time 8 \
+    curl --show-error --silent --connect-timeout 3 --max-time 8 \
         "$upload_url/" >/dev/null
+    exit 0
+fi
+
+if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ "${WCLIQUIDGLASS_SKIP_UPLOAD:-}" = "1" ]; then
+    echo "Skipping local HTTP package upload"
     exit 0
 fi
 

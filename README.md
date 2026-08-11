@@ -194,18 +194,12 @@ make clean package FINALPACKAGE=1
 scripts/build-device-package.sh
 ```
 
-该命令只在构建成功后分发一次：本地 HTTP 服务可访问时上传至 `/Plugins/`；服务不可访问时，自动为已提交并推送到 `origin/main` 的最终源码创建对应版本 tag，并发布到 GitHub Release。HTTP 分发会先校验同名文件的 SHA-256，相同文件跳过，不同文件拒绝上传，必须先升级 `control` 的版本号，避免产生 `(1)` 重复包或同版本不同二进制。GitHub Release 资产使用覆盖上传，因此同一 tag 始终只保留一个同名 `.deb`。
+每次最终修改先显式执行 `sh scripts/bump-version.sh --apply`，补充同版本的 `CHANGELOG.md` 条目，并提交、推送到 `main` 后再构建 `.deb`。该命令只在构建成功后分发一次：本地 HTTP 服务可访问时上传至 `/Plugins/`；只有服务无法连接时才推送对应 tag，由 GitHub Actions 构建并创建 GitHub Release。HTTP 可达但上传冲突或服务器错误会直接失败，不会改走 GitHub。HTTP 分发会先校验同名文件的 SHA-256，相同文件跳过，不同文件拒绝上传，必须先升级 `control` 的版本号，避免生成 `(1)` 重复包或同版本不同二进制。已有 GitHub Release 或资产不会被覆盖。
 
-如需显式生成下一补丁版本，可额外传入 `WCLIQUIDGLASS_AUTO_BUMP=1`。项目输出 rootless `iphoneos-arm64` `.deb` 包，发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。
+项目输出 rootless `iphoneos-arm64` `.deb` 包，发布版本与历史安装包请见 [GitHub Releases](https://github.com/Ssiswent/WCLiquidGlass/releases)。
 
 ### 版本与 Tag
 
 `control` 的 `Version` 是唯一包版本来源；GitHub tag 和 Release 状态由它自动推导，禁止手工拼接另一套版本名。
 
-| 发布类型 | `control` 中的版本 | Git tag | GitHub Release |
-| --- | --- | --- | --- |
-| 正式版 | `1.9.2` | `v1.9.2` | 正式发布 |
-| 正式版 | `1.8.2` | `v1.8.2` | 正式发布 |
-| 预发布 | `1.8.2~project-polish.2` | `v1.8.2-project-polish.2` | Pre-release |
-
-`~` 是 Debian 预发布排序标记，确保预发布包低于同号正式版；Git tag 不包含 `~`，而是将它转换为一个连字符。预发布名称使用小写单词、连字符和点号计数，例如 `beta.1`、`layout-test.4`、`project-polish.2`。推送对应 tag 或在 Actions 手动输入对应 tag 后，工作流会验证映射、上传 `.deb` 并自动设置正确的 Release 状态。
+`Version` 只能是 `MAJOR.MINOR.PATCH`，例如 `1.9.26`；对应 tag 必须是 `v1.9.26`。本地脚本和 GitHub Actions 都会拒绝后缀、手工 tag 和缺少对应 `CHANGELOG.md` 条目的发布。仅推送这个纯版本 tag 会触发 Actions；工作流在安装 Theos 和编译前校验 tag、`control` 和更新日志，然后创建新的 latest Release，绝不覆盖已有 Release 或资产。

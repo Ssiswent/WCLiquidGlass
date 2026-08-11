@@ -3,63 +3,30 @@
 set -eu
 
 usage() {
-    echo "Usage: $0 --tag VERSION | --channel VERSION | --validate-tag VERSION TAG" >&2
+    echo "Usage: $0 --tag VERSION | --validate-tag VERSION TAG" >&2
     exit 64
 }
 
-[ "$#" -ge 2 ] || usage
-
-mode=$1
-version=$2
-
 validate_version() {
-    base=${version%%~*}
-    suffix=
-    case "$version" in
-        *'~'*)
-            suffix=${version#*~}
-            case "$suffix" in
-                ''|*'~'*|*[!0-9A-Za-z.-]*|.*|*.)
-                    echo "Invalid prerelease package version: $version" >&2
-                    exit 65
-                    ;;
-            esac
-            ;;
-    esac
-
-    printf '%s\n' "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
-        echo "Expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH~PRERELEASE; found: $version" >&2
+    printf '%s\n' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+        echo "Expected MAJOR.MINOR.PATCH; found: $1" >&2
         exit 65
     }
 }
 
-validate_version
-base=${version%%~*}
-suffix=
-case "$version" in
-    *'~'*) suffix=${version#*~} ;;
-esac
+[ "$#" -ge 2 ] || usage
 
-case "$mode" in
+case "$1" in
     --tag)
-        if [ -n "$suffix" ]; then
-            printf 'v%s-%s\n' "$base" "$suffix"
-        else
-            printf 'v%s\n' "$base"
-        fi
-        ;;
-    --channel)
-        if [ -n "$suffix" ]; then
-            printf '%s\n' prerelease
-        else
-            printf '%s\n' stable
-        fi
+        [ "$#" = 2 ] || usage
+        validate_version "$2"
+        printf 'v%s\n' "$2"
         ;;
     --validate-tag)
         [ "$#" = 3 ] || usage
-        expected_tag=$("$0" --tag "$version")
-        if [ "$3" != "$expected_tag" ]; then
-            echo "Release tag must be $expected_tag for package version $version" >&2
+        validate_version "$2"
+        if [ "$3" != "v$2" ]; then
+            echo "Release tag must be v$2 for package version $2" >&2
             exit 66
         fi
         ;;
