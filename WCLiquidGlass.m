@@ -7,6 +7,22 @@
 
 static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
+@interface WCLiquidGlassMenuProxyButton : UIButton
+@end
+
+@implementation WCLiquidGlassMenuProxyButton
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *superview = self.superview;
+    if (!superview) {
+        return [super pointInside:point withEvent:event];
+    }
+    CGPoint superviewPoint = [self convertPoint:point toView:superview];
+    return CGRectContainsPoint(superview.bounds, superviewPoint);
+}
+
+@end
+
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <math.h>
@@ -147,34 +163,18 @@ static void WCLiquidGlassConfigureTableBackground(UITableViewController *control
     controller.tableView.backgroundView = [[WCLiquidGlassBackdropView alloc] init];
 }
 
-static UIColor *WCLiquidGlassSettingsCardColor(void) {
-    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
-        BOOL dark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
-        return dark ? [UIColor colorWithWhite:0.14 alpha:0.94]
-                    : [UIColor colorWithWhite:1.0 alpha:0.84];
-    }];
+static void WCLiquidGlassRestoreNativeGroupedCellBackground(UITableViewCell *cell) {
+    if (@available(iOS 14.0, *)) {
+        cell.backgroundConfiguration = [UIBackgroundConfiguration listGroupedCellConfiguration];
+    }
 }
 
 static void WCLiquidGlassStyleCardCell(UITableViewCell *cell,
                                        NSIndexPath *indexPath,
                                        UITableView *tableView) {
-    NSInteger rowCount = [tableView.dataSource tableView:tableView numberOfRowsInSection:indexPath.section];
-    BOOL first = indexPath.row == 0;
-    BOOL last = indexPath.row == rowCount - 1;
-    CACornerMask corners = 0;
-    if (first) {
-        corners |= kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    }
-    if (last) {
-        corners |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
-    }
-    cell.backgroundConfiguration = nil;
-    cell.backgroundColor = WCLiquidGlassSettingsCardColor();
-    cell.contentView.backgroundColor = UIColor.clearColor;
-    cell.layer.cornerRadius = (first || last) ? 24.0 : 0.0;
-    cell.layer.cornerCurve = kCACornerCurveContinuous;
-    cell.layer.maskedCorners = corners;
-    cell.layer.masksToBounds = YES;
+    (void)indexPath;
+    (void)tableView;
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
 }
 
 static UIFont *WCLiquidGlassFont(CGFloat size, UIFontWeight weight) {
@@ -227,88 +227,23 @@ static void WCLiquidGlassConfigureCell(UITableViewCell *cell,
     content.imageProperties.tintColor = UIColor.labelColor;
     content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(10.0, 16.0, 10.0, 12.0);
     cell.contentConfiguration = content;
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
     cell.accessoryView = nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 }
 
+static UIImageView *WCLiquidGlassSelectedCheckmarkView(void) {
+    UIImageView *imageView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"checkmark.circle.fill"]];
+    imageView.frame = CGRectMake(0.0, 0.0, 28.0, 28.0);
+    imageView.contentMode = UIViewContentModeScaleAspectFit;
+    imageView.tintColor = UIColor.systemBlueColor;
+    imageView.preferredSymbolConfiguration = [UIImageSymbolConfiguration configurationWithPointSize:24.0
+                                                                                               weight:UIImageSymbolWeightSemibold];
+    return imageView;
+}
+
 typedef void (^WCLiquidGlassOptionSelectionHandler)(NSUInteger index);
-
-@interface WCLiquidGlassOptionSheetController : UITableViewController
-
-- (instancetype)initWithTitle:(NSString *)title
-                       options:(NSArray<NSString *> *)options
-                 selectedIndex:(NSUInteger)selectedIndex
-                       handler:(WCLiquidGlassOptionSelectionHandler)handler;
-
-@end
-
-@implementation WCLiquidGlassOptionSheetController {
-    NSArray<NSString *> *_optionTitles;
-    NSUInteger _selectedIndex;
-    WCLiquidGlassOptionSelectionHandler _selectionHandler;
-}
-
-- (instancetype)initWithTitle:(NSString *)title
-                       options:(NSArray<NSString *> *)options
-                 selectedIndex:(NSUInteger)selectedIndex
-                       handler:(WCLiquidGlassOptionSelectionHandler)handler {
-    self = [super initWithStyle:UITableViewStyleInsetGrouped];
-    if (self) {
-        self.title = title;
-        _optionTitles = [options copy];
-        _selectedIndex = MIN(selectedIndex, _optionTitles.count > 0 ? _optionTitles.count - 1 : 0);
-        _selectionHandler = [handler copy];
-    }
-    return self;
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    WCLiquidGlassConfigureTableBackground(self);
-    self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 56.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"完成"
-                                                                                 style:UIBarButtonItemStyleDone
-                                                                                target:self
-                                                                                action:@selector(wc_done)];
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return _optionTitles.count;
-}
-
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    static NSString *identifier = @"WCLiquidGlassOptionSheetCell";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-    if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier];
-    }
-    WCLiquidGlassConfigureCell(cell, _optionTitles[indexPath.row], nil, nil, UIColor.labelColor);
-    cell.accessoryType = (NSUInteger)indexPath.row == _selectedIndex ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-    return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    _selectedIndex = indexPath.row;
-    if (_selectionHandler) {
-        _selectionHandler(_selectedIndex);
-    }
-    [tableView reloadData];
-}
-
-- (void)wc_done {
-    [self dismissViewControllerAnimated:YES completion:nil];
-}
-
-@end
 
 static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
                                          BOOL allowsMediumDetent) {
@@ -320,7 +255,6 @@ static void WCLiquidGlassConfigureSheet(UISheetPresentationController *sheet,
             ? @[[UISheetPresentationControllerDetent mediumDetent], [UISheetPresentationControllerDetent largeDetent]]
             : @[[UISheetPresentationControllerDetent largeDetent]];
         sheet.prefersGrabberVisible = YES;
-        sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
         if (allowsMediumDetent) {
             sheet.selectedDetentIdentifier = UISheetPresentationControllerDetentIdentifierMedium;
         }
@@ -338,24 +272,36 @@ static void WCLiquidGlassPresentSettingsSheet(UIViewController *presenter,
     [presenter presentViewController:navigationController animated:YES completion:nil];
 }
 
-static void WCLiquidGlassPresentOptionSheet(UIViewController *presenter,
-                                            NSString *title,
-                                            NSArray<NSString *> *options,
-                                            NSUInteger selectedIndex,
-                                            WCLiquidGlassOptionSelectionHandler handler) {
-    WCLiquidGlassOptionSheetController *content = [[WCLiquidGlassOptionSheetController alloc] initWithTitle:title
-                                                                                                      options:options
-                                                                                                selectedIndex:selectedIndex
-                                                                                                      handler:handler];
-    WCLiquidGlassPresentSettingsSheet(presenter, content, YES);
+static void WCLiquidGlassPresentActionSheet(UIViewController *controller,
+                                             UIView *sourceView,
+                                             NSString *title,
+                                             NSString *message,
+                                             NSArray<NSString *> *options,
+                                             WCLiquidGlassOptionSelectionHandler handler) {
+    UIAlertController *picker = [UIAlertController alertControllerWithTitle:title
+                                                                     message:message
+                                                              preferredStyle:UIAlertControllerStyleActionSheet];
+    [options enumerateObjectsUsingBlock:^(NSString *optionTitle, NSUInteger index, __unused BOOL *stop) {
+        [picker addAction:[UIAlertAction actionWithTitle:optionTitle
+                                                    style:UIAlertActionStyleDefault
+                                                  handler:^(__unused UIAlertAction *action) {
+            if (handler) {
+                handler(index);
+            }
+        }]];
+    }];
+    [picker addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    picker.popoverPresentationController.sourceView = sourceView;
+    picker.popoverPresentationController.sourceRect = sourceView.bounds;
+    [controller presentViewController:picker animated:YES completion:nil];
 }
 
 static void WCLiquidGlassPresentMessageSwipeSizePicker(UIViewController *controller, UIView *sourceView) {
-    (void)sourceView;
-    WCLiquidGlassPresentOptionSheet(controller,
+    WCLiquidGlassPresentActionSheet(controller,
+                                    sourceView,
                                     @"左滑菜单大小",
+                                    @"仅影响左滑“引用 / 转发 / 复读”的原生液态面板。",
                                     @[@"Small", @"Medium", @"Large", @"Automatic"],
-                                    WCLiquidGlassPreferences.messageSwipeMenuElementSize,
                                     ^(NSUInteger index) {
         [WCLiquidGlassPreferences setMessageSwipeMenuElementSize:(WCLiquidGlassMenuElementSize)index];
     });
@@ -810,10 +756,7 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"液态效果";
-    self.view.backgroundColor = WCLiquidGlassBackdropBaseColor();
 
-    WCLiquidGlassBackdropView *backdrop = [[WCLiquidGlassBackdropView alloc] init];
-    backdrop.translatesAutoresizingMaskIntoConstraints = NO;
     UIScrollView *scrollView = [[UIScrollView alloc] init];
     scrollView.translatesAutoresizingMaskIntoConstraints = NO;
     scrollView.alwaysBounceVertical = YES;
@@ -844,7 +787,6 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
     _detailLabel.numberOfLines = 0;
     _detailLabel.textColor = UIColor.secondaryLabelColor;
 
-    [self.view addSubview:backdrop];
     [self.view addSubview:scrollView];
     [scrollView addSubview:contentView];
     [contentView addSubview:intro];
@@ -852,10 +794,6 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
     [contentView addSubview:_appearanceControl];
     [contentView addSubview:_detailLabel];
     [NSLayoutConstraint activateConstraints:@[
-        [backdrop.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [backdrop.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [backdrop.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [backdrop.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
         [scrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [scrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [scrollView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
@@ -930,13 +868,19 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"按钮与动作";
-    self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 66.0;
     WCLiquidGlassConfigureTableBackground(self);
     self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 66.0;
     self.tableView.allowsSelectionDuringEditing = YES;
     self.navigationItem.rightBarButtonItem = self.editButtonItem;
     [self wc_reloadItems];
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -945,12 +889,6 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
         WCLiquidGlassHasDifferentContentSizeCategory(self.traitCollection, previousTraitCollection)) {
         [self.tableView reloadData];
     }
-}
-
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
 }
 
 - (void)wc_reloadItems {
@@ -1191,6 +1129,7 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
                                    @"恢复为最初的按钮与顺序",
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindRestore, 32.0),
                                    UIColor.systemRedColor);
+        WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
         cell.accessoryType = UITableViewCellAccessoryNone;
         cell.showsReorderControl = NO;
         cell.contentView.alpha = 1.0;
@@ -1205,6 +1144,7 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
                                nil,
                                WCLiquidGlassImageForAction(actionIdentifier, 60.0),
                                UIColor.labelColor);
+    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.accessoryView = nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
@@ -1239,10 +1179,8 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"崩溃日志";
-    WCLiquidGlassConfigureTableBackground(self);
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 76.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
                                                                                style:UIBarButtonItemStylePlain
                                                                               target:self
@@ -1283,17 +1221,30 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
+    if (self.logURLs.count == 0) {
+        return WCLiquidGlassFooterLabel(@"暂无崩溃日志。发生可捕获的异常后会自动出现在这里。");
+    }
     return WCLiquidGlassFooterLabel(@"最多保留 20 份。点击日志可调用 iOS 系统分享；内容包含崩溃堆栈、系统与已加载插件信息，不记录聊天文字。");
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+    if (self.logURLs.count == 0) {
+        return WCLiquidGlassFooterHeight(@"暂无崩溃日志。发生可捕获的异常后会自动出现在这里。", 72.0);
+    }
     return WCLiquidGlassFooterHeight(@"最多保留 20 份。点击日志可调用 iOS 系统分享；内容包含崩溃堆栈、系统与已加载插件信息，不记录聊天文字。", 72.0);
 }
 
 - (void)tableView:(UITableView *)tableView
   willDisplayCell:(UITableViewCell *)cell
 forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    for (UITableViewCell *cell in self.tableView.visibleCells) {
+        WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+    }
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -1317,6 +1268,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                                       countStyle:NSByteCountFormatterCountStyleFile]];
     WCLiquidGlassConfigureCell(cell, title, detail,
                                WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashLogs, 32.0), UIColor.labelColor);
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
     cell.accessibilityHint = URL.lastPathComponent;
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     return cell;
@@ -1349,18 +1301,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 - (void)wc_reloadLogs {
     self.logURLs = WCLiquidGlassCrashLogger.sharedLogger.crashLogURLs;
     self.navigationItem.rightBarButtonItem.enabled = self.logURLs.count > 0;
-    if (self.logURLs.count == 0) {
-        UILabel *empty = [[UILabel alloc] init];
-        empty.text = @"暂无崩溃日志\n发生可捕获的异常后会自动出现在这里";
-        empty.numberOfLines = 0;
-        empty.textAlignment = NSTextAlignmentCenter;
-        empty.textColor = UIColor.secondaryLabelColor;
-        empty.font = WCLiquidGlassFont(15.0, UIFontWeightRegular);
-        empty.adjustsFontForContentSizeCategory = YES;
-        self.tableView.backgroundView = empty;
-    } else {
-        self.tableView.backgroundView = [[WCLiquidGlassBackdropView alloc] init];
-    }
     [self.tableView reloadData];
 }
 
@@ -1397,32 +1337,9 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"液态功能";
-    WCLiquidGlassConfigureTableBackground(self);
+    [WCLiquidGlassPreferences registerDefaults];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 66.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
-    [WCLiquidGlassPreferences registerDefaults];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                           selector:@selector(wc_preferencesChanged:)
-                                               name:WCLiquidGlassPreferencesDidChangeNotification
-                                             object:nil];
-}
-
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    [self.tableView reloadData];
-}
-
-- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-    [super traitCollectionDidChange:previousTraitCollection];
-    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection] ||
-        WCLiquidGlassHasDifferentContentSizeCategory(self.traitCollection, previousTraitCollection)) {
-        [self.tableView reloadData];
-    }
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -1433,106 +1350,78 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
     return section == 0 ? 1 : 6;
 }
 
-- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    return WCLiquidGlassSectionLabel(section == 0 ? @"全局液态" : @"页面液态", UIColor.secondaryLabelColor);
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return section == 0 ? @"全局液态" : @"页面液态";
 }
 
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return WCLiquidGlassSectionHeaderHeight();
-}
-
-- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-    NSString *text = section == 0
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    return section == 0
         ? @"液态效果控制悬浮入口与环形菜单的材质层次。"
         : @"这些开关分别控制微信页面中的液态适配；通知圆角与首页圆角可进入子页面继续调整。";
-    return WCLiquidGlassFooterLabel(text);
 }
 
-- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    NSString *text = section == 0
-        ? @"液态效果控制悬浮入口与环形菜单的材质层次。"
-        : @"这些开关分别控制微信页面中的液态适配；通知圆角与首页圆角可进入子页面继续调整。";
-    return WCLiquidGlassFooterHeight(text, section == 0 ? 48.0 : 64.0);
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCellStyle cellStyle = indexPath.section == 0 ? UITableViewCellStyleValue1 : UITableViewCellStyleDefault;
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:cellStyle reuseIdentifier:nil];
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+    cell.imageView.image = [UIImage systemImageNamed:@"circle.lefthalf.filled"];
+    cell.imageView.tintColor = UIColor.secondaryLabelColor;
+    cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+
+    if (indexPath.section == 0) {
+        cell.textLabel.text = @"液态效果";
+        cell.detailTextLabel.text = WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance);
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        return cell;
+    }
+
+    NSArray<NSString *> *titles = @[
+        @"聊天时间条液态",
+        @"长按菜单液态",
+        @"通讯录索引液态",
+        @"未读消息提示液态",
+        @"通知圆角与液态",
+        @"首页圆角与液态"
+    ];
+    cell.textLabel.text = titles[indexPath.row];
+    if (indexPath.row < 4) {
+        UISwitch *toggle = [[UISwitch alloc] init];
+        switch (indexPath.row) {
+            case 0:
+                toggle.on = WCLiquidGlassPreferences.chatTimeGlassEnabled;
+                [toggle addTarget:self action:@selector(wc_chatTimeChanged:) forControlEvents:UIControlEventValueChanged];
+                break;
+            case 1:
+                toggle.on = WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled;
+                [toggle addTarget:self action:@selector(wc_longPressChanged:) forControlEvents:UIControlEventValueChanged];
+                break;
+            case 2:
+                toggle.on = WCLiquidGlassPreferences.contactsIndexGlassEnabled;
+                [toggle addTarget:self action:@selector(wc_contactsChanged:) forControlEvents:UIControlEventValueChanged];
+                break;
+            default:
+                toggle.on = WCLiquidGlassPreferences.unreadMessageTipGlassEnabled;
+                [toggle addTarget:self action:@selector(wc_unreadChanged:) forControlEvents:UIControlEventValueChanged];
+                break;
+        }
+        cell.accessoryView = toggle;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else {
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
+    return cell;
 }
 
 - (void)tableView:(UITableView *)tableView
   willDisplayCell:(UITableViewCell *)cell
 forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
 }
 
-- (UITableViewCell *)wc_switchCellWithTitle:(NSString *)title
-                                      detail:(NSString *)detail
-                                          on:(BOOL)on
-                                      action:(SEL)action {
-    static NSString *identifier = @"WCLiquidGlassLiquidFeatureSwitchCell";
-    UITableViewCell *cell = [self.tableView dequeueReusableCellWithIdentifier:identifier];
-    if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-    }
-    WCLiquidGlassConfigureCell(cell, title, detail,
-                               WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0),
-                               UIColor.labelColor);
-    UISwitch *toggle = [[UISwitch alloc] init];
-    toggle.on = on;
-    [toggle addTarget:self action:action forControlEvents:UIControlEventValueChanged];
-    cell.accessoryView = toggle;
-    cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    return cell;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 0) {
-        static NSString *identifier = @"WCLiquidGlassLiquidFeatureAppearanceCell";
-        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-        if (!cell) {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-        }
-        WCLiquidGlassConfigureCell(cell, @"液态效果", WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance),
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        return cell;
-    }
-
-    switch (indexPath.row) {
-        case 0:
-            return [self wc_switchCellWithTitle:@"聊天时间条液态" detail:nil
-                                              on:WCLiquidGlassPreferences.chatTimeGlassEnabled
-                                          action:@selector(wc_chatTimeChanged:)];
-        case 1:
-            return [self wc_switchCellWithTitle:@"长按菜单液态" detail:nil
-                                              on:WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled
-                                          action:@selector(wc_longPressChanged:)];
-        case 2:
-            return [self wc_switchCellWithTitle:@"通讯录索引液态" detail:nil
-                                              on:WCLiquidGlassPreferences.contactsIndexGlassEnabled
-                                          action:@selector(wc_contactsChanged:)];
-        case 3:
-            return [self wc_switchCellWithTitle:@"未读消息提示液态" detail:nil
-                                              on:WCLiquidGlassPreferences.unreadMessageTipGlassEnabled
-                                          action:@selector(wc_unreadChanged:)];
-        case 4: {
-            static NSString *identifier = @"WCLiquidGlassLiquidFeatureNotificationCell";
-            UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-            if (!cell) {
-                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-            }
-            WCLiquidGlassConfigureCell(cell, @"通知圆角与液态", nil,
-                                       WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-            return cell;
-        }
-        default: {
-            static NSString *identifier = @"WCLiquidGlassLiquidFeatureHomeCell";
-            UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-            if (!cell) {
-                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-            }
-            WCLiquidGlassConfigureCell(cell, @"首页圆角与液态", nil,
-                                       WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-            return cell;
-        }
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    for (UITableViewCell *cell in self.tableView.visibleCells) {
+        WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
     }
 }
 
@@ -1563,10 +1452,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [WCLiquidGlassPreferences setUnreadMessageTipGlassEnabled:sender.isOn];
 }
 
-- (void)wc_preferencesChanged:(NSNotification *)notification {
-    [self.tableView reloadData];
-}
-
 @end
 
 
@@ -1584,14 +1469,20 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [super viewDidLoad];
     self.title = @"左滑引用/复读";
     WCLiquidGlassConfigureTableBackground(self);
+    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 66.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     [WCLiquidGlassPreferences registerDefaults];
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_preferencesChanged:)
                                                name:WCLiquidGlassPreferencesDidChangeNotification
                                              object:nil];
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
 }
 
 - (void)dealloc {
@@ -1623,12 +1514,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     return WCLiquidGlassFooterHeight(text, 64.0);
 }
 
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
-}
-
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *identifier = @"WCLiquidGlassMessageSwipeSettingsCell";
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
@@ -1644,8 +1529,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = toggle;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else {
-        WCLiquidGlassConfigureCell(cell, @"左滑菜单大小", [self wc_messageSwipeMenuElementSizeTitle],
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
+    WCLiquidGlassConfigureCell(cell, @"左滑菜单大小", [self wc_messageSwipeMenuElementSizeTitle],
+                               WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     }
     return cell;
@@ -1682,11 +1567,127 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 @end
 
 
+@interface WCLiquidGlassMenuStyleSettingsController : UITableViewController
+@end
+
+
+@implementation WCLiquidGlassMenuStyleSettingsController
+
+- (instancetype)init {
+    return [super initWithStyle:UITableViewStyleInsetGrouped];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"菜单样式";
+    self.tableView.rowHeight = 60.0;
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"完成"
+                                                                                 style:UIBarButtonItemStyleDone
+                                                                                target:self
+                                                                                action:@selector(wc_done)];
+    [WCLiquidGlassPreferences registerDefaults];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing ? 2 : 3;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    if (section == 0) {
+        return 2;
+    }
+    if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
+        return 4;
+    }
+    return section == 1 ? 4 : 2;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    if (section == 0) {
+        return @"菜单样式";
+    }
+    if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
+        return @"环形菜单 · 紧凑布局";
+    }
+    return section == 1 ? @"液态面板 · 菜单大小" : @"液态面板 · 悬浮按钮轨迹";
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                                       reuseIdentifier:nil];
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+
+    NSArray<NSString *> *titles;
+    NSInteger selectedIndex = NSNotFound;
+    if (indexPath.section == 0) {
+        titles = @[@"环形菜单", @"液态面板"];
+        selectedIndex = WCLiquidGlassPreferences.menuStyle;
+    } else if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
+        titles = @[@"双层月牙", @"流动 S 弧", @"宽扇形", @"花瓣环簇"];
+        selectedIndex = WCLiquidGlassPreferences.compactLayoutStyle;
+    } else if (indexPath.section == 1) {
+        titles = @[@"Small", @"Medium", @"Large", @"Automatic"];
+        selectedIndex = WCLiquidGlassPreferences.menuElementSize;
+    } else {
+        titles = @[@"隐藏位置直接打开菜单", @"点击时先自动归位"];
+        selectedIndex = WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyHiddenAnchor ? 0 : 1;
+    }
+
+    cell.textLabel.text = titles[indexPath.row];
+    cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    cell.textLabel.adjustsFontForContentSizeCategory = YES;
+    cell.accessoryView = indexPath.row == selectedIndex ? WCLiquidGlassSelectedCheckmarkView() : nil;
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    for (UITableViewCell *cell in self.tableView.visibleCells) {
+        WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+    }
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (indexPath.section == 0) {
+        [WCLiquidGlassPreferences setMenuStyle:(WCLiquidGlassMenuStyle)indexPath.row];
+    } else if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
+        [WCLiquidGlassPreferences setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)indexPath.row];
+    } else if (indexPath.section == 1) {
+        [WCLiquidGlassPreferences setMenuElementSize:(WCLiquidGlassMenuElementSize)indexPath.row];
+    } else {
+        [WCLiquidGlassPreferences setFloatingMenuStrategy:indexPath.row == 0
+            ? WCLiquidGlassFloatingMenuStrategyHiddenAnchor
+            : WCLiquidGlassFloatingMenuStrategyPreflightSpring];
+    }
+    [tableView reloadData];
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+}
+
+- (void)wc_done {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+@end
+
+
 @interface WCLiquidGlass ()
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
 @property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
+
+- (NSString *)wc_menuStylePresentationTitle;
+- (UIMenu *)wc_menuStyleHierarchyMenu;
+- (void)wc_presentMenuStyleSheet;
+- (void)wc_presentMenuStylePresentationPickerFromView:(UIView *)sourceView;
 
 @end
 
@@ -1834,14 +1835,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSArray<NSString *> *)wc_menuRowKeys {
-    NSMutableArray<NSString *> *keys = [NSMutableArray arrayWithArray:@[@"enabled", @"menuStyle"]];
-    if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
-        [keys addObject:@"compactLayout"];
-    } else {
-        [keys addObject:@"menuElementSize"];
-        [keys addObject:@"floatingStrategy"];
-    }
-    return keys;
+    return @[@"enabled", @"menuStyle", @"menuStylePresentation"];
 }
 
 - (NSArray<NSString *> *)wc_contentRowKeys {
@@ -1876,10 +1870,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；闲置时自动吸附并半隐藏到屏幕边缘。菜单样式会决定下方显示的布局选项。");
+        return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；菜单样式设置支持层级 UIMenu 或二级 Sheet，面板大小、悬浮按钮轨迹与紧凑布局均在其中设置。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"按钮与动作、液态适配和左滑引用/复读分别进入系统液态 Sheet；左滑菜单大小只影响左滑菜单。");
+        return WCLiquidGlassFooterLabel(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
@@ -1892,10 +1886,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (section == 0) {
-        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；闲置时自动吸附并半隐藏到屏幕边缘。菜单样式会决定下方显示的布局选项。", 80.0);
+        return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；菜单样式设置支持层级 UIMenu 或二级 Sheet，面板大小、悬浮按钮轨迹与紧凑布局均在其中设置。", 80.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"按钮与动作、液态适配和左滑引用/复读分别进入系统液态 Sheet；左滑菜单大小只影响左滑菜单。", 80.0);
+        return WCLiquidGlassFooterHeight(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。", 80.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。", 88.0);
@@ -1911,7 +1905,16 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier];
     }
-
+    for (UIView *subview in cell.subviews.copy) {
+        if ([subview isKindOfClass:WCLiquidGlassMenuProxyButton.class]) {
+            [subview removeFromSuperview];
+        }
+    }
+    for (UIView *subview in cell.contentView.subviews.copy) {
+        if ([subview isKindOfClass:WCLiquidGlassMenuProxyButton.class]) {
+            [subview removeFromSuperview];
+        }
+    }
     if (indexPath.section == 0) {
         NSString *key = self.wc_menuRowKeys[indexPath.row];
         if ([key isEqualToString:@"enabled"]) {
@@ -1925,17 +1928,29 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         } else if ([key isEqualToString:@"menuStyle"]) {
             WCLiquidGlassConfigureCell(cell, @"菜单样式", [self wc_menuStyleTitle],
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else if ([key isEqualToString:@"compactLayout"]) {
-            WCLiquidGlassConfigureCell(cell, @"紧凑布局", [self wc_compactLayoutStyleTitle],
-                                       WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCompactLayout, 32.0), UIColor.labelColor);
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else if ([key isEqualToString:@"menuElementSize"]) {
-            WCLiquidGlassConfigureCell(cell, @"面板菜单大小", [self wc_menuElementSizeTitle],
-                                       WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindSize, 32.0), UIColor.labelColor);
-            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        } else if ([key isEqualToString:@"floatingStrategy"]) {
-            WCLiquidGlassConfigureCell(cell, @"悬浮按钮轨迹", [self wc_floatingMenuStrategyTitle],
+            BOOL usesHierarchyMenu = NO;
+            if (@available(iOS 16.0, *)) {
+                usesHierarchyMenu = WCLiquidGlassPreferences.menuStylePresentation == WCLiquidGlassMenuStylePresentationHierarchyMenu;
+            }
+            if (usesHierarchyMenu) {
+                WCLiquidGlassMenuProxyButton *menuButton = [WCLiquidGlassMenuProxyButton buttonWithType:UIButtonTypeCustom];
+                menuButton.translatesAutoresizingMaskIntoConstraints = NO;
+                menuButton.menu = [self wc_menuStyleHierarchyMenu];
+                menuButton.showsMenuAsPrimaryAction = YES;
+                menuButton.accessibilityLabel = @"打开菜单样式层级菜单";
+                [cell.contentView addSubview:menuButton];
+                [NSLayoutConstraint activateConstraints:@[
+                    [menuButton.centerXAnchor constraintEqualToAnchor:cell.centerXAnchor],
+                    [menuButton.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor],
+                    [menuButton.widthAnchor constraintEqualToConstant:1.0],
+                    [menuButton.heightAnchor constraintEqualToConstant:1.0]
+                ]];
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+            } else {
+                cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+            }
+        } else if ([key isEqualToString:@"menuStylePresentation"]) {
+            WCLiquidGlassConfigureCell(cell, @"菜单样式设置", [self wc_menuStylePresentationTitle],
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         }
@@ -1997,28 +2012,22 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.section == 0) {
         NSString *key = self.wc_menuRowKeys[indexPath.row];
         if ([key isEqualToString:@"menuStyle"]) {
-            [self wc_presentMenuStylePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
-        } else if ([key isEqualToString:@"compactLayout"]) {
-            [self wc_presentCompactLayoutPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
-        } else if ([key isEqualToString:@"menuElementSize"]) {
-            [self wc_presentMenuElementSizePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
-        } else if ([key isEqualToString:@"floatingStrategy"]) {
-            [self wc_presentFloatingMenuStrategyPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
+            if (WCLiquidGlassPreferences.menuStylePresentation == WCLiquidGlassMenuStylePresentationSecondarySheet) {
+                [self wc_presentMenuStyleSheet];
+            }
+        } else if ([key isEqualToString:@"menuStylePresentation"]) {
+            [self wc_presentMenuStylePresentationPickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
         }
     } else if (indexPath.section == 1) {
         NSString *key = self.wc_contentRowKeys[indexPath.row];
         if ([key isEqualToString:@"buttonActions"]) {
-            WCLiquidGlassPresentSettingsSheet(self,
-                                              [[WCLiquidGlassButtonEditorController alloc] init],
-                                              YES);
+            [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
         } else if ([key isEqualToString:@"liquidFeatures"]) {
             WCLiquidGlassPresentSettingsSheet(self,
                                               [[WCLiquidGlassLiquidFeaturesController alloc] init],
                                               YES);
         } else {
-            WCLiquidGlassPresentSettingsSheet(self,
-                                              [[WCLiquidGlassMessageSwipeSettingsController alloc] init],
-                                              YES);
+            [self.navigationController pushViewController:[[WCLiquidGlassMessageSwipeSettingsController alloc] init] animated:YES];
         }
     } else if (indexPath.section == 3 && indexPath.row == 1) {
         WCLiquidGlassPresentSettingsSheet(self,
@@ -2052,40 +2061,20 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [WCLiquidGlassPreferences setMaterialFileProtectionEnabled:sender.isOn];
 }
 
-- (NSString *)wc_compactLayoutStyleTitle {
-    switch (WCLiquidGlassPreferences.compactLayoutStyle) {
-        case WCLiquidGlassCompactLayoutStyleSCurve:
-            return @"流动 S 弧";
-        case WCLiquidGlassCompactLayoutStyleWideFan:
-            return @"宽扇形";
-        case WCLiquidGlassCompactLayoutStylePetalCluster:
-            return @"花瓣环簇";
-        default:
-            return @"双层月牙";
-    }
-}
-
 - (NSString *)wc_glassAppearanceTitle {
     return WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassPreferences.glassAppearance);
+}
+
+- (NSString *)wc_menuStylePresentationTitle {
+    return WCLiquidGlassPreferences.menuStylePresentation == WCLiquidGlassMenuStylePresentationSecondarySheet
+        ? @"二级 Sheet"
+        : @"层级 UIMenu";
 }
 
 - (NSString *)wc_menuStyleTitle {
     return WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleLiquidPanel
         ? @"液态面板"
         : @"环形菜单";
-}
-
-- (NSString *)wc_menuElementSizeTitle {
-    switch (WCLiquidGlassPreferences.menuElementSize) {
-        case WCLiquidGlassMenuElementSizeSmall:
-            return @"Small";
-        case WCLiquidGlassMenuElementSizeMedium:
-            return @"Medium";
-        case WCLiquidGlassMenuElementSizeLarge:
-            return @"Large";
-        default:
-            return @"Automatic";
-    }
 }
 
 - (NSString *)wc_messageSwipeMenuElementSizeTitle {
@@ -2101,58 +2090,119 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-- (NSString *)wc_floatingMenuStrategyTitle {
-    return WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring
-        ? @"点击时先自动归位"
-        : @"隐藏位置直接打开菜单";
+- (UIAction *)wc_menuStyleActionWithTitle:(NSString *)title
+                                  selected:(BOOL)selected
+                                   handler:(void (^)(void))handler {
+    UIAction *action = [UIAction actionWithTitle:title
+                                            image:nil
+                                       identifier:nil
+                                          handler:^(__unused UIAction *sender) {
+        if (handler) {
+            handler();
+        }
+    }];
+    action.state = selected ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return action;
 }
 
-- (void)wc_presentCompactLayoutPickerFromView:(UIView *)sourceView {
-    (void)sourceView;
-    WCLiquidGlassPresentOptionSheet(self,
-                                    @"紧凑布局",
-                                    @[@"双层月牙", @"流动 S 弧", @"宽扇形", @"花瓣环簇"],
-                                    WCLiquidGlassPreferences.compactLayoutStyle,
-                                    ^(NSUInteger index) {
-        [WCLiquidGlassPreferences setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)index];
-    });
+- (UIMenu *)wc_menuStyleHierarchyMenu {
+    UIAction *ringAction = [self wc_menuStyleActionWithTitle:@"环形菜单"
+                                                      selected:WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing
+                                                       handler:^{
+        [WCLiquidGlassPreferences setMenuStyle:WCLiquidGlassMenuStyleRing];
+    }];
+    UIAction *panelAction = [self wc_menuStyleActionWithTitle:@"液态面板"
+                                                        selected:WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleLiquidPanel
+                                                         handler:^{
+        [WCLiquidGlassPreferences setMenuStyle:WCLiquidGlassMenuStyleLiquidPanel];
+    }];
+    UIMenu *styleMenu = [UIMenu menuWithTitle:@"菜单样式"
+                                         image:nil
+                                    identifier:nil
+                                       options:UIMenuOptionsDisplayInline | UIMenuOptionsSingleSelection
+                                      children:@[ringAction, panelAction]];
+
+    UIMenu *dependentMenu;
+    if (WCLiquidGlassPreferences.menuStyle == WCLiquidGlassMenuStyleRing) {
+        NSArray<NSString *> *titles = @[@"双层月牙", @"流动 S 弧", @"宽扇形", @"花瓣环簇"];
+        NSMutableArray<UIAction *> *actions = [NSMutableArray arrayWithCapacity:titles.count];
+        for (NSUInteger index = 0; index < titles.count; index += 1) {
+            NSUInteger value = index;
+            [actions addObject:[self wc_menuStyleActionWithTitle:titles[index]
+                                                          selected:WCLiquidGlassPreferences.compactLayoutStyle == (WCLiquidGlassCompactLayoutStyle)value
+                                                           handler:^{
+                [WCLiquidGlassPreferences setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)value];
+            }]];
+        }
+        dependentMenu = [UIMenu menuWithTitle:@"环形菜单 · 紧凑布局"
+                                          image:nil
+                                     identifier:nil
+                                        options:UIMenuOptionsDisplayInline | UIMenuOptionsSingleSelection
+                                       children:actions];
+    } else {
+        NSArray<NSString *> *sizeTitles = @[@"Small", @"Medium", @"Large", @"Automatic"];
+        NSMutableArray<UIAction *> *sizeActions = [NSMutableArray arrayWithCapacity:sizeTitles.count];
+        for (NSUInteger index = 0; index < sizeTitles.count; index += 1) {
+            NSUInteger value = index;
+            [sizeActions addObject:[self wc_menuStyleActionWithTitle:sizeTitles[index]
+                                                               selected:WCLiquidGlassPreferences.menuElementSize == (WCLiquidGlassMenuElementSize)value
+                                                                handler:^{
+                [WCLiquidGlassPreferences setMenuElementSize:(WCLiquidGlassMenuElementSize)value];
+            }]];
+        }
+        NSArray<NSString *> *strategyTitles = @[@"隐藏位置直接打开菜单", @"点击时先自动归位"];
+        NSMutableArray<UIAction *> *strategyActions = [NSMutableArray arrayWithCapacity:strategyTitles.count];
+        for (NSUInteger index = 0; index < strategyTitles.count; index += 1) {
+            NSUInteger value = index;
+            [strategyActions addObject:[self wc_menuStyleActionWithTitle:strategyTitles[index]
+                                                               selected:WCLiquidGlassPreferences.floatingMenuStrategy == (WCLiquidGlassFloatingMenuStrategy)value
+                                                                handler:^{
+                [WCLiquidGlassPreferences setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)value];
+            }]];
+        }
+        UIMenu *sizeMenu = [UIMenu menuWithTitle:@"面板菜单大小"
+                                             image:nil
+                                        identifier:nil
+                                           options:UIMenuOptionsDisplayInline | UIMenuOptionsSingleSelection
+                                          children:sizeActions];
+        UIMenu *strategyMenu = [UIMenu menuWithTitle:@"悬浮按钮轨迹"
+                                                 image:nil
+                                            identifier:nil
+                                               options:UIMenuOptionsDisplayInline | UIMenuOptionsSingleSelection
+                                              children:strategyActions];
+        dependentMenu = [UIMenu menuWithTitle:@"液态面板选项"
+                                          image:nil
+                                     identifier:nil
+                                        options:0
+                                       children:@[sizeMenu, strategyMenu]];
+    }
+
+    return [UIMenu menuWithTitle:@"菜单样式"
+                            image:nil
+                       identifier:nil
+                          options:0
+                         children:@[styleMenu, dependentMenu]];
 }
 
-- (void)wc_presentMenuStylePickerFromView:(UIView *)sourceView {
-    (void)sourceView;
-    WCLiquidGlassPresentOptionSheet(self,
-                                    @"菜单样式",
-                                    @[@"环形菜单", @"液态面板"],
-                                    WCLiquidGlassPreferences.menuStyle,
-                                    ^(NSUInteger index) {
-        [WCLiquidGlassPreferences setMenuStyle:(WCLiquidGlassMenuStyle)index];
-    });
+- (void)wc_presentMenuStyleSheet {
+    WCLiquidGlassPresentSettingsSheet(self,
+                                      [[WCLiquidGlassMenuStyleSettingsController alloc] init],
+                                      YES);
 }
 
-- (void)wc_presentMenuElementSizePickerFromView:(UIView *)sourceView {
-    (void)sourceView;
-    WCLiquidGlassPresentOptionSheet(self,
-                                    @"面板菜单大小",
-                                    @[@"Small", @"Medium", @"Large", @"Automatic"],
-                                    WCLiquidGlassPreferences.menuElementSize,
+- (void)wc_presentMenuStylePresentationPickerFromView:(UIView *)sourceView {
+    WCLiquidGlassPresentActionSheet(self,
+                                    sourceView,
+                                    @"菜单样式设置",
+                                    @"选择菜单样式设置所使用的系统入口。",
+                                    @[@"层级 UIMenu", @"二级 Sheet"],
                                     ^(NSUInteger index) {
-        [WCLiquidGlassPreferences setMenuElementSize:(WCLiquidGlassMenuElementSize)index];
+        [WCLiquidGlassPreferences setMenuStylePresentation:(WCLiquidGlassMenuStylePresentation)index];
     });
 }
 
 - (void)wc_presentMessageSwipeMenuElementSizePickerFromView:(UIView *)sourceView {
     WCLiquidGlassPresentMessageSwipeSizePicker(self, sourceView);
-}
-
-- (void)wc_presentFloatingMenuStrategyPickerFromView:(UIView *)sourceView {
-    (void)sourceView;
-    WCLiquidGlassPresentOptionSheet(self,
-                                    @"悬浮按钮轨迹",
-                                    @[@"隐藏位置直接打开菜单", @"点击时先自动归位"],
-                                    WCLiquidGlassPreferences.floatingMenuStrategy,
-                                    ^(NSUInteger index) {
-        [WCLiquidGlassPreferences setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)index];
-    });
 }
 
 - (void)wc_confirmRestore {

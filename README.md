@@ -125,6 +125,8 @@ WCLiquidGlass 的目标不是给微信覆盖一层统一模糊，而是让每个
 完整的行为边界、同步顺序和验证清单见
 [原生 Liquid Glass 液态面板菜单](docs/solutions/design-patterns/native-liquid-panel-menu.md)。
 
+设置页的层级 UIMenu 与二级 Page Sheet 基线见[原生层级 UIMenu 与二级 Page Sheet 设置入口](docs/solutions/design-patterns/native-settings-menu-and-sheet.md)。
+
 ## 素材文件保护
 
 微信会周期性扫描沙盒并清理未知文件。WCLiquidGlass 默认开启“素材文件保护”，完整沿用 ThemePro 已验证的处理方式：关闭微信磁盘扫描器的未知文件删除、删除上报与空文件夹清理，并拦截其规则覆盖的素材路径删除和移动操作。

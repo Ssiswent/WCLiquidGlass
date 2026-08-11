@@ -54,6 +54,11 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStyle) {
     WCLiquidGlassMenuStyleLiquidPanel
 };
 
+typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStylePresentation) {
+    WCLiquidGlassMenuStylePresentationHierarchyMenu = 0,
+    WCLiquidGlassMenuStylePresentationSecondarySheet
+};
+
 typedef NS_ENUM(NSInteger, WCLiquidGlassMenuElementSize) {
     WCLiquidGlassMenuElementSizeSmall = 0,
     WCLiquidGlassMenuElementSizeMedium,
@@ -77,6 +82,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (WCLiquidGlassMenuStyle)menuStyle;
 + (void)setMenuStyle:(WCLiquidGlassMenuStyle)style;
++ (WCLiquidGlassMenuStylePresentation)menuStylePresentation;
++ (void)setMenuStylePresentation:(WCLiquidGlassMenuStylePresentation)presentation;
 + (WCLiquidGlassMenuElementSize)menuElementSize;
 + (void)setMenuElementSize:(WCLiquidGlassMenuElementSize)size;
 + (WCLiquidGlassFloatingMenuStrategy)floatingMenuStrategy;

@@ -1654,14 +1654,20 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
     [super viewDidLoad];
     self.title = @"首页圆角与液态";
     WCLiquidGlassConfigureSettingsTableBackground(self);
+    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     [WCLiquidGlassPreferences registerDefaults];
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_preferencesChanged:)
                                                name:WCLiquidGlassPreferencesDidChangeNotification
                                              object:nil];
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (void)dealloc {
@@ -1674,12 +1680,6 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return 6;
-}
-
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {

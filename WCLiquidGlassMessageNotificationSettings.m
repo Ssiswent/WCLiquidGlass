@@ -30,14 +30,20 @@ static NSString *WCLiquidGlassMessageNotificationAppearanceTitle(
     [super viewDidLoad];
     self.title = @"消息通知液态";
     WCLiquidGlassConfigureSettingsTableBackground(self);
+    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     [WCLiquidGlassPreferences registerDefaults];
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_preferencesChanged:)
                                                name:WCLiquidGlassPreferencesDidChangeNotification
                                              object:nil];
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (void)dealloc {
@@ -50,12 +56,6 @@ static NSString *WCLiquidGlassMessageNotificationAppearanceTitle(
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return 4;
-}
-
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
