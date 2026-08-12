@@ -33,8 +33,12 @@ grep -Fq 'shouldRegisterUncaughtExceptionHandler:YES' WCLiquidGlassCrashLogger.m
 custom_data_assignments=$(grep -c 'reporter.customData =' WCLiquidGlassCrashLogger.m || true)
 [ "$custom_data_assignments" -eq 1 ] || fail "PLCrashReporter customData must be assigned exactly once before enable"
 grep -Fq '@".failed"' WCLiquidGlassCrashLogger.m || fail "failed pending crash report isolation is missing"
+grep -Fq '@"q7ar2wl2d3z44fwr25h2f2lx"' WCLiquidGlassMenu.m || fail "verified WCGlass settings controller is missing"
 if grep -Fq 'purgePendingCrashReport' WCLiquidGlassCrashLogger.m; then
     fail "single-slot purgePendingCrashReport path remains"
+fi
+if grep -Eq 'WCGlassEntry|WCLiquidGlassCaptureWCGlassRegistration|WCLiquidGlassObserveWCGlassPluginListNavigation' Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m; then
+    fail "temporary WCGlass entry diagnostics remain"
 fi
 for runtime_file in Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m WCLiquidGlass*.xm; do
     [ -f "$runtime_file" ] || continue

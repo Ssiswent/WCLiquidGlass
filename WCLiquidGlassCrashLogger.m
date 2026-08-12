@@ -125,10 +125,6 @@ static NSString *WCLiquidGlassReportHeader(NSString *level) {
 
 @property(nonatomic) BOOL started;
 @property(nonatomic, strong) PLCrashReporter *reporter;
-- (nullable NSURL *)wc_writeTextDiagnosticWithFilePrefix:(NSString *)filePrefix
-                                                    level:(NSString *)level
-                                               eventLabel:(NSString *)eventLabel
-                                                  content:(NSString *)content;
 
 @end
 
@@ -186,43 +182,22 @@ static NSString *WCLiquidGlassReportHeader(NSString *level) {
 }
 
 - (nullable NSURL *)writePageHierarchyDiagnosticWithContent:(NSString *)content {
-    return [self wc_writeTextDiagnosticWithFilePrefix:@"PageHierarchy"
-                                                 level:@"Page Hierarchy Diagnostic"
-                                            eventLabel:@"Page hierarchy diagnostic"
-                                               content:content];
-}
-
-- (nullable NSURL *)writeWCGlassEntryDiagnosticWithContent:(NSString *)content {
-    return [self wc_writeTextDiagnosticWithFilePrefix:@"WCGlassEntry"
-                                                 level:@"WCGlass 入口诊断"
-                                            eventLabel:@"WCGlass entry diagnostic"
-                                               content:content];
-}
-
-- (nullable NSURL *)wc_writeTextDiagnosticWithFilePrefix:(NSString *)filePrefix
-                                                    level:(NSString *)level
-                                               eventLabel:(NSString *)eventLabel
-                                                  content:(NSString *)content {
     if (![self wc_prepareDirectories]) {
         return nil;
     }
     NSString *body = [NSString stringWithFormat:@"%@%@\n",
-                      WCLiquidGlassReportHeader(level),
+                      WCLiquidGlassReportHeader(@"Page Hierarchy Diagnostic"),
                       content ?: @""];
     NSURL *URL = [self.class.crashLogsDirectoryURL
-                  URLByAppendingPathComponent:[NSString stringWithFormat:@"%@-%@.txt",
-                                              filePrefix,
+                  URLByAppendingPathComponent:[NSString stringWithFormat:@"PageHierarchy-%@.txt",
                                               WCLiquidGlassTimestamp()]];
     NSError *writeError = nil;
     if (![body writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
-        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"%@ write failed: %@",
-                                  eventLabel,
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Page hierarchy diagnostic write failed: %@",
                                   writeError.localizedDescription ?: @"Unknown error"]);
         return nil;
     }
-    WCLiquidGlassRecordEvent([NSString stringWithFormat:@"%@ saved: %@",
-                              eventLabel,
-                              URL.lastPathComponent]);
+    WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Page hierarchy diagnostic saved: %@", URL.lastPathComponent]);
     [self wc_trimOldLogs];
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassCrashLogsDidChangeNotification object:nil];
     return URL;
