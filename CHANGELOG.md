@@ -1,5 +1,13 @@
 # 更新日志
 
+## [2.0.14] - 2026-08-12
+
+### WCGlass 真实入口导航诊断
+
+- 2.0.13 真机日志确认 WCGlass 在 WCLiquidGlass 安装注册 Hook 前已经完成注册，因此原公开注册快照为空。
+- 仅当 `wcglass_settings` 回退打开 `WCPluginsViewController` 后，临时观察该页下一次导航 push，把真实目标控制器类名写入“WCGlass 入口诊断”。
+- 观察只在回退后 5 分钟内有效，命中一次即关闭；不读取 WCGlass 二进制、不扫描插件列表、不持久化候选类名。
+
 ## [2.0.13] - 2026-08-12
 
 ### WCGlass 入口临时诊断

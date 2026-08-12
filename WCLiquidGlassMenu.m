@@ -991,6 +991,7 @@ static NSObject *WCLiquidGlassWCGlassRegistrationLock(void) {
 }
 
 static NSDictionary<NSString *, NSString *> *WCLiquidGlassWCGlassRegistrationSnapshot;
+static NSTimeInterval WCLiquidGlassWCGlassPluginListObservationDeadline;
 
 void WCLiquidGlassCaptureWCGlassRegistration(NSString *title,
                                              NSString *version,
@@ -1017,6 +1018,49 @@ NSDictionary<NSString *, NSString *> *WCLiquidGlassCurrentWCGlassRegistration(vo
     @synchronized (WCLiquidGlassWCGlassRegistrationLock()) {
         return [WCLiquidGlassWCGlassRegistrationSnapshot copy];
     }
+}
+
+void WCLiquidGlassBeginWCGlassPluginListObservation(void) {
+    @synchronized (WCLiquidGlassWCGlassRegistrationLock()) {
+        WCLiquidGlassWCGlassPluginListObservationDeadline = NSDate.timeIntervalSinceReferenceDate + 300.0;
+    }
+}
+
+void WCLiquidGlassObserveWCGlassPluginListNavigation(UIViewController *sourceController,
+                                                     UIViewController *destinationController,
+                                                     BOOL completed) {
+    Class pluginsControllerClass = NSClassFromString(@"WCPluginsViewController");
+    if (!sourceController ||
+        !pluginsControllerClass ||
+        ![sourceController isKindOfClass:pluginsControllerClass]) {
+        return;
+    }
+    BOOL expected = NO;
+    @synchronized (WCLiquidGlassWCGlassRegistrationLock()) {
+        expected = WCLiquidGlassWCGlassPluginListObservationDeadline >= NSDate.timeIntervalSinceReferenceDate;
+        WCLiquidGlassWCGlassPluginListObservationDeadline = 0.0;
+    }
+    if (!expected) {
+        return;
+    }
+    NSString *sourceClassName = NSStringFromClass(sourceController.class) ?: @"<none>";
+    NSString *destinationClassName = destinationController
+        ? (NSStringFromClass(destinationController.class) ?: @"<none>")
+        : @"<none>";
+    NSString *diagnostic = [NSString stringWithFormat:
+        @"Observation: WCPluginsViewController navigation push\n"
+         "Expected after WCLiquidGlass fallback: YES\n"
+         "Source controller: %@\n"
+         "Destination controller: %@\n"
+         "Destination is UIViewController: %@\n"
+         "Navigation push completed: %@\n"
+         "Candidate fixed controller: %@",
+        sourceClassName,
+        destinationClassName,
+        [destinationController isKindOfClass:UIViewController.class] ? @"YES" : @"NO",
+        completed ? @"YES" : @"NO",
+        destinationClassName];
+    [WCLiquidGlassCrashLogger.sharedLogger writeWCGlassEntryDiagnosticWithContent:diagnostic];
 }
 
 UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonDiameter) {
@@ -1760,6 +1804,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
         BOOL fallbackRouteAttempted = !directRouteResult;
         BOOL fallbackRouteResult = fallbackRouteAttempted &&
             WCLiquidGlassOpenControllerNamed(@[@"WCPluginsViewController"]);
+        if (fallbackRouteResult) {
+            WCLiquidGlassBeginWCGlassPluginListObservation();
+        }
         NSString *finalRoute = directRouteResult
             ? @"captured controller"
             : (fallbackRouteResult ? @"WCPluginsViewController fallback" : @"none");

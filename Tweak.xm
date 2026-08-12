@@ -26,6 +26,8 @@ static BOOL WCLiquidGlassPluginRegistered = NO;
 static NSUInteger WCLiquidGlassRegistrationAttempts = 0;
 static BOOL WCLiquidGlassWCGlassRegistrationHookAttempted = NO;
 static void (*WCLiquidGlassOriginalWCGlassRegisterController)(id, SEL, id, id, id) = NULL;
+static BOOL WCLiquidGlassWCGlassEntryNavigationHookInstalled = NO;
+static void (*WCLiquidGlassOriginalNavigationPushViewController)(UINavigationController *, SEL, UIViewController *, BOOL) = NULL;
 static __thread NSUInteger WCLiquidGlassDictationWriteDepth = 0;
 static BOOL WCLiquidGlassKeyboardVisible = NO;
 static BOOL WCLiquidGlassWCGlassRiskyReturnPending = NO;
@@ -43,6 +45,35 @@ static void (*WCLiquidGlassOriginalMainFrameViewWillAppear)(id, SEL, BOOL) = NUL
 static NSInteger (*WCLiquidGlassOriginalTableViewNumberOfRows)(UITableView *, SEL, NSInteger) = NULL;
 static CGRect (*WCLiquidGlassOriginalTableViewRectForSection)(UITableView *, SEL, NSInteger) = NULL;
 static BOOL WCLiquidGlassIsAffectedChatController(UIViewController *viewController);
+
+static void WCLiquidGlassObservedNavigationPushViewController(UINavigationController *self,
+                                                              SEL selector,
+                                                              UIViewController *viewController,
+                                                              BOOL animated) {
+    UIViewController *sourceController = self.topViewController;
+    if (WCLiquidGlassOriginalNavigationPushViewController) {
+        WCLiquidGlassOriginalNavigationPushViewController(self, selector, viewController, animated);
+    }
+    WCLiquidGlassObserveWCGlassPluginListNavigation(sourceController,
+                                                    viewController,
+                                                    self.topViewController == viewController);
+}
+
+static void WCLiquidGlassInstallWCGlassEntryNavigationHookIfNeeded(void) {
+    if (WCLiquidGlassWCGlassEntryNavigationHookInstalled) {
+        return;
+    }
+    SEL selector = @selector(pushViewController:animated:);
+    if (!class_getInstanceMethod(UINavigationController.class, selector)) {
+        return;
+    }
+    MSHookMessageEx(UINavigationController.class,
+                    selector,
+                    (IMP)&WCLiquidGlassObservedNavigationPushViewController,
+                    (IMP *)&WCLiquidGlassOriginalNavigationPushViewController);
+    WCLiquidGlassWCGlassEntryNavigationHookInstalled =
+        WCLiquidGlassOriginalNavigationPushViewController != NULL;
+}
 
 static UIViewController *WCLiquidGlassStableNavigationPopViewController(UINavigationController *self,
                                                                         SEL selector,
@@ -498,6 +529,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
+            WCLiquidGlassInstallWCGlassEntryNavigationHookIfNeeded();
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallWCGlassSearchTabBarHooks();
