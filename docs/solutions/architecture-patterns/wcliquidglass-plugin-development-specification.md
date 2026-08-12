@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.7（2026-08-12）
+> 当前基线：WCLiquidGlass 2.0.12（2026-08-12）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -102,7 +102,7 @@ flowchart TD
 1. 启动 `WCLiquidGlassManager`，建立偏好监听和悬浮窗口。
 2. 尝试通过 `WCPluginsMgr.sharedInstance` 注册插件设置入口。
 
-注册方法为 `registerControllerWithTitle:version:controller:`。当前微信插件管理器要求 controller 参数传控制器**类名字符串**，即 `NSStringFromClass(WCLiquidGlass.class)`，不能擅自改为 `Class` 对象。调用前应继续检查方法签名和参数类型，并保留有限次数重试以及 App 回到前台后的补偿注册。
+注册方法为 `registerControllerWithTitle:version:controller:`。当前微信插件管理器要求 controller 参数传控制器**类名字符串**，即 `NSStringFromClass(WCLiquidGlass.class)`，不能擅自改为 `Class` 对象。调用前应继续检查方法签名和参数类型，并保留有限次数重试以及 App 回到前台后的补偿注册。注册前若 `WCPluginsMgr` 和该 selector 可用，安装一次受保护的消息 Hook，先转发原始注册，再仅在标题为 `WCGlass` 且 controller 为有效 `NSString` 时保留本进程最新类名。`wcglass_settings` 优先使用该类名直接打开；捕获缺失、类无法解析或打开失败时回退 `WCPluginsViewController`，不自动选择插件列表行。该路径不硬编码或枚举 WCGlass 设置类名，也不探测其 bundle 资源。
 
 #### 3.2 配置刷新
 
@@ -599,7 +599,7 @@ gmake clean package FINALPACKAGE=1
 | 键盘避让 | 菜单收起和展开两种状态下唤起、切换及收起键盘；锚点与所有 orb 均不被遮挡，动画与键盘同步且收起后恢复原位置 |
 | 图标 | 环形菜单和动作选择页使用微信原生黑灰风格；无问号兜底；收起锚点不重复功能图标 |
 | 配置 | 排序、显隐、替换、添加、删除、恢复默认和重启微信后持久化正确 |
-| 日志 | 默认详细异常/崩溃采集、pending report 转换、20 份上限、分享、单条删除、原生 UIMenu 清空、空日志无操作和隐私边界正确 |
+| 日志 | 默认详细异常/崩溃采集、pending report 转换、20 份上限、分享、单条删除、原生 UIMenu 清空、空日志原生提示和隐私边界正确 |
 | 边界 | 0 个可用动作、1 个动作、12 个动作、小屏和上下安全区布局正确 |
 
 ### 12. AI 开发约束与完成定义

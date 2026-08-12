@@ -24,6 +24,8 @@
 
 static BOOL WCLiquidGlassPluginRegistered = NO;
 static NSUInteger WCLiquidGlassRegistrationAttempts = 0;
+static BOOL WCLiquidGlassWCGlassRegistrationHookAttempted = NO;
+static void (*WCLiquidGlassOriginalWCGlassRegisterController)(id, SEL, id, id, id) = NULL;
 static __thread NSUInteger WCLiquidGlassDictationWriteDepth = 0;
 static BOOL WCLiquidGlassKeyboardVisible = NO;
 static BOOL WCLiquidGlassWCGlassRiskyReturnPending = NO;
@@ -334,6 +336,39 @@ static void WCLiquidGlassReportManualTextEdit(id inputView) {
 
 static void WCLiquidGlassTryRegisterPlugin(void);
 
+static void WCLiquidGlassWCGlassRegisterController(id self,
+                                                   SEL selector,
+                                                   id title,
+                                                   __unused id version,
+                                                   id controller) {
+    if (WCLiquidGlassOriginalWCGlassRegisterController) {
+        WCLiquidGlassOriginalWCGlassRegisterController(self, selector, title, version, controller);
+    }
+    if (![title isKindOfClass:NSString.class] ||
+        ![title isEqualToString:@"WCGlass"] ||
+        ![controller isKindOfClass:NSString.class] ||
+        [(NSString *)controller length] == 0) {
+        return;
+    }
+    WCLiquidGlassCaptureWCGlassController((NSString *)controller);
+}
+
+static void WCLiquidGlassInstallWCGlassRegistrationHookIfNeeded(void) {
+    if (WCLiquidGlassWCGlassRegistrationHookAttempted) {
+        return;
+    }
+    Class managerClass = NSClassFromString(@"WCPluginsMgr");
+    SEL registerSelector = NSSelectorFromString(@"registerControllerWithTitle:version:controller:");
+    if (!managerClass || !class_getInstanceMethod(managerClass, registerSelector)) {
+        return;
+    }
+    WCLiquidGlassWCGlassRegistrationHookAttempted = YES;
+    MSHookMessageEx(managerClass,
+                    registerSelector,
+                    (IMP)&WCLiquidGlassWCGlassRegisterController,
+                    (IMP *)&WCLiquidGlassOriginalWCGlassRegisterController);
+}
+
 static void WCLiquidGlassScheduleRegistrationRetry(void) {
     if (WCLiquidGlassPluginRegistered || WCLiquidGlassRegistrationAttempts >= 15) {
         return;
@@ -350,6 +385,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         return;
     }
     WCLiquidGlassRegistrationAttempts += 1;
+    WCLiquidGlassInstallWCGlassRegistrationHookIfNeeded();
 
     Class managerClass = NSClassFromString(@"WCPluginsMgr");
     SEL sharedSelector = NSSelectorFromString(@"sharedInstance");

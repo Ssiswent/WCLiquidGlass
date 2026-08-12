@@ -1196,6 +1196,7 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
 
 @property(nonatomic, copy) NSArray<NSURL *> *logURLs;
 @property(nonatomic, strong) UIMenu *clearMenu;
+@property(nonatomic, strong) UIMenu *emptyMenu;
 
 @end
 
@@ -1222,6 +1223,12 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     clearAction.attributes = UIMenuElementAttributesDestructive;
     UIMenu *clearMenu = [UIMenu menuWithTitle:@"" children:@[clearAction]];
     self.clearMenu = clearMenu;
+    UIAction *emptyAction = [UIAction actionWithTitle:@"暂无日志"
+                                                  image:[UIImage systemImageNamed:@"info.circle"]
+                                             identifier:nil
+                                                handler:^(__unused UIAction *action) {
+    }];
+    self.emptyMenu = [UIMenu menuWithTitle:@"" children:@[emptyAction]];
     UIBarButtonItem *clearItem = [[UIBarButtonItem alloc] initWithTitle:@"清空" menu:clearMenu];
     clearItem.tintColor = UIColor.systemRedColor;
     clearItem.accessibilityLabel = @"清空日志";
@@ -1336,7 +1343,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 
 - (void)wc_reloadLogs {
     self.logURLs = WCLiquidGlassCrashLogger.sharedLogger.crashLogURLs;
-    self.navigationItem.rightBarButtonItem.menu = self.logURLs.count > 0 ? self.clearMenu : nil;
+    self.navigationItem.rightBarButtonItem.menu = self.logURLs.count > 0 ? self.clearMenu : self.emptyMenu;
     [self.tableView reloadData];
 }
 

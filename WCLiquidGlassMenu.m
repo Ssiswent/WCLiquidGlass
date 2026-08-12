@@ -976,31 +976,17 @@ static UIImage *WCLiquidGlassActionBrandImage(CGFloat side) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
 }
 
-static Class WCLiquidGlassWCGlassSettingsControllerClass(void) {
-    Class legacyClass = NSClassFromString(@"WCLGSettingsViewController");
-    if (legacyClass) {
-        return legacyClass;
+static NSString *WCLiquidGlassWCGlassControllerName;
+
+void WCLiquidGlassCaptureWCGlassController(NSString *controllerName) {
+    if (![controllerName isKindOfClass:NSString.class] || controllerName.length == 0) {
+        return;
     }
-    return NSClassFromString(@"qfquiuz2ve533qtztzsnfk2f");
+    WCLiquidGlassWCGlassControllerName = [controllerName copy];
 }
 
-static UIImage *WCLiquidGlassWCGlassSettingsImage(CGFloat buttonDiameter) {
-    Class settingsClass = WCLiquidGlassWCGlassSettingsControllerClass();
-    NSBundle *bundle = settingsClass ? [NSBundle bundleForClass:settingsClass] : nil;
-    if (!bundle) {
-        return nil;
-    }
-
-    UIImage *image = [UIImage imageNamed:@"WeChatLiquidGlassLogo"
-                                 inBundle:bundle
-            compatibleWithTraitCollection:UITraitCollection.currentTraitCollection];
-    if (!image) {
-        NSString *path = [bundle pathForResource:@"WeChatLiquidGlassLogo" ofType:@"png"];
-        image = path ? [UIImage imageWithContentsOfFile:path] : nil;
-    }
-    return image
-        ? WCLiquidGlassImageWithMaximumSide(image, floor(buttonDiameter * 0.42))
-        : nil;
+NSString *WCLiquidGlassCurrentWCGlassController(void) {
+    return WCLiquidGlassWCGlassControllerName;
 }
 
 UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonDiameter) {
@@ -1023,9 +1009,6 @@ UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonD
     UIImage *image = [actionIdentifier isEqualToString:WCLiquidGlassActionSettings]
         ? WCLiquidGlassActionBrandImage(floor(buttonDiameter * 0.48))
         : nil;
-    if (!image && [actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-        image = WCLiquidGlassWCGlassSettingsImage(buttonDiameter);
-    }
     if (!image && [actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]) {
         image = WCLiquidGlassDoutuAssistantImage();
     }
@@ -1649,7 +1632,9 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
             [availableActions addObject:actionIdentifier];
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-            if (navigationController && WCLiquidGlassWCGlassSettingsControllerClass()) {
+            NSString *controllerName = WCLiquidGlassCurrentWCGlassController();
+            BOOL hasCapturedController = controllerName.length > 0 && NSClassFromString(controllerName) != Nil;
+            if (navigationController && (hasCapturedController || NSClassFromString(@"WCPluginsViewController"))) {
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins]) {
@@ -1735,13 +1720,14 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
 
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-        if (WCLiquidGlassOpenControllerNamed(@[
-            @"WCLGSettingsViewController",
-            @"qfquiuz2ve533qtztzsnfk2f"
-        ])) {
+        NSString *controllerName = WCLiquidGlassCurrentWCGlassController();
+        if (controllerName.length > 0 && WCLiquidGlassOpenControllerNamed(@[controllerName])) {
             return;
         }
-        WCLiquidGlassShowActionError(@"没有找到 WCGlass 设置页面，请确认 WCGlass 已启用。");
+        if (WCLiquidGlassOpenControllerNamed(@[@"WCPluginsViewController"])) {
+            return;
+        }
+        WCLiquidGlassShowActionError(@"没有找到 WCGlass 设置入口。");
         return;
     }
 
