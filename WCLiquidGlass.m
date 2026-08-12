@@ -1223,7 +1223,7 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     self.tableView.estimatedRowHeight = 76.0;
     if (@available(iOS 26.0, *)) {
         WCLiquidGlassStaticGlassButton *clearButton = [[WCLiquidGlassStaticGlassButton alloc] initWithFrame:CGRectZero];
-        UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
+        UIButtonConfiguration *configuration = ((UIButtonConfiguration *(*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class, NSSelectorFromString(@"glassButtonConfiguration"));
         configuration.title = @"清空";
         clearButton.configuration = configuration;
         [clearButton addTarget:self action:@selector(wc_confirmDeleteAll) forControlEvents:UIControlEventTouchUpInside];
