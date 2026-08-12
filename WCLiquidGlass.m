@@ -24,17 +24,6 @@ static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
 @end
 
-@interface WCLiquidGlassStaticGlassButton : UIButton
-@end
-
-@implementation WCLiquidGlassStaticGlassButton
-
-- (void)setHighlighted:(BOOL)highlighted {
-    (void)highlighted;
-}
-
-@end
-
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <math.h>
@@ -1221,20 +1210,32 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     self.title = @"日志";
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 76.0;
-    if (@available(iOS 26.0, *)) {
-        WCLiquidGlassStaticGlassButton *clearButton = [[WCLiquidGlassStaticGlassButton alloc] initWithFrame:CGRectZero];
-        UIButtonConfiguration *configuration = ((UIButtonConfiguration *(*)(id, SEL))objc_msgSend)(UIButtonConfiguration.class, NSSelectorFromString(@"glassButtonConfiguration"));
-        configuration.title = @"清空";
-        clearButton.configuration = configuration;
-        [clearButton addTarget:self action:@selector(wc_confirmDeleteAll) forControlEvents:UIControlEventTouchUpInside];
-        clearButton.accessibilityLabel = @"清空日志";
-        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:clearButton];
-    } else {
-        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
-                                                                                   style:UIBarButtonItemStylePlain
-                                                                                  target:self
-                                                                                  action:@selector(wc_confirmDeleteAll)];
+    UIAction *clearAction = [UIAction actionWithTitle:@"确认清空"
+                                                   image:[UIImage systemImageNamed:@"trash"]
+                                              identifier:nil
+                                                 handler:^(__unused UIAction *action) {
+        [WCLiquidGlassCrashLogger.sharedLogger deleteAllLogs];
+    }];
+    clearAction.attributes = UIMenuElementAttributesDestructive;
+    UIMenu *clearMenu = [UIMenu menuWithTitle:@"" children:@[clearAction]];
+    if (@available(iOS 17.0, *)) {
+        clearMenu.preferredElementSize = UIMenuElementSizeMedium;
     }
+    UIBarButtonItem *clearItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
+                                                                       image:nil
+                                                                      target:nil
+                                                                      action:nil
+                                                                        menu:clearMenu];
+    if (@available(iOS 26.0, *)) {
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
+        clearItem.style = UIBarButtonItemStyleProminent;
+#else
+        ((void (*)(id, SEL, NSInteger))objc_msgSend)(clearItem, @selector(setStyle:), 2);
+#endif
+    }
+    clearItem.tintColor = UIColor.systemRedColor;
+    clearItem.accessibilityLabel = @"清空日志";
+    self.navigationItem.rightBarButtonItem = clearItem;
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_logsChanged:)
                                                name:WCLiquidGlassCrashLogsDidChangeNotification
@@ -1351,19 +1352,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 
 - (void)wc_logsChanged:(NSNotification *)notification {
     [self wc_reloadLogs];
-}
-
-- (void)wc_confirmDeleteAll {
-    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(self.tableView,
-                                                             @"清空全部日志？",
-                                                             @"删除后无法恢复。");
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"清空"
-                                             style:UIAlertActionStyleDestructive
-                                           handler:^(__unused UIAlertAction *action) {
-        [WCLiquidGlassCrashLogger.sharedLogger deleteAllLogs];
-    }]];
-    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 @end

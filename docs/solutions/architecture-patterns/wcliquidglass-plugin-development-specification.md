@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.4（2026-08-12）
+> 当前基线：WCLiquidGlass 2.0.5（2026-08-12）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -599,7 +599,7 @@ gmake clean package FINALPACKAGE=1
 | 键盘避让 | 菜单收起和展开两种状态下唤起、切换及收起键盘；锚点与所有 orb 均不被遮挡，动画与键盘同步且收起后恢复原位置 |
 | 图标 | 环形菜单和动作选择页使用微信原生黑灰风格；无问号兜底；收起锚点不重复功能图标 |
 | 配置 | 排序、显隐、替换、添加、删除、恢复默认和重启微信后持久化正确 |
-| 日志 | 默认详细异常/崩溃采集、pending report 转换、20 份上限、分享、单条删除、清空和隐私边界正确 |
+| 日志 | 默认详细异常/崩溃采集、pending report 转换、20 份上限、分享、单条删除、原生 UIMenu 清空和隐私边界正确 |
 | 边界 | 0 个可用动作、1 个动作、12 个动作、小屏和上下安全区布局正确 |
 
 ### 12. AI 开发约束与完成定义
