@@ -68,7 +68,7 @@ navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
 
 恢复默认、配置导入导出和开关说明等短操作使用
 `UIAlertControllerStyleActionSheet`；日志 Page Sheet 的清空操作使用挂在导航栏按钮上的原生
-`UIBarButtonItem(menu:)`，菜单只保留带垃圾桶图标的“确认清空”动作。`sourceView` 与 `sourceRect` 必须来自实际触发的 cell、按钮或
+`UIBarButtonItem(menu:)`，菜单只保留带垃圾桶图标的“确认清空”动作。按钮不根据日志数量切换 enabled 或颜色；无日志时仅移除菜单，点击不执行操作。`sourceView` 与 `sourceRect` 必须来自实际触发的 cell、按钮或
 开关；不能把整张 table 作为锚点，也不能退回居中的 `UIAlertControllerStyleAlert`。这样系统才能在
 iOS 26+ 自动提供正确的 Liquid Glass 气泡位置、动画和转场，并在 iPad/横屏时保持安全的 popover 锚点。
 

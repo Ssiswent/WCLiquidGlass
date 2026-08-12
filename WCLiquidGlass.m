@@ -1195,6 +1195,7 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
 @interface WCLiquidGlassCrashLogsController : UITableViewController
 
 @property(nonatomic, copy) NSArray<NSURL *> *logURLs;
+@property(nonatomic, strong) UIMenu *clearMenu;
 
 @end
 
@@ -1221,6 +1222,7 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     if (@available(iOS 17.0, *)) {
         clearMenu.preferredElementSize = UIMenuElementSizeMedium;
     }
+    self.clearMenu = clearMenu;
     UIBarButtonItem *clearItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
                                                                        image:nil
                                                                       target:nil
@@ -1346,7 +1348,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 
 - (void)wc_reloadLogs {
     self.logURLs = WCLiquidGlassCrashLogger.sharedLogger.crashLogURLs;
-    self.navigationItem.rightBarButtonItem.enabled = self.logURLs.count > 0;
+    self.navigationItem.rightBarButtonItem.menu = self.logURLs.count > 0 ? self.clearMenu : nil;
     [self.tableView reloadData];
 }
 
