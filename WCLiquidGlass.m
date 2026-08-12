@@ -1229,11 +1229,12 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
                                                                       action:nil
                                                                         menu:clearMenu];
     if (@available(iOS 26.0, *)) {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 260000
-        clearItem.style = UIBarButtonItemStyleProminent;
-#else
-        ((void (*)(id, SEL, NSInteger))objc_msgSend)(clearItem, @selector(setStyle:), 2);
-#endif
+        if ([clearItem respondsToSelector:NSSelectorFromString(@"setHidesSharedBackground:")]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(clearItem, NSSelectorFromString(@"setHidesSharedBackground:"), YES);
+        }
+        if ([clearItem respondsToSelector:NSSelectorFromString(@"setSharesBackground:")]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(clearItem, NSSelectorFromString(@"setSharesBackground:"), NO);
+        }
     }
     clearItem.tintColor = UIColor.systemRedColor;
     clearItem.accessibilityLabel = @"清空日志";
