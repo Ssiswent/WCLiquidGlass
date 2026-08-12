@@ -339,7 +339,7 @@ static void WCLiquidGlassTryRegisterPlugin(void);
 static void WCLiquidGlassWCGlassRegisterController(id self,
                                                    SEL selector,
                                                    id title,
-                                                   __unused id version,
+                                                   id version,
                                                    id controller) {
     if (WCLiquidGlassOriginalWCGlassRegisterController) {
         WCLiquidGlassOriginalWCGlassRegisterController(self, selector, title, version, controller);
@@ -350,7 +350,18 @@ static void WCLiquidGlassWCGlassRegisterController(id self,
         [(NSString *)controller length] == 0) {
         return;
     }
-    WCLiquidGlassCaptureWCGlassController((NSString *)controller);
+    NSString *versionDescription = [version isKindOfClass:NSString.class]
+        ? [(NSString *)version copy]
+        : @"<non-string>";
+    WCLiquidGlassCaptureWCGlassRegistration((NSString *)title,
+                                             versionDescription,
+                                             (NSString *)controller);
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+        @"WCGlass registration selector=%@ title=%@ version=%@ controller=%@",
+        NSStringFromSelector(selector),
+        title,
+        versionDescription,
+        controller]];
 }
 
 static void WCLiquidGlassInstallWCGlassRegistrationHookIfNeeded(void) {

@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.12（2026-08-12）
+> 当前基线：WCLiquidGlass 2.0.13（2026-08-12）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -102,7 +102,9 @@ flowchart TD
 1. 启动 `WCLiquidGlassManager`，建立偏好监听和悬浮窗口。
 2. 尝试通过 `WCPluginsMgr.sharedInstance` 注册插件设置入口。
 
-注册方法为 `registerControllerWithTitle:version:controller:`。当前微信插件管理器要求 controller 参数传控制器**类名字符串**，即 `NSStringFromClass(WCLiquidGlass.class)`，不能擅自改为 `Class` 对象。调用前应继续检查方法签名和参数类型，并保留有限次数重试以及 App 回到前台后的补偿注册。注册前若 `WCPluginsMgr` 和该 selector 可用，安装一次受保护的消息 Hook，先转发原始注册，再仅在标题为 `WCGlass` 且 controller 为有效 `NSString` 时保留本进程最新类名。`wcglass_settings` 优先使用该类名直接打开；捕获缺失、类无法解析或打开失败时回退 `WCPluginsViewController`，不自动选择插件列表行。该路径不硬编码或枚举 WCGlass 设置类名，也不探测其 bundle 资源。
+注册方法为 `registerControllerWithTitle:version:controller:`。当前微信插件管理器要求 controller 参数传控制器**类名字符串**，即 `NSStringFromClass(WCLiquidGlass.class)`，不能擅自改为 `Class` 对象。调用前应继续检查方法签名和参数类型，并保留有限次数重试以及 App 回到前台后的补偿注册。注册前若 `WCPluginsMgr` 和该 selector 可用，安装一次受保护的消息 Hook，先转发原始注册，再仅在标题为 `WCGlass` 且 controller 为有效 `NSString` 时以线程安全快照保留本进程最新的标题、版本描述和类名。`wcglass_settings` 优先使用该类名直接打开；捕获缺失、类无法解析或打开失败时回退 `WCPluginsViewController`，不自动选择插件列表行。该路径不硬编码或枚举 WCGlass 设置类名，也不探测其 bundle 资源。
+
+2.0.13 是一次性的真机入口诊断版本：每次有效 WCGlass 注册只写入最近事件，不创建可见文件；每次 `wcglass_settings` 点击则在现有日志目录生成 `WCGlassEntry-<timestamp>.txt`，记录注册快照、类解析状态、直接/回退路径和最终结果。固定入口经真机确认后，后续版本必须移除该启动 Hook、快照与诊断 API，再采用已验证的方法。
 
 #### 3.2 配置刷新
 

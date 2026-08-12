@@ -12,6 +12,7 @@ extern NSNotificationName const WCLiquidGlassCrashLogsDidChangeNotification;
 - (void)start;
 - (void)recordEvent:(NSString *)event;
 - (nullable NSURL *)writePageHierarchyDiagnosticWithContent:(NSString *)content;
+- (nullable NSURL *)writeWCGlassEntryDiagnosticWithContent:(NSString *)content;
 - (NSArray<NSURL *> *)crashLogURLs;
 - (void)deleteLogAtURL:(NSURL *)URL error:(NSError **)error;
 - (void)deleteAllLogs;

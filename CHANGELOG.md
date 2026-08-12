@@ -1,5 +1,13 @@
 # 更新日志
 
+## [2.0.13] - 2026-08-12
+
+### WCGlass 入口临时诊断
+
+- 临时记录 `WCPluginsMgr` 通过 `registerControllerWithTitle:version:controller:` 为 WCGlass 注册的标题、版本描述和 controller 类名，并在每次 `wcglass_settings` 点击后记录直接入口、插件列表回退入口及最终结果。
+- 诊断文件写入现有日志目录，文件名为 `WCGlassEntry-<timestamp>.txt`，日志页显示为“WCGlass 入口诊断”；本版本仅用于用户分享真机日志。
+- 确认固定入口后应在后续版本移除每次启动的注册 Hook、快照和 `WCGlassEntry` 诊断 API，再改用验证过的固定方法；本版本不持久化或硬编码 WCGlass controller。
+
 ## [2.0.12] - 2026-08-12
 
 ### WCGlass 设置入口

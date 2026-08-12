@@ -2,6 +2,7 @@
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassIconAssets.h"
 #import "WCLiquidGlassPreferences.h"
+#import "WCLiquidGlassCrashLogger.h"
 
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
@@ -976,17 +977,46 @@ static UIImage *WCLiquidGlassActionBrandImage(CGFloat side) {
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
 }
 
-static NSString *WCLiquidGlassWCGlassControllerName;
+static NSString *const WCLiquidGlassWCGlassRegistrationTitleKey = @"title";
+static NSString *const WCLiquidGlassWCGlassRegistrationVersionKey = @"version";
+static NSString *const WCLiquidGlassWCGlassRegistrationControllerKey = @"controller";
 
-void WCLiquidGlassCaptureWCGlassController(NSString *controllerName) {
-    if (![controllerName isKindOfClass:NSString.class] || controllerName.length == 0) {
-        return;
-    }
-    WCLiquidGlassWCGlassControllerName = [controllerName copy];
+static NSObject *WCLiquidGlassWCGlassRegistrationLock(void) {
+    static NSObject *lock;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        lock = [[NSObject alloc] init];
+    });
+    return lock;
 }
 
-NSString *WCLiquidGlassCurrentWCGlassController(void) {
-    return WCLiquidGlassWCGlassControllerName;
+static NSDictionary<NSString *, NSString *> *WCLiquidGlassWCGlassRegistrationSnapshot;
+
+void WCLiquidGlassCaptureWCGlassRegistration(NSString *title,
+                                             NSString *version,
+                                             NSString *controllerName) {
+    if (![title isKindOfClass:NSString.class] ||
+        title.length == 0 ||
+        ![controllerName isKindOfClass:NSString.class] ||
+        controllerName.length == 0) {
+        return;
+    }
+    NSDictionary<NSString *, NSString *> *snapshot = @{
+        WCLiquidGlassWCGlassRegistrationTitleKey: [title copy],
+        WCLiquidGlassWCGlassRegistrationVersionKey: [version isKindOfClass:NSString.class]
+            ? [version copy]
+            : @"",
+        WCLiquidGlassWCGlassRegistrationControllerKey: [controllerName copy]
+    };
+    @synchronized (WCLiquidGlassWCGlassRegistrationLock()) {
+        WCLiquidGlassWCGlassRegistrationSnapshot = snapshot;
+    }
+}
+
+NSDictionary<NSString *, NSString *> *WCLiquidGlassCurrentWCGlassRegistration(void) {
+    @synchronized (WCLiquidGlassWCGlassRegistrationLock()) {
+        return [WCLiquidGlassWCGlassRegistrationSnapshot copy];
+    }
 }
 
 UIImage *WCLiquidGlassImageForAction(NSString *actionIdentifier, CGFloat buttonDiameter) {
@@ -1632,7 +1662,7 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
             [availableActions addObject:actionIdentifier];
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-            NSString *controllerName = WCLiquidGlassCurrentWCGlassController();
+            NSString *controllerName = WCLiquidGlassCurrentWCGlassRegistration()[WCLiquidGlassWCGlassRegistrationControllerKey];
             BOOL hasCapturedController = controllerName.length > 0 && NSClassFromString(controllerName) != Nil;
             if (navigationController && (hasCapturedController || NSClassFromString(@"WCPluginsViewController"))) {
                 [availableActions addObject:actionIdentifier];
@@ -1720,11 +1750,45 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
 
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-        NSString *controllerName = WCLiquidGlassCurrentWCGlassController();
-        if (controllerName.length > 0 && WCLiquidGlassOpenControllerNamed(@[controllerName])) {
-            return;
-        }
-        if (WCLiquidGlassOpenControllerNamed(@[@"WCPluginsViewController"])) {
+        NSDictionary<NSString *, NSString *> *registration = WCLiquidGlassCurrentWCGlassRegistration();
+        NSString *controllerName = registration[WCLiquidGlassWCGlassRegistrationControllerKey];
+        NSString *capturedTitle = registration[WCLiquidGlassWCGlassRegistrationTitleKey] ?: @"";
+        NSString *capturedVersion = registration[WCLiquidGlassWCGlassRegistrationVersionKey] ?: @"";
+        BOOL capturedClassResolves = controllerName.length > 0 && NSClassFromString(controllerName) != Nil;
+        BOOL directRouteAttempted = controllerName.length > 0;
+        BOOL directRouteResult = directRouteAttempted && WCLiquidGlassOpenControllerNamed(@[controllerName]);
+        BOOL fallbackRouteAttempted = !directRouteResult;
+        BOOL fallbackRouteResult = fallbackRouteAttempted &&
+            WCLiquidGlassOpenControllerNamed(@[@"WCPluginsViewController"]);
+        NSString *finalRoute = directRouteResult
+            ? @"captured controller"
+            : (fallbackRouteResult ? @"WCPluginsViewController fallback" : @"none");
+        BOOL finalResult = directRouteResult || fallbackRouteResult;
+        NSString *diagnostic = [NSString stringWithFormat:
+            @"Manager: WCPluginsMgr\n"
+             "Selector: registerControllerWithTitle:version:controller:\n"
+             "Captured title: %@\n"
+             "Captured version: %@\n"
+             "Captured controller: %@\n"
+             "Captured class resolves: %@\n"
+             "Direct route attempted: %@\n"
+             "Direct route result: %@\n"
+             "Fallback route attempted: %@\n"
+             "Fallback route result: %@\n"
+             "Final selected route: %@\n"
+             "Final result: %@",
+            capturedTitle.length > 0 ? capturedTitle : @"<none>",
+            capturedVersion.length > 0 ? capturedVersion : @"<none>",
+            controllerName.length > 0 ? controllerName : @"<none>",
+            capturedClassResolves ? @"YES" : @"NO",
+            directRouteAttempted ? @"YES" : @"NO",
+            directRouteResult ? @"YES" : @"NO",
+            fallbackRouteAttempted ? @"YES" : @"NO",
+            fallbackRouteResult ? @"YES" : @"NO",
+            finalRoute,
+            finalResult ? @"YES" : @"NO"];
+        [WCLiquidGlassCrashLogger.sharedLogger writeWCGlassEntryDiagnosticWithContent:diagnostic];
+        if (finalResult) {
             return;
         }
         WCLiquidGlassShowActionError(@"没有找到 WCGlass 设置入口。");

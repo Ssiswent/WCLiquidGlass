@@ -1180,6 +1180,9 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 
 static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     NSString *name = URL.lastPathComponent.lowercaseString;
+    if ([name hasPrefix:@"wcglassentry-"]) {
+        return @"WCGlass 入口诊断";
+    }
     if ([name containsString:@"pagehierarchy"] || [name hasPrefix:@"diagnostic-"]) {
         return @"页面层级诊断";
     }

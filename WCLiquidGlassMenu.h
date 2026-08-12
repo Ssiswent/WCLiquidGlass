@@ -35,8 +35,10 @@ BOOL WCLiquidGlassShouldReportManualTextEdit(void);
 void WCLiquidGlassRefreshDoutuConfiguration(void);
 void WCLiquidGlassUpdateDoutuButtonVisibility(id inputToolView);
 id _Nullable WCLiquidGlassCurrentTabController(void);
-void WCLiquidGlassCaptureWCGlassController(NSString *controllerName);
-NSString * _Nullable WCLiquidGlassCurrentWCGlassController(void);
+void WCLiquidGlassCaptureWCGlassRegistration(NSString *title,
+                                             NSString *version,
+                                             NSString *controllerName);
+NSDictionary<NSString *, NSString *> * _Nullable WCLiquidGlassCurrentWCGlassRegistration(void);
 extern NSString *const WCLiquidGlassManualTextEditNotification;
 
 #ifdef __cplusplus
