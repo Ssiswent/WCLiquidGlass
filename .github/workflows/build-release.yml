@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install ldid
+          HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install ldid
           export THEOS="$RUNNER_TEMP/theos"
           git clone --depth=1 --recursive https://github.com/theos/theos.git "$THEOS"
           sdk_path="$(xcrun --sdk iphoneos --show-sdk-path)"
