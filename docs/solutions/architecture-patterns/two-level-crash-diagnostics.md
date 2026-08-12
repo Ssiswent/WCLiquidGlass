@@ -40,7 +40,7 @@ Mach/Objective-C 采集仍受进程启动时机和宿主环境限制，不能可
 
 - 文件使用 NSFileProtectionCompleteUntilFirstUserAuthentication。
 - 日志列表通过文件 URL 分享，不把整份大文件读入 UI。
-- 支持单条删除；完整日志页面右上角使用系统 `UIBarButtonItem` 和默认 `UIMenu`，菜单只显示带垃圾桶图标的“确认清空”，点击外部取消，不叠加 Alert 或 Action Sheet。按钮颜色和可点击状态不随日志数量变化；无日志时只移除菜单，点击不执行操作。删除前校验目标位于 Crashes 目录。
+- 支持单条删除；完整日志页面复用按钮与动作页的背景和导航上下文，右上角使用系统 plain `UIBarButtonItem` 和默认 `UIMenu`，菜单只显示带垃圾桶图标的“确认清空”，点击外部取消，不叠加 Alert 或 Action Sheet。按钮颜色和可点击状态不随日志数量变化；无日志时只移除菜单，点击不执行操作。删除前校验目标位于 Crashes 目录。
 - 超过 20 份时按修改时间删除最旧文件。
 
 ## 发布检查

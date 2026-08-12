@@ -1209,6 +1209,8 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"日志";
+    WCLiquidGlassConfigureTableBackground(self);
+    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 76.0;
     UIAction *clearAction = [UIAction actionWithTitle:@"确认清空"
@@ -1220,14 +1222,7 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     clearAction.attributes = UIMenuElementAttributesDestructive;
     UIMenu *clearMenu = [UIMenu menuWithTitle:@"" children:@[clearAction]];
     self.clearMenu = clearMenu;
-    UIBarButtonItem *clearItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
-                                                                       image:nil
-                                                                      target:nil
-                                                                      action:nil
-                                                                        menu:clearMenu];
-    if (@available(iOS 26.0, *)) {
-        clearItem.style = UIBarButtonItemStyleDone;
-    }
+    UIBarButtonItem *clearItem = [[UIBarButtonItem alloc] initWithTitle:@"清空" menu:clearMenu];
     clearItem.tintColor = UIColor.systemRedColor;
     clearItem.accessibilityLabel = @"清空日志";
     self.navigationItem.rightBarButtonItem = clearItem;

@@ -30,7 +30,7 @@ tags: [ios, uikit, liquid-glass, settings-ui, dynamic-color, cards]
 
 玻璃效果优先动态创建 `UIGlassEffect`，不可用时回退 `UIBlurEffectStyleSystemMaterial`。颜色使用 `labelColor`、`secondaryLabelColor`、`systemBlueColor`、`systemRedColor` 和动态 provider；不要写死仅适合浅色模式的文字或背景颜色。
 
-中文字体优先使用 `PingFangSC-Regular` 与 `PingFangSC-Semibold`，不可用时退回系统字体。普通设置项使用原生 `UISwitch`、disclosure indicator、action sheet 和 alert，避免为标准交互重复制造自定义控件；日志完整页面的清空使用系统 `UIBarButtonItem` 与默认 `UIMenu`，菜单只提供一个带垃圾桶图标的确认动作；菜单样式配置另外提供原生层级 `UIMenu` 与二级 `PageSheet` 两种入口，详见[原生层级 UIMenu 与二级 Page Sheet 设置入口](native-settings-menu-and-sheet.md)。
+中文字体优先使用 `PingFangSC-Regular` 与 `PingFangSC-Semibold`，不可用时退回系统字体。普通设置项使用原生 `UISwitch`、disclosure indicator、action sheet 和 alert，避免为标准交互重复制造自定义控件；日志完整页面复用“按钮与动作”页的背景和导航上下文，清空使用系统 plain `UIBarButtonItem` 与默认 `UIMenu`，菜单只提供一个带垃圾桶图标的确认动作；菜单样式配置另外提供原生层级 `UIMenu` 与二级 `PageSheet` 两种入口，详见[原生层级 UIMenu 与二级 Page Sheet 设置入口](native-settings-menu-and-sheet.md)。
 
 按钮与动作、左滑引用/复读和日志等需要持续浏览或保留导航上下文的页面由宿主导航控制器 `pushViewController:` 进入，保留原生返回按钮；液态功能总览等结构化浏览页使用系统 `UIModalPresentationPageSheet`。枚举选择优先使用 `UIAlertControllerStyleActionSheet`，不要为每个选项建立独立 sheet。按钮管理页把预览说明、当前按钮和管理动作分开；新增和恢复只保留一个入口，编辑状态使用表格原生排序与删除能力。
 
