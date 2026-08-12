@@ -29,6 +29,21 @@ for source_file in ./*.m ./*.xm ./*.c; do
     grep -Fq "$source_name" Makefile || fail "$source_name is missing from Makefile"
 done
 
+grep -Fq 'shouldRegisterUncaughtExceptionHandler:YES' WCLiquidGlassCrashLogger.m || fail "PLCrashReporter Objective-C exception handler is not enabled"
+custom_data_assignments=$(grep -c 'reporter.customData =' WCLiquidGlassCrashLogger.m || true)
+[ "$custom_data_assignments" -eq 1 ] || fail "PLCrashReporter customData must be assigned exactly once before enable"
+grep -Fq '@".failed"' WCLiquidGlassCrashLogger.m || fail "failed pending crash report isolation is missing"
+if grep -Fq 'purgePendingCrashReport' WCLiquidGlassCrashLogger.m; then
+    fail "single-slot purgePendingCrashReport path remains"
+fi
+for runtime_file in Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m WCLiquidGlass*.xm; do
+    [ -f "$runtime_file" ] || continue
+    if grep -Fq 'fullCrashReportsEnabled' "$runtime_file" ||
+       grep -Fq 'WCLiquidGlassFullCrashReportsEnabledKey' "$runtime_file"; then
+        fail "obsolete full crash reports preference remains in $runtime_file"
+    fi
+done
+
 plist_output=$(plutil -p WCLiquidGlass.plist)
 printf '%s\n' "$plist_output" | grep -Fq '"com.tencent.xin"' || fail "main WeChat bundle is missing from filter plist"
 printf '%s\n' "$plist_output" | grep -Fq '"com.tencent.xin.sharetimeline"' || fail "share timeline bundle is missing from filter plist"

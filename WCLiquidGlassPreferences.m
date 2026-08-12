@@ -58,7 +58,6 @@ static NSString *const WCLiquidGlassHomeCardGapKey = @"WCLiquidGlass.HomeCorners
 static NSString *const WCLiquidGlassHomeLiquidBackgroundEnabledKey = @"WCLiquidGlass.HomeCorners.LiquidBackgroundEnabled";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
-static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
 static NSString *const WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey = @"WCLiquidGlass.Compatibility.WCGlassIOS27ReturnCrashFixEnabled";
 static NSString *const WCLiquidGlassMaterialFileProtectionEnabledKey = @"WCLiquidGlass.MaterialFileProtectionEnabled";
 static NSString *const WCLiquidGlassButtonItemsKey = @"WCLiquidGlass.ButtonItems";
@@ -113,7 +112,6 @@ static NSArray<NSString *> *WCLiquidGlassConfigurationKeys(void) {
             WCLiquidGlassHomeLiquidBackgroundEnabledKey,
             WCLiquidGlassAnchorOnLeftKey,
             WCLiquidGlassAnchorYKey,
-            WCLiquidGlassFullCrashReportsEnabledKey,
             WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey,
             WCLiquidGlassMaterialFileProtectionEnabledKey,
             WCLiquidGlassButtonItemsKey
@@ -254,7 +252,7 @@ NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void
             @{@"identifier": WCLiquidGlassActionContacts, @"title": @"通讯录", @"symbol": @"person.2.fill"},
             @{@"identifier": WCLiquidGlassActionDiscover, @"title": @"发现", @"symbol": @"safari.fill"},
             @{@"identifier": WCLiquidGlassActionMe, @"title": @"我", @"symbol": @"person.crop.circle.fill"},
-            @{@"identifier": WCLiquidGlassActionPageHierarchyDiagnostics, @"title": @"当前页面层级诊断", @"symbol": @"rectangle.3.group.bubble.left"},
+            @{@"identifier": WCLiquidGlassActionPageHierarchyDiagnostics, @"title": @"页面层级诊断", @"symbol": @"rectangle.3.group.bubble.left"},
             @{@"identifier": WCLiquidGlassActionPlugins, @"title": @"插件列表", @"symbol": @"shippingbox.fill"},
             @{@"identifier": WCLiquidGlassActionDoutuAssistant, @"title": @"斗图助手", @"symbol": @"face.smiling"},
             @{@"identifier": WCLiquidGlassActionMoments, @"title": @"朋友圈", @"symbol": @"circle.hexagongrid.fill"},
@@ -364,7 +362,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
-        WCLiquidGlassFullCrashReportsEnabledKey: @NO,
         WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey: @YES,
         WCLiquidGlassMaterialFileProtectionEnabledKey: @YES,
         WCLiquidGlassButtonItemsKey: WCLiquidGlassDefaultButtonItems()
@@ -652,15 +649,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     [NSUserDefaults.standardUserDefaults setBool:anchorOnLeft forKey:WCLiquidGlassAnchorOnLeftKey];
     [NSUserDefaults.standardUserDefaults setDouble:MIN(0.9, MAX(0.1, yFraction))
                                             forKey:WCLiquidGlassAnchorYKey];
-}
-
-+ (BOOL)fullCrashReportsEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassFullCrashReportsEnabledKey];
-}
-
-+ (void)setFullCrashReportsEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassFullCrashReportsEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
 }
 
 + (BOOL)wcGlassIOS27CompatibilityEnabled {

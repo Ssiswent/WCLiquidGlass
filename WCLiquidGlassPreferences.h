@@ -123,8 +123,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (BOOL)anchorOnLeft;
 + (CGFloat)anchorYFraction;
 + (void)setAnchorOnLeft:(BOOL)anchorOnLeft yFraction:(CGFloat)yFraction;
-+ (BOOL)fullCrashReportsEnabled;
-+ (void)setFullCrashReportsEnabled:(BOOL)enabled;
 + (BOOL)wcGlassIOS27CompatibilityEnabled;
 + (void)setWCGlassIOS27CompatibilityEnabled:(BOOL)enabled;
 + (BOOL)materialFileProtectionEnabled;

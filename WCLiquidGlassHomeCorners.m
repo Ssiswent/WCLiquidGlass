@@ -1620,8 +1620,7 @@ static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMain
         [report appendString:@"No visible window found.\n"];
     }
 
-    NSURL *URL = [WCLiquidGlassCrashLogger.sharedLogger writeDiagnosticReportWithTitle:@"Current Page Hierarchy"
-                                                                                content:report];
+    NSURL *URL = [WCLiquidGlassCrashLogger.sharedLogger writePageHierarchyDiagnosticWithContent:report];
     if (URL) {
         UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
         [feedback prepare];

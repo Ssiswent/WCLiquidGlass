@@ -1,7 +1,7 @@
 ---
 title: WCLiquidGlass 插件架构与微信插件开发规范
 date: 2026-07-19
-last_updated: 2026-08-01
+last_updated: 2026-08-12
 category: architecture-patterns
 module: WCLiquidGlass
 problem_type: architecture_pattern
@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 1.8.1（2026-08-01）
+> 当前基线：WCLiquidGlass 2.0.2（2026-08-12）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -53,19 +53,21 @@ WCLiquidGlass 是一个注入微信进程的 rootless arm64 Theos tweak。它向
 ```mermaid
 flowchart TD
     A["WeChat 启动并加载 tweak"] --> B["Tweak.xm"]
-    B --> C["向 WCPluginsMgr 注册设置入口"]
-    B --> D["启动 WCLiquidGlassManager"]
-    C --> E["WCLiquidGlass 设置页"]
-    D --> F["非 key 的透明 overlay window"]
-    F --> G["WCLiquidGlassHostView"]
-    G --> H["固定锚点与环形按钮"]
+    B --> C["尽早启动 WCLiquidGlassCrashLogger"]
+    C --> D["准备目录并启用 PLCrashReporter"]
+    B --> E["启动 WCLiquidGlassManager"]
+    B --> F["向 WCPluginsMgr 注册设置入口"]
+    F --> G["WCLiquidGlass 设置页"]
+    E --> H["非 key 的透明 overlay window"]
+    H --> I["WCLiquidGlassHostView"]
+    I --> J["固定锚点与环形按钮"]
 
-    I["WCLiquidGlassPreferences"] -->|"配置变更通知"| D
-    I --> E
-    J["动作目录与图标名映射"] --> E
-    J --> G
+    P["WCLiquidGlassPreferences"] -->|"配置变更通知"| E
+    P --> G
+    Q["动作目录与图标名映射"] --> G
+    Q --> I
     K["当前微信页面与私有 selector"] --> L["能力检测与动作路由"]
-    L --> G
+    L --> I
 ```
 
 架构按职责拆成以下核心源码单元：
@@ -81,7 +83,7 @@ flowchart TD
 | [`WCLiquidGlassWCGlassLongPress.m`](../../../WCLiquidGlassWCGlassLongPress.m) | WCGlass 长按消息菜单呈现层兼容 | 微信菜单业务和按钮内容 |
 | [`WCLiquidGlassWCGlassSearchTabBar.m`](../../../WCLiquidGlassWCGlassSearchTabBar.m) | WCGlass 底栏搜索框模式的安全 Tab 切换 | 普通页面导航业务 |
 | [`WCLiquidGlassMaterialFileProtection.m`](../../../WCLiquidGlassMaterialFileProtection.m) | ThemePro 等价的扫描配置与素材路径保护 | UI、素材目录重写或额外白名单 |
-| [`WCLiquidGlassCrashLogger.m`](../../../WCLiquidGlassCrashLogger.m) | 基础异常记录、可选完整崩溃采集与诊断文件管理 | 页面功能逻辑 |
+| [`WCLiquidGlassCrashLogger.m`](../../../WCLiquidGlassCrashLogger.m) | 默认详细异常/崩溃采集、pending 转换、页面层级诊断与日志文件管理 | 页面功能逻辑 |
 
 工程级文件：
 
@@ -95,7 +97,7 @@ flowchart TD
 
 #### 3.1 注入入口
 
-`%ctor` 必须先验证 bundle identifier 为 `com.tencent.xin` 或 `com.tencent.xin.sharetimeline`，注册偏好并安装素材保护 Hook。分享时间线进程随后立即返回；只有微信主进程在主线程执行以下两项工作：
+`%ctor` 必须先验证 bundle identifier 为 `com.tencent.xin` 或 `com.tencent.xin.sharetimeline`。主微信进程先启动 `WCLiquidGlassCrashLogger`（准备目录并尽早安装 PLCrashReporter），随后才注册偏好和安装素材保护 Hook；分享时间线进程只安装素材保护 Hook 后立即返回。只有微信主进程在主线程执行以下两项工作：
 
 1. 启动 `WCLiquidGlassManager`，建立偏好监听和悬浮窗口。
 2. 尝试通过 `WCPluginsMgr.sharedInstance` 注册插件设置入口。
@@ -159,7 +161,7 @@ flowchart TD
 
 #### 4.3 配置备份与恢复
 
-设置页提供插件配置 JSON 的备份与恢复，不包含崩溃日志、聊天内容或其它文件。导出文档使用固定的
+设置页提供插件配置 JSON 的备份与恢复，不包含日志、聊天内容或其它文件。导出文档使用固定的
 `format`（`com.ssiswent.wcliquidglass.configuration`）、`version`（当前为 `1`）和
 `preferences` 顶层结构；`preferences` 只包含本节列出的设置键。
 
@@ -178,7 +180,7 @@ flowchart TD
 | --- | --- | --- |
 | 页面与设置 | `wcliquidglass_settings` | WCLiquidGlass |
 | 页面与设置 | `wcglass_settings` | WCGlass |
-| 页面与设置 | `page_hierarchy_diagnostics` | 当前页面层级诊断 |
+| 页面与设置 | `page_hierarchy_diagnostics` | 页面层级诊断 |
 | 主页导航 | `tab.0` | 微信 |
 | 主页导航 | `tab.1` | 通讯录 |
 | 主页导航 | `tab.2` | 发现 |
@@ -597,7 +599,7 @@ gmake clean package FINALPACKAGE=1
 | 键盘避让 | 菜单收起和展开两种状态下唤起、切换及收起键盘；锚点与所有 orb 均不被遮挡，动画与键盘同步且收起后恢复原位置 |
 | 图标 | 环形菜单和动作选择页使用微信原生黑灰风格；无问号兜底；收起锚点不重复功能图标 |
 | 配置 | 排序、显隐、替换、添加、删除、恢复默认和重启微信后持久化正确 |
-| 崩溃诊断 | 基础异常日志、完整采集重启生效、pending report 转换、20 份上限、分享、单条删除、清空和隐私边界正确 |
+| 日志 | 默认详细异常/崩溃采集、pending report 转换、20 份上限、分享、单条删除、清空和隐私边界正确 |
 | 边界 | 0 个可用动作、1 个动作、12 个动作、小屏和上下安全区布局正确 |
 
 ### 12. AI 开发约束与完成定义
@@ -690,7 +692,7 @@ self.navigationController.navigationBar.barStyle = UIBarStyleBlack;
 - [设置页 Liquid Glass 设计模式](../design-patterns/liquid-glass-settings-ui.md)
 - [按页面过滤动作的实现模式](../design-patterns/page-aware-action-filtering.md)
 - [原生导航栏下拉变黑问题](../ui-bugs/native-navigation-bar-turns-black-after-scrolling.md)
-- [微信注入插件的两级崩溃诊断](two-level-crash-diagnostics.md)
+- [微信注入插件的统一日志采集](two-level-crash-diagnostics.md)
 - [WCGlass 在 iOS 27 从聊天页返回时的过期分区闪退](../integration-issues/wcglass-ios-27-stale-section-return-crash.md)
 - [`WCLiquidGlassPreferences.h`](../../../WCLiquidGlassPreferences.h)
 - [`WCLiquidGlassMenu.h`](../../../WCLiquidGlassMenu.h)

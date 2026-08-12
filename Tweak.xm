@@ -441,13 +441,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             return;
         }
 
+        if (isMainWeChatProcess) {
+            [WCLiquidGlassCrashLogger.sharedLogger start];
+        }
         [WCLiquidGlassPreferences registerDefaults];
         WCLiquidGlassInstallMaterialFileProtectionHooks();
         if (!isMainWeChatProcess) {
             return;
         }
-
-        [WCLiquidGlassCrashLogger.sharedLogger start];
 
         dispatch_async(dispatch_get_main_queue(), ^{
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();

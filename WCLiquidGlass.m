@@ -1178,6 +1178,20 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 
 @end
 
+static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
+    NSString *name = URL.lastPathComponent.lowercaseString;
+    if ([name containsString:@"pagehierarchy"] || [name hasPrefix:@"diagnostic-"]) {
+        return @"页面层级诊断";
+    }
+    if ([name containsString:@"objectivec"]) {
+        return @"Objective-C 异常";
+    }
+    if ([name containsString:@"-native."] || [name containsString:@"-full."]) {
+        return @"原生崩溃";
+    }
+    return @"诊断日志";
+}
+
 @interface WCLiquidGlassCrashLogsController : UITableViewController
 
 @property(nonatomic, copy) NSArray<NSURL *> *logURLs;
@@ -1193,7 +1207,7 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"崩溃日志";
+    self.title = @"日志";
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 76.0;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
@@ -1237,16 +1251,16 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
     if (self.logURLs.count == 0) {
-        return WCLiquidGlassFooterLabel(@"暂无崩溃日志。发生可捕获的异常后会自动出现在这里。");
+        return WCLiquidGlassFooterLabel(@"暂无日志。可捕获的异常或崩溃会自动出现在这里。");
     }
-    return WCLiquidGlassFooterLabel(@"最多保留 20 份。点击日志可调用 iOS 系统分享；内容包含崩溃堆栈、系统与已加载插件信息，不记录聊天文字。");
+    return WCLiquidGlassFooterLabel(@"最多保留 20 份。点击日志可调用 iOS 系统分享；插件不主动读取聊天内容，系统异常原因可能包含运行时上下文。");
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     if (self.logURLs.count == 0) {
-        return WCLiquidGlassFooterHeight(@"暂无崩溃日志。发生可捕获的异常后会自动出现在这里。", 72.0);
+        return WCLiquidGlassFooterHeight(@"暂无日志。可捕获的异常或崩溃会自动出现在这里。", 72.0);
     }
-    return WCLiquidGlassFooterHeight(@"最多保留 20 份。点击日志可调用 iOS 系统分享；内容包含崩溃堆栈、系统与已加载插件信息，不记录聊天文字。", 72.0);
+    return WCLiquidGlassFooterHeight(@"最多保留 20 份。点击日志可调用 iOS 系统分享；插件不主动读取聊天内容，系统异常原因可能包含运行时上下文。", 72.0);
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -1269,8 +1283,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     NSDate *modifiedAt = nil;
     [URL getResourceValue:&fileSize forKey:NSURLFileSizeKey error:nil];
     [URL getResourceValue:&modifiedAt forKey:NSURLContentModificationDateKey error:nil];
-    BOOL fullReport = [URL.pathExtension.lowercaseString isEqualToString:@"crash"];
-    NSString *title = fullReport ? @"完整崩溃报告" : @"Objective-C 异常报告";
+    NSString *title = WCLiquidGlassLogTitle(URL);
     NSString *detail = [NSString stringWithFormat:@"%@ · %@",
                         modifiedAt ? [NSDateFormatter localizedStringFromDate:modifiedAt
                                                                     dateStyle:NSDateFormatterShortStyle
@@ -1715,7 +1728,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 @interface WCLiquidGlass () <UIDocumentPickerDelegate>
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
-@property(nonatomic, strong) UISwitch *fullCrashReportsSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 @property(nonatomic, weak) UIView *configurationActionSourceView;
 
@@ -1893,11 +1905,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (section == 2) {
         return 2;
     }
-    return section == 3 ? 2 : 3;
+    return section == 3 ? 1 : 3;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    NSArray<NSString *> *titles = @[@"菜单", @"内容", @"保护与兼容", @"诊断", @"维护"];
+    NSArray<NSString *> *titles = @[@"菜单", @"内容", @"保护与兼容", @"日志", @"维护"];
     return WCLiquidGlassSectionLabel(titles[section], UIColor.secondaryLabelColor);
 }
 
@@ -1916,7 +1928,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
     }
     if (section == 3) {
-        return WCLiquidGlassFooterLabel(@"基础诊断始终开启且不记录聊天内容；日志可在“崩溃日志”中分享。");
+        return WCLiquidGlassFooterLabel(@"默认自动采集尽可能详细的异常与崩溃信息；页面层级诊断也在日志中。插件不主动读取聊天内容，系统异常原因可能包含运行时上下文。");
     }
     return nil;
 }
@@ -1932,7 +1944,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。", 88.0);
     }
     return section == 3
-        ? WCLiquidGlassFooterHeight(@"基础诊断始终开启且不记录聊天内容；日志可在“崩溃日志”中分享。", 64.0)
+        ? WCLiquidGlassFooterHeight(@"默认自动采集尽可能详细的异常与崩溃信息；页面层级诊断也在日志中。插件不主动读取聊天内容，系统异常原因可能包含运行时上下文。", 88.0)
         : CGFLOAT_MIN;
 }
 
@@ -2024,17 +2036,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.accessoryView = self.materialFileProtectionSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else if (indexPath.section == 3 && indexPath.row == 0) {
-        WCLiquidGlassConfigureCell(cell, @"完整崩溃采集", @"重启微信后生效",
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashCapture, 32.0), UIColor.labelColor);
-        self.fullCrashReportsSwitch = [[UISwitch alloc] init];
-        self.fullCrashReportsSwitch.on = WCLiquidGlassPreferences.fullCrashReportsEnabled;
-        [self.fullCrashReportsSwitch addTarget:self action:@selector(wc_fullCrashReportsChanged:) forControlEvents:UIControlEventValueChanged];
-        cell.accessoryView = self.fullCrashReportsSwitch;
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    } else if (indexPath.section == 3 && indexPath.row == 1) {
         NSUInteger count = WCLiquidGlassCrashLogger.sharedLogger.crashLogURLs.count;
         NSString *detail = count > 0 ? [NSString stringWithFormat:@"%lu 份", (unsigned long)count] : @"暂无日志";
-        WCLiquidGlassConfigureCell(cell, @"崩溃日志", detail,
+        WCLiquidGlassConfigureCell(cell, @"日志", detail,
                                    WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindCrashLogs, 32.0), UIColor.labelColor);
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     } else if (indexPath.row == 0) {
@@ -2074,7 +2078,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         } else {
             [self.navigationController pushViewController:[[WCLiquidGlassMessageSwipeSettingsController alloc] init] animated:YES];
         }
-    } else if (indexPath.section == 3 && indexPath.row == 1) {
+    } else if (indexPath.section == 3 && indexPath.row == 0) {
         WCLiquidGlassPresentSettingsSheet(self,
                                           [[WCLiquidGlassCrashLogsController alloc] init],
                                           YES);
@@ -2089,17 +2093,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_enabledChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setEnabled:sender.isOn];
-}
-
-- (void)wc_fullCrashReportsChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setFullCrashReportsEnabled:sender.isOn];
-    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(sender,
-                                                             @"重启微信后生效",
-                                                             sender.isOn
-                                                                 ? @"完整崩溃采集会在下次启动微信时启用。它能提供更完整的原生崩溃信息，但可能与其他崩溃采集插件竞争异常处理权。"
-                                                                 : @"完整崩溃采集会在下次启动微信时关闭；基础 Objective-C 异常诊断仍会保留。");
-    [sheet addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleDefault handler:nil]];
-    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)wc_wcGlassCompatibilityChanged:(UISwitch *)sender {

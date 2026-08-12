@@ -1,7 +1,5 @@
 #import "WCLiquidGlassCrashLogger.h"
 
-#import "WCLiquidGlassPreferences.h"
-
 #import "CrashReporter.h"
 
 #import <UIKit/UIKit.h>
@@ -16,8 +14,6 @@
 NSNotificationName const WCLiquidGlassCrashLogsDidChangeNotification = @"WCLiquidGlass.CrashLogsChanged";
 
 static const NSUInteger WCLiquidGlassMaximumCrashLogCount = 20;
-static NSUncaughtExceptionHandler *WCLiquidGlassPreviousExceptionHandler = NULL;
-static __weak WCLiquidGlassCrashLogger *WCLiquidGlassActiveCrashLogger = nil;
 
 static NSMutableArray<NSString *> *WCLiquidGlassRecentEvents(void) {
     static NSMutableArray<NSString *> *events;
@@ -125,28 +121,6 @@ static NSString *WCLiquidGlassReportHeader(NSString *level) {
             WCLiquidGlassLoadedTweaks()];
 }
 
-static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
-    @autoreleasepool {
-        WCLiquidGlassCrashLogger *logger = WCLiquidGlassActiveCrashLogger;
-        if (logger) {
-            NSString *body = [NSString stringWithFormat:
-                              @"%@Exception Name: %@\nReason: %@\nUser Info: %@\n\nBacktrace:\n%@\n",
-                              WCLiquidGlassReportHeader(@"Basic / Objective-C Exception"),
-                              exception.name ?: @"Unknown",
-                              exception.reason ?: @"Unknown",
-                              exception.userInfo ?: @{},
-                              [exception.callStackSymbols componentsJoinedByString:@"\n"] ?: @"Unavailable"];
-            NSURL *URL = [[WCLiquidGlassCrashLogger crashLogsDirectoryURL]
-                          URLByAppendingPathComponent:[NSString stringWithFormat:@"Crash-%@-ObjectiveC.txt", WCLiquidGlassTimestamp()]];
-            [body writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-    }
-    if (WCLiquidGlassPreviousExceptionHandler &&
-        WCLiquidGlassPreviousExceptionHandler != WCLiquidGlassHandleUncaughtException) {
-        WCLiquidGlassPreviousExceptionHandler(exception);
-    }
-}
-
 @interface WCLiquidGlassCrashLogger ()
 
 @property(nonatomic) BOOL started;
@@ -184,20 +158,20 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
         self.started = YES;
     }
 
-    [WCLiquidGlassPreferences registerDefaults];
-    [self wc_prepareDirectories];
-    WCLiquidGlassRecordEvent(@"WCLiquidGlass diagnostics started");
-    [self wc_observeLifecycle];
-    [self wc_processPendingFullReport];
-    [self wc_trimOldLogs];
-
-    WCLiquidGlassActiveCrashLogger = self;
-    WCLiquidGlassPreviousExceptionHandler = NSGetUncaughtExceptionHandler();
-    NSSetUncaughtExceptionHandler(WCLiquidGlassHandleUncaughtException);
-
-    if (WCLiquidGlassPreferences.fullCrashReportsEnabled && !WCLiquidGlassDebuggerAttached()) {
-        [self wc_enableFullCrashReporter];
+    BOOL directoriesReady = [self wc_prepareDirectories];
+    PLCrashReporter *reporter = [self wc_reporter];
+    BOOL pendingReady = directoriesReady && [self wc_stagePendingCrashReportForEnable:reporter];
+    if (WCLiquidGlassDebuggerAttached()) {
+        WCLiquidGlassRecordEvent(@"PLCrashReporter skipped because debugger is attached");
+    } else if (!pendingReady) {
+        WCLiquidGlassRecordEvent(@"PLCrashReporter enable deferred because pending report preparation failed");
+    } else {
+        [self wc_enableCrashReporter];
     }
+    [self wc_processStagedCrashReports];
+    [self wc_observeLifecycle];
+    [self wc_trimOldLogs];
+    WCLiquidGlassRecordEvent(@"WCLiquidGlass logs started");
 }
 
 - (void)recordEvent:(NSString *)event {
@@ -207,23 +181,23 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
     WCLiquidGlassRecordEvent(event);
 }
 
-- (nullable NSURL *)writeDiagnosticReportWithTitle:(NSString *)title content:(NSString *)content {
-    [self wc_prepareDirectories];
-    NSString *safeTitle = title.length > 0 ? title : @"Manual";
-    NSString *body = [NSString stringWithFormat:@"%@Manual Diagnostic: %@\n\n%@\n",
-                      WCLiquidGlassReportHeader(@"Manual / Page Hierarchy"),
-                      safeTitle,
+- (nullable NSURL *)writePageHierarchyDiagnosticWithContent:(NSString *)content {
+    if (![self wc_prepareDirectories]) {
+        return nil;
+    }
+    NSString *body = [NSString stringWithFormat:@"%@%@\n",
+                      WCLiquidGlassReportHeader(@"Page Hierarchy Diagnostic"),
                       content ?: @""];
     NSURL *URL = [self.class.crashLogsDirectoryURL
-                  URLByAppendingPathComponent:[NSString stringWithFormat:@"Diagnostic-%@.txt",
+                  URLByAppendingPathComponent:[NSString stringWithFormat:@"PageHierarchy-%@.txt",
                                               WCLiquidGlassTimestamp()]];
     NSError *writeError = nil;
     if (![body writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
-        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Manual diagnostic write failed: %@",
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Page hierarchy diagnostic write failed: %@",
                                   writeError.localizedDescription ?: @"Unknown error"]);
         return nil;
     }
-    WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Manual diagnostic saved: %@", URL.lastPathComponent]);
+    WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Page hierarchy diagnostic saved: %@", URL.lastPathComponent]);
     [self wc_trimOldLogs];
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassCrashLogsDidChangeNotification object:nil];
     return URL;
@@ -271,21 +245,49 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassCrashLogsDidChangeNotification object:nil];
 }
 
-- (void)wc_prepareDirectories {
+- (BOOL)wc_prepareDirectories {
     NSFileManager *fileManager = NSFileManager.defaultManager;
-    [fileManager createDirectoryAtURL:self.class.crashLogsDirectoryURL
-          withIntermediateDirectories:YES
-                           attributes:@{NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication}
-                                error:nil];
+    NSDictionary *attributes = @{NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication};
+    NSError *directoryError = nil;
+    BOOL success = [fileManager createDirectoryAtURL:self.class.crashLogsDirectoryURL
+                           withIntermediateDirectories:YES
+                                            attributes:attributes
+                                                 error:&directoryError];
+    if (!success && directoryError) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Crash logs directory creation failed: %@",
+                                  directoryError.localizedDescription ?: @"Unknown error"]);
+    }
     NSURL *internal = [self.class.diagnosticsDirectoryURL URLByAppendingPathComponent:@"Internal" isDirectory:YES];
-    [fileManager createDirectoryAtURL:internal
-          withIntermediateDirectories:YES
-                           attributes:@{NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication}
-                                error:nil];
-    [fileManager createDirectoryAtURL:[internal URLByAppendingPathComponent:@"PLCrashReporter" isDirectory:YES]
-          withIntermediateDirectories:YES
-                           attributes:@{NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication}
-                                error:nil];
+    directoryError = nil;
+    BOOL internalSuccess = [fileManager createDirectoryAtURL:internal
+                                  withIntermediateDirectories:YES
+                                                   attributes:attributes
+                                                        error:&directoryError];
+    if (!internalSuccess && directoryError) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Diagnostics internal directory creation failed: %@",
+                                  directoryError.localizedDescription ?: @"Unknown error"]);
+    }
+    NSURL *reporterDirectory = [internal URLByAppendingPathComponent:@"PLCrashReporter" isDirectory:YES];
+    directoryError = nil;
+    BOOL reporterSuccess = [fileManager createDirectoryAtURL:reporterDirectory
+                                  withIntermediateDirectories:YES
+                                                   attributes:attributes
+                                                        error:&directoryError];
+    if (!reporterSuccess && directoryError) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"PLCrashReporter directory creation failed: %@",
+                                  directoryError.localizedDescription ?: @"Unknown error"]);
+    }
+    NSURL *pendingDirectory = [internal URLByAppendingPathComponent:@"Pending" isDirectory:YES];
+    directoryError = nil;
+    BOOL pendingSuccess = [fileManager createDirectoryAtURL:pendingDirectory
+                                  withIntermediateDirectories:YES
+                                                   attributes:attributes
+                                                        error:&directoryError];
+    if (!pendingSuccess && directoryError) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending staging directory creation failed: %@",
+                                  directoryError.localizedDescription ?: @"Unknown error"]);
+    }
+    return success && internalSuccess && reporterSuccess && pendingSuccess;
 }
 
 - (void)wc_observeLifecycle {
@@ -302,9 +304,6 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
                             queue:NSOperationQueue.mainQueue
                        usingBlock:^(NSNotification *notification) {
             WCLiquidGlassRecordEvent(notification.name);
-            if (self.reporter && WCLiquidGlassPreferences.fullCrashReportsEnabled) {
-                self.reporter.customData = [WCLiquidGlassReportHeader(@"Full / Mach Exception Metadata") dataUsingEncoding:NSUTF8StringEncoding];
-            }
         }];
     }
 }
@@ -317,47 +316,150 @@ static void WCLiquidGlassHandleUncaughtException(NSException *exception) {
     PLCrashReporterConfig *config = [[PLCrashReporterConfig alloc]
                                     initWithSignalHandlerType:PLCrashReporterSignalHandlerTypeMach
                                     symbolicationStrategy:PLCrashReporterSymbolicationStrategyNone
-                                    shouldRegisterUncaughtExceptionHandler:NO
+                                    shouldRegisterUncaughtExceptionHandler:YES
                                     basePath:basePath
                                     maxReportBytes:5 * 1024 * 1024];
     self.reporter = [[PLCrashReporter alloc] initWithConfiguration:config];
     return self.reporter;
 }
 
-- (void)wc_processPendingFullReport {
-    PLCrashReporter *reporter = [self wc_reporter];
-    if (![reporter hasPendingCrashReport]) {
-        return;
-    }
+- (NSURL *)wc_pendingStagingDirectoryURL {
+    return [self.class.diagnosticsDirectoryURL URLByAppendingPathComponent:@"Internal/Pending" isDirectory:YES];
+}
 
-    NSError *loadError = nil;
-    NSData *data = [reporter loadPendingCrashReportDataAndReturnError:&loadError];
+- (BOOL)wc_processCrashReportAtURL:(NSURL *)sourceURL {
+    NSError *readError = nil;
+    NSData *data = [NSData dataWithContentsOfURL:sourceURL options:0 error:&readError];
     if (!data) {
-        return;
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending crash report load failed (%@): %@",
+                                  sourceURL.lastPathComponent,
+                                  readError.localizedDescription ?: @"Unknown error"]);
+        return NO;
     }
     NSError *parseError = nil;
     PLCrashReport *report = [[PLCrashReport alloc] initWithData:data error:&parseError];
     if (!report) {
-        return;
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending crash report parse failed (%@): %@",
+                                  sourceURL.lastPathComponent,
+                                  parseError.localizedDescription ?: @"Unknown error"]);
+        return NO;
     }
     NSString *formatted = [PLCrashReportTextFormatter stringValueForCrashReport:report
                                                                   withTextFormat:PLCrashReportTextFormatiOS];
+    if (formatted.length == 0) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending crash report formatting failed (%@)",
+                                  sourceURL.lastPathComponent]);
+        return NO;
+    }
+    BOOL objectiveCException = report.exceptionInfo != nil;
+    NSString *reportType = objectiveCException ? @"ObjectiveC" : @"Native";
     NSString *capturedHeader = [[NSString alloc] initWithData:report.customData encoding:NSUTF8StringEncoding];
-    NSString *content = [(capturedHeader ?: WCLiquidGlassReportHeader(@"Full / Mach Exception"))
-                         stringByAppendingString:formatted ?: @""];
+    NSString *content = [(capturedHeader ?: WCLiquidGlassReportHeader(objectiveCException
+                                                                        ? @"Objective-C Exception"
+                                                                        : @"Native Mach Exception"))
+                         stringByAppendingString:formatted];
+    NSString *baseName = [NSString stringWithFormat:@"Crash-%@-%@", WCLiquidGlassTimestamp(), reportType];
     NSURL *URL = [self.class.crashLogsDirectoryURL
-                  URLByAppendingPathComponent:[NSString stringWithFormat:@"Crash-%@-Full.crash", WCLiquidGlassTimestamp()]];
+                  URLByAppendingPathComponent:[baseName stringByAppendingString:@".crash"]];
+    if ([NSFileManager.defaultManager fileExistsAtPath:URL.path]) {
+        URL = [self.class.crashLogsDirectoryURL
+               URLByAppendingPathComponent:[NSString stringWithFormat:@"%@-%@.crash",
+                                           baseName,
+                                           NSUUID.UUID.UUIDString]];
+    }
     NSError *writeError = nil;
-    if ([content writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
-        [reporter purgePendingCrashReportAndReturnError:nil];
-        [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassCrashLogsDidChangeNotification object:nil];
+    if (![content writeToURL:URL atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending crash report write failed (%@): %@",
+                                  sourceURL.lastPathComponent,
+                                  writeError.localizedDescription ?: @"Unknown error"]);
+        return NO;
+    }
+    NSError *removeError = nil;
+    if (![NSFileManager.defaultManager removeItemAtURL:sourceURL error:&removeError]) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending crash report staging cleanup failed (%@): %@",
+                                  sourceURL.lastPathComponent,
+                                  removeError.localizedDescription ?: @"Unknown error"]);
+        return NO;
+    }
+    [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassCrashLogsDidChangeNotification object:nil];
+    return YES;
+}
+
+- (BOOL)wc_stagePendingCrashReportForEnable:(PLCrashReporter *)reporter {
+    NSString *path = reporter.crashReportPath;
+    BOOL hasPending = [reporter hasPendingCrashReport];
+    if (path.length == 0 || ![NSFileManager.defaultManager fileExistsAtPath:path]) {
+        if (hasPending) {
+            WCLiquidGlassRecordEvent(@"PLCrashReporter reported pending crash data but its live path is unavailable");
+            return NO;
+        }
+        return YES;
+    }
+    NSURL *sourceURL = [NSURL fileURLWithPath:path];
+    NSString *stagingName = [NSString stringWithFormat:@"Crash-%@-%@.plcrash",
+                             WCLiquidGlassTimestamp(),
+                             NSUUID.UUID.UUIDString];
+    NSURL *stagingURL = [[self wc_pendingStagingDirectoryURL] URLByAppendingPathComponent:stagingName];
+    NSError *moveError = nil;
+    if ([NSFileManager.defaultManager moveItemAtURL:sourceURL toURL:stagingURL error:&moveError]) {
+        return YES;
+    }
+    WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending crash report staging move failed: %@",
+                              moveError.localizedDescription ?: @"Unknown error"]);
+    if (![self wc_processCrashReportAtURL:sourceURL]) {
+        WCLiquidGlassRecordEvent(@"Live pending crash report fallback failed; PLCrashReporter remains disabled");
+        return NO;
+    }
+    return YES;
+}
+
+- (void)wc_processStagedCrashReports {
+    NSError *directoryError = nil;
+    NSArray<NSURL *> *URLs = [NSFileManager.defaultManager contentsOfDirectoryAtURL:[self wc_pendingStagingDirectoryURL]
+                                                               includingPropertiesForKeys:nil
+                                                                                  options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                                                    error:&directoryError];
+    if (!URLs) {
+        if (directoryError) {
+            WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Pending staging scan failed: %@",
+                                      directoryError.localizedDescription ?: @"Unknown error"]);
+        }
+        return;
+    }
+    for (NSURL *URL in URLs) {
+        if ([URL.pathExtension.lowercaseString isEqualToString:@"plcrash"]) {
+            if ([self wc_processCrashReportAtURL:URL]) {
+                continue;
+            }
+            NSString *failedPath = [[URL URLByDeletingPathExtension].path stringByAppendingString:@".failed"];
+            if ([NSFileManager.defaultManager fileExistsAtPath:failedPath]) {
+                failedPath = [[URL URLByDeletingPathExtension].path
+                               stringByAppendingFormat:@"-%@.failed", NSUUID.UUID.UUIDString];
+            }
+            NSError *isolationError = nil;
+            NSURL *failedURL = [NSURL fileURLWithPath:failedPath];
+            if (![NSFileManager.defaultManager moveItemAtURL:URL toURL:failedURL error:&isolationError]) {
+                WCLiquidGlassRecordEvent([NSString stringWithFormat:@"Failed pending crash report isolation failed (%@): %@",
+                                          URL.lastPathComponent,
+                                          isolationError.localizedDescription ?: @"Unknown error"]);
+            }
+        }
     }
 }
 
-- (void)wc_enableFullCrashReporter {
+- (void)wc_enableCrashReporter {
     PLCrashReporter *reporter = [self wc_reporter];
-    reporter.customData = [WCLiquidGlassReportHeader(@"Full / Mach Exception Metadata") dataUsingEncoding:NSUTF8StringEncoding];
-    [reporter enableCrashReporterAndReturnError:nil];
+    if (!reporter) {
+        WCLiquidGlassRecordEvent(@"PLCrashReporter initialization failed");
+        return;
+    }
+    NSString *header = WCLiquidGlassReportHeader(@"Automatic Crash Collection Metadata");
+    reporter.customData = [header dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *enableError = nil;
+    if (![reporter enableCrashReporterAndReturnError:&enableError]) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"PLCrashReporter enable failed: %@",
+                                  enableError.localizedDescription ?: @"Unknown error"]);
+    }
 }
 
 - (void)wc_trimOldLogs {
