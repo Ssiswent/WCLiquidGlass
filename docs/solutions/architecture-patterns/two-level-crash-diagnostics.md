@@ -28,7 +28,7 @@ pending 报告根据 PLCrashReport.exceptionInfo 命名：
 - Crash-<timestamp>-Native.crash：原生 Mach 崩溃。
 - PageHierarchy-<timestamp>.txt：页面层级诊断。
 
-日志列表按文件名识别新旧类型；旧的 ObjectiveC、Full 文件继续按原语义显示，无法识别的历史文件显示“诊断日志”，不迁移或重写旧文件。设置入口和 Sheet 标题统一使用“日志”。
+日志列表按文件名识别新旧类型；旧的 ObjectiveC、Full 文件继续按原语义显示，无法识别的历史文件显示“诊断日志”，不迁移或重写旧文件。设置入口和完整日志页面标题统一使用“日志”。
 
 ## 隐私与能力边界
 
@@ -40,7 +40,7 @@ Mach/Objective-C 采集仍受进程启动时机和宿主环境限制，不能可
 
 - 文件使用 NSFileProtectionCompleteUntilFirstUserAuthentication。
 - 日志列表通过文件 URL 分享，不把整份大文件读入 UI。
-- 支持单条删除；日志 Page Sheet 右上角使用无背景的系统 `UIBarButtonItem(menu:)`，保持菜单样式 Sheet 完成按钮的文字布局，菜单只显示带垃圾桶图标的“确认清空”，点击外部取消，不叠加 Alert 或 Action Sheet。按钮颜色和可点击状态不随日志数量变化；无日志时只移除菜单，点击不执行操作。删除前校验目标位于 Crashes 目录。
+- 支持单条删除；完整日志页面右上角使用系统 `UIBarButtonItem` 和默认 `UIMenu`，菜单只显示带垃圾桶图标的“确认清空”，点击外部取消，不叠加 Alert 或 Action Sheet。按钮颜色和可点击状态不随日志数量变化；无日志时只移除菜单，点击不执行操作。删除前校验目标位于 Crashes 目录。
 - 超过 20 份时按修改时间删除最旧文件。
 
 ## 发布检查

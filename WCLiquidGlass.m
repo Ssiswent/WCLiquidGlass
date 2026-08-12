@@ -1219,9 +1219,6 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     }];
     clearAction.attributes = UIMenuElementAttributesDestructive;
     UIMenu *clearMenu = [UIMenu menuWithTitle:@"" children:@[clearAction]];
-    if (@available(iOS 17.0, *)) {
-        clearMenu.preferredElementSize = UIMenuElementSizeMedium;
-    }
     self.clearMenu = clearMenu;
     UIBarButtonItem *clearItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
                                                                        image:nil
@@ -1229,12 +1226,7 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
                                                                       action:nil
                                                                         menu:clearMenu];
     if (@available(iOS 26.0, *)) {
-        if ([clearItem respondsToSelector:NSSelectorFromString(@"setHidesSharedBackground:")]) {
-            ((void (*)(id, SEL, BOOL))objc_msgSend)(clearItem, NSSelectorFromString(@"setHidesSharedBackground:"), YES);
-        }
-        if ([clearItem respondsToSelector:NSSelectorFromString(@"setSharesBackground:")]) {
-            ((void (*)(id, SEL, BOOL))objc_msgSend)(clearItem, NSSelectorFromString(@"setSharesBackground:"), NO);
-        }
+        clearItem.style = UIBarButtonItemStyleDone;
     }
     clearItem.tintColor = UIColor.systemRedColor;
     clearItem.accessibilityLabel = @"清空日志";
@@ -2094,9 +2086,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             [self.navigationController pushViewController:[[WCLiquidGlassMessageSwipeSettingsController alloc] init] animated:YES];
         }
     } else if (indexPath.section == 3 && indexPath.row == 0) {
-        WCLiquidGlassPresentSettingsSheet(self,
-                                          [[WCLiquidGlassCrashLogsController alloc] init],
-                                          YES);
+        [self.navigationController pushViewController:[[WCLiquidGlassCrashLogsController alloc] init] animated:YES];
     } else if (indexPath.section == 4 && indexPath.row == 0) {
         [self wc_exportConfigurationFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.section == 4 && indexPath.row == 1) {
