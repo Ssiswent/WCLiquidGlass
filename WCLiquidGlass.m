@@ -24,6 +24,17 @@ static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
 
 @end
 
+@interface WCLiquidGlassStaticGlassButton : UIButton
+@end
+
+@implementation WCLiquidGlassStaticGlassButton
+
+- (void)setHighlighted:(BOOL)highlighted {
+    (void)highlighted;
+}
+
+@end
+
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <math.h>
@@ -1210,10 +1221,20 @@ static NSString *WCLiquidGlassLogTitle(NSURL *URL) {
     self.title = @"日志";
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 76.0;
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
-                                                                               style:UIBarButtonItemStylePlain
-                                                                              target:self
-                                                                              action:@selector(wc_confirmDeleteAll)];
+    if (@available(iOS 26.0, *)) {
+        WCLiquidGlassStaticGlassButton *clearButton = [[WCLiquidGlassStaticGlassButton alloc] initWithFrame:CGRectZero];
+        UIButtonConfiguration *configuration = [UIButtonConfiguration glassButtonConfiguration];
+        configuration.title = @"清空";
+        clearButton.configuration = configuration;
+        [clearButton addTarget:self action:@selector(wc_confirmDeleteAll) forControlEvents:UIControlEventTouchUpInside];
+        clearButton.accessibilityLabel = @"清空日志";
+        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:clearButton];
+    } else {
+        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"清空"
+                                                                                   style:UIBarButtonItemStylePlain
+                                                                                  target:self
+                                                                                  action:@selector(wc_confirmDeleteAll)];
+    }
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_logsChanged:)
                                                name:WCLiquidGlassCrashLogsDidChangeNotification
@@ -1342,7 +1363,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                                            handler:^(__unused UIAlertAction *action) {
         [WCLiquidGlassCrashLogger.sharedLogger deleteAllLogs];
     }]];
-    sheet.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItem;
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
@@ -1760,6 +1780,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                                            selector:@selector(wc_preferencesChanged:)
                                            name:WCLiquidGlassPreferencesDidChangeNotification
                                            object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(wc_crashLogsChanged:)
+                                               name:WCLiquidGlassCrashLogsDidChangeNotification
+                                             object:nil];
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -2321,6 +2345,14 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)URLs {
 - (void)wc_preferencesChanged:(NSNotification *)notification {
     self.tableView.tableHeaderView = [self wc_makeHeaderView];
     [self.tableView reloadData];
+}
+
+- (void)wc_crashLogsChanged:(NSNotification *)notification {
+    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:0 inSection:3];
+    if ([self.tableView numberOfSections] > indexPath.section &&
+        [self.tableView numberOfRowsInSection:indexPath.section] > indexPath.row) {
+        [self.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone];
+    }
 }
 
 @end
