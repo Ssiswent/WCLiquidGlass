@@ -388,6 +388,31 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 %hook MMInputToolView
 
+- (void)setFrame:(CGRect)frame {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+- (void)setBounds:(CGRect)bounds {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+- (void)setHidden:(BOOL)hidden {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+- (void)setAlpha:(CGFloat)alpha {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+- (void)setUserInteractionEnabled:(BOOL)userInteractionEnabled {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
@@ -397,6 +422,30 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 - (void)didMoveToWindow {
     %orig;
     WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+- (void)willMoveToWindow:(UIWindow *)window {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+- (void)didMoveToSuperview {
+    %orig;
+    WCLiquidGlassLayoutChatToolbarForInput(self);
+}
+
+%end
+
+%hook MMTableView
+
+- (void)setContentInset:(UIEdgeInsets)inset {
+    %orig;
+    WCLiquidGlassReapplyChatTableBottomInset((UITableView *)self);
+}
+
+- (void)setVerticalScrollIndicatorInsets:(UIEdgeInsets)insets {
+    %orig;
+    WCLiquidGlassReapplyChatTableBottomInset((UITableView *)self);
 }
 
 %end

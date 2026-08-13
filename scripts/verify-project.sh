@@ -58,10 +58,30 @@ if grep -Eq 'WCGlassEntry|WCLiquidGlassCaptureWCGlassRegistration|WCLiquidGlassO
 fi
 grep -Fq 'WCLiquidGlassLayoutChatToolbarForInput(self);' Tweak.xm || fail "MMInputToolView per-input toolbar attach is missing"
 grep -Fq '@interface WCLiquidGlassChatToolbarView' WCLiquidGlassMenu.m || fail "chat toolbar view definition is missing"
+grep -Fq '@interface WCLiquidGlassToolbarButton : UIButton' WCLiquidGlassMenu.m || fail "chat toolbar must use native UIButton controls"
+grep -Fq 'WCLiquidGlassChatToolbarButtonSide = 40.0' WCLiquidGlassMenu.m || fail "chat toolbar compact button size is missing"
+grep -Fq 'WCLiquidGlassChatToolbarGap = 8.0' WCLiquidGlassMenu.m || fail "chat toolbar gap is missing"
+grep -Fq '![actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]' WCLiquidGlassMenu.m || fail "chat toolbar must hide voice transcription"
+grep -Fq '![actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]' WCLiquidGlassMenu.m || fail "chat toolbar must hide doutu assistant"
+if grep -Eq 'WCLiquidGlassToggleVoiceTranscription|WCLiquidGlassSharedVoiceTranscription|VoiceTranscriptionStateDidChangeNotification|WCLiquidGlassVoiceControlAssociationKey|WCLiquidGlassActiveChatInputToolView' WCLiquidGlassMenu.m; then
+    fail "toolbar-specific shared voice transcription code remains"
+fi
+grep -Fq 'background.strokeWidth = 0.0' WCLiquidGlassMenu.m || fail "chat toolbar active icon must not add a border"
+grep -Fq -- '- (void)setFrame:(CGRect)frame' Tweak.xm || fail "MMInputToolView frame synchronization is missing"
+grep -Fq -- '- (void)setBounds:(CGRect)bounds' Tweak.xm || fail "MMInputToolView bounds synchronization is missing"
+grep -Fq -- '- (void)setHidden:(BOOL)hidden' Tweak.xm || fail "MMInputToolView visibility synchronization is missing"
+grep -Fq -- '- (void)willMoveToWindow:(UIWindow *)window' Tweak.xm || fail "MMInputToolView window migration synchronization is missing"
+grep -Fq -- '- (void)didMoveToSuperview' Tweak.xm || fail "MMInputToolView reparent synchronization is missing"
 grep -Fq 'WCLiquidGlassChatToolbarEnabledKey' WCLiquidGlassPreferences.m || fail "chat toolbar preference definition is missing"
-grep -Fq 'BOOL inputAvailable = WCLiquidGlassPreferences.enabled &&' WCLiquidGlassMenu.m || fail "chat toolbar master enable gate is missing"
+grep -Fq 'BOOL inputAvailable = WCLiquidGlassPreferences.enabled &&' WCLiquidGlassMenu.m || fail "chat toolbar master preference gate is missing"
+grep -Fq 'WCLiquidGlassUpdateChatTableBottomInset' WCLiquidGlassMenu.m || fail "chat table bottom inset synchronization is missing"
+grep -Fq 'verticalScrollIndicatorInsets' WCLiquidGlassMenu.m || fail "chat table scroll indicator inset synchronization is missing"
 if grep -Fq 'buttonsByAction' WCLiquidGlassMenu.m; then
     fail "chat toolbar still keys buttons by action"
+fi
+if grep -Fq '@interface WCLiquidGlassToolbarButton : UIControl' WCLiquidGlassMenu.m ||
+   grep -Fq 'button.glassView.effect' WCLiquidGlassMenu.m; then
+    fail "chat toolbar still nests custom glass buttons"
 fi
 if grep -Eq 'WCLiquidGlassCurrentChatInputToolFrames|chatToolbarRefreshQueued|chatToolbarSuppressed|wc_refreshChatToolbarAnimated|wc_scheduleChatToolbarLayoutAnimated|wc_layoutChatToolbarAnimated|beginChatToolbarAppearanceTransition|endChatToolbarAppearanceTransition|hideChatToolbarImmediately|resumeChatToolbarImmediately' Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m; then
     fail "obsolete global chat toolbar lifecycle remains"

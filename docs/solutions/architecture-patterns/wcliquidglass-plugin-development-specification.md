@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.18（2026-08-13）
+> 当前基线：WCLiquidGlass 2.0.33（2026-08-13）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -120,11 +120,13 @@ flowchart TD
 
 #### 3.3 聊天输入工具栏
 
-2.0.18 起，聊天输入工具栏不属于 overlay window 或 `WCLiquidGlassHostView`。`%hook MMInputToolView` 在原生 `layoutSubviews` 完成后调用 `WCLiquidGlassLayoutChatToolbarForInput`，并在 `didMoveToWindow` 后补一次布局。函数通过关联对象让每个输入工具视图拥有唯一的 `WCLiquidGlassChatToolbarView`；工具栏可以随着输入层级迁移到新的宿主祖先，但不扫描控制器、窗口或全局视图树。
+2.0.18 起，聊天输入工具栏不属于 overlay window 或 `WCLiquidGlassHostView`。函数通过关联对象让每个 `MMInputToolView` 拥有唯一的 `WCLiquidGlassChatToolbarView`；工具栏跟随输入所属页面控制器的 view，不扫描控制器、窗口或全局视图树来寻找输入。2.0.19 补齐 `layoutSubviews`、`setFrame:`、`setBounds:`、`setHidden:`、`setAlpha:`、`setUserInteractionEnabled:`、`willMoveToWindow:`、`didMoveToWindow` 和 `didMoveToSuperview` 的同一布局入口，覆盖输入高度、位置、可见性和同窗口换宿主；2.0.21 起优先复用输入所属聊天控制器的 `getInputToolViewFrame`，避免微信输入容器的内部布局坐标把工具栏放到全屏页顶部或 sheet 顶部。
 
-挂载时从 `MMInputToolView.superview` 向上寻找最近的非 `UIWindow`、可交互且可见的原生祖先，只有该祖先的 `bounds` 完整容纳输入工具视图上方 48pt 矩形（历史间距 10pt）才挂载。无法找到安全祖先、输入窗口不可用、输入视图隐藏/透明或“聊天输入工具栏”开关关闭时，工具栏立即移除并隐藏，下一次原生布局再重试。位置使用同一 UIKit 布局事务中的 frame 写入，不添加工具栏位置、键盘或控制器转场动画；祖先层级自然保证其位于 Sheet、Alert 和 Modal 下方。
+挂载时从 `MMInputToolView.superview` 向上寻找最近的非 `UIWindow`、可见且能接收触摸的原生祖先，只有该祖先的 `bounds` 完整容纳输入行上方 8pt 间距和 40pt 工具栏矩形才挂载；工具栏横向边界优先取输入行内左右两个可见圆形控件的外沿（加号和语音按钮），找不到两个控件时才回退到微信 `getInputToolViewFrame`，并在多行文字或引用布局改变时由同一原生布局事务重新计算。工具栏显示的高度加 8pt 间距会以关联状态同步加入同一聊天页面 `MMTableView` 的 `contentInset.bottom` 与 `verticalScrollIndicatorInsets.bottom`，切换输入宿主或隐藏工具栏时只移除插件增加的部分并保留微信原生 inset；微信在键盘转场中重设表格 inset 时，定向复用同一同步入口恢复插件额外空间，位于列表底部时保持滚动位置。聊天表格在首次挂载时解析一次并缓存，后续输入布局复用缓存，不参与聊天列表滚动。中间的布局容器即使关闭交互也不会提前截断搜索。输入工具本身只要在可见窗口中且总开关与“聊天输入工具栏”开关同时开启即可。无法找到安全祖先、输入窗口不可用、输入视图隐藏/透明或工具栏开关关闭时，工具栏立即移除并隐藏，下一次原生布局再重试。位置和透明度在输入视图的同一 UIKit 事务中更新，不叠加自定义键盘或转场动画；祖先层级自然保证其位于 Sheet、Alert 和 Modal 下方；外部 sibling 引用层不做推测性扫描。
 
-工具栏创建时以及收到 `WCLiquidGlassPreferencesDidChangeNotification` 时读取完整的 `buttonItems` 顺序；布局阶段不做页面可用性筛选，也不重复扫描。配置动作统一交给既有 `WCLiquidGlassPerformAction` 路由，横向 `UIScrollView` 承载全部已配置按钮。语音转述按钮的激活描边是唯一独立维护的动态状态。WCGlass 若在 `MMInputToolView` 外部渲染引用层，源码无法推断其扩展范围，仍需在目标设备检查实际层级和交互式转场。
+工具栏只使用一层原生 Liquid Glass 背景，其内使用 40pt `UIButton` 和系统按压反馈，不再在玻璃上叠加按钮玻璃或手工缩放。图标沿用 `WCLiquidGlassImageForAction` 的资源路径并在工具栏内统一以模板色渲染；WCGlass 单独使用更小的符号尺寸，使其与其他动作的视觉重量一致。工具栏始终过滤 `voice_input` 与 `doutu_assistant`，不显示或维护这两个动作的状态；环形菜单和液态面板继续使用各自原有的微信入口与点击逻辑。创建时以及收到 `WCLiquidGlassPreferencesDidChangeNotification` 时读取完整的 `buttonItems` 顺序；布局阶段不做页面可用性筛选，也不重复扫描。已创建工具栏直接复用按钮数量，避免在输入布局热路径读取偏好数组。配置动作统一交给既有 `WCLiquidGlassPerformAction` 路由，横向 `UIScrollView` 以默认触摸仲裁承载全部已配置按钮。工具栏布局不扫描语音或斗图控件，其他配置动作统一交给既有 `WCLiquidGlassPerformAction` 路由，避免插件按钮递归触发微信原生控件。
+
+本基线中，`voice_input` 与 `doutu_assistant` 明确只属于环形菜单和液态面板；聊天输入工具栏在构建按钮序列时始终过滤这两个动作，不创建对应状态或原生控件关联。工具栏外框按按钮数量自适应，按钮不足时相对输入行居中，超过可用宽度时保留横向滚动。微信键盘或输入层转场重写 `MMTableView` inset 时，由表格自身的定向同步入口把最新微信 inset 作为基线恢复工具栏额外空间，并在列表位于底部时定位到新的底部，避免键盘收起后消息被遮挡；该入口只在 inset 发生变化时工作，不参与列表滚动。
 
 ### 4. 配置与数据契约
 
@@ -249,7 +251,7 @@ flowchart LR
 - 视频号：优先 `openFinderTimeline`，再尝试 `WCFinderTimelineTabViewController`。
 - 文件：优先页面 selector，再尝试 `LMFileBrowserViewController`。
 - 斗图助手：用 `[DouTuConfig sharedConfig].DTEnabled` 读取真实启用状态，并在当前聊天输入工具响应 `doutuAction` 时显示环形动作；执行直接调用 `doutuAction`，不依赖原按钮是否可见。配置中启用该环形动作时，在 `MMInputToolView` 布局结束后隐藏 `doutuButton`，并记录其原始 `hidden` 状态，以便 WCLiquidGlass 关闭、动作隐藏或斗图助手关闭时安全恢复。
-- 语音转述：只定位当前聊天页中的微信原生 `UIControl` 并发送 `UIControlEventTouchUpInside`；原按钮被其他插件隐藏、禁用或移出 view tree 时，能力判断直接过滤该动作。
+- 语音转述：优先从当前 `MMInputToolView` 定位微信原生 `UIControl` 并发送 `UIControlEventTouchUpInside`；原按钮被其他插件隐藏、禁用或移出 view tree 时，能力判断直接过滤该动作。
 - 不回退调用聊天输入工具的 `onVoiceInputButtonClicked:`。真机验证表明它与点击原生语音转述按钮的实际效果不等价。
 - WeChatLiquidGlass 的 `wclg_smsVoiceTapped:` 虽然会转发到其关联的原生 control，但隐藏功能开启后对应代理 control 不在当前页面可遍历的 view tree 中，因此不作为 capability 条件或执行回退。
 
@@ -259,13 +261,13 @@ flowchart LR
 
 普通动作采用“一次点击、菜单收起、延迟执行”。语音转述属于持续型切换动作，交互契约不同：
 
-- 首次点击原生语音转述按钮后，菜单保持展开，当前 orb 显示绿色激活描边。
+- 首次点击原生语音转述按钮后，菜单保持展开，当前 orb 显示绿色激活图标。
 - 再次点击同一 orb 时触发原生按钮退出转述，并自动收起菜单。
 - 点击背景或关闭锚点只收起菜单，不结束微信正在进行的转述。
-- 动作显隐与视觉激活态必须分离：原生 control 是否存在决定动作显隐，插件触发和当前聊天文本控件的手动编辑方法共同维护绿色描边。
+- 动作显隐与视觉激活态必须分离：原生 control 是否存在决定动作显隐，插件触发和当前聊天文本控件的手动编辑方法共同维护绿色图标。
 - 当前微信环境的两阶段真机调用记录表明：空输入框首次转述通常只产生 `MMTextView` 文字变化通知；输入框已有文字并从光标处再次转述时，也会同步调用 `insertText:`，但调用栈明确经过 `MMGrowTextView MMDictationLogicIcon_replaceRange:withText:`。键盘手动输入不经过该方法，即使由 `WCGlass.dylib` 转发也直接进入 UIKit 输入链。
 - 插件在 `MMDictationLogicIcon_replaceRange:withText:` 的同步调用范围内维护线程局部嵌套计数。该范围内触发的 `insertText:` 属于转述，不发送手动编辑事件；范围外的 `insertText:`、`deleteBackward` 和 `setMarkedText:selectedRange:` 才视为手动编辑。
-- 宿主收到手动编辑事件后，仍需确认事件对象是当前聊天输入框且语音转述处于激活态，再立即取消绿色描边。其他页面文本控件不会影响状态。
+- 宿主收到手动编辑事件后，仍需确认事件对象是当前聊天输入框且语音转述处于激活态，再立即取消绿色图标。其他页面文本控件不会影响状态。
 - 状态同步是事件驱动的，不持续轮询微信，不比较不稳定的按钮图片、颜色或动画，也不读取版本相关的私有关联对象。
 - 输入框文字变化只作为延迟复查能力的触发信号，不能直接决定动作显隐。微信可能在语音转述产生文字后继续保留原生 control，也可能在从空输入框开始手动输入后移除它。
 - 原生 control 存在时保留或加入语音转述 orb；原生 control 消失时才移除。菜单展开期间，移除的 orb 淡出，新增 orb 从锚点淡入，其余按钮使用弹簧动画沿新弧线重新排布；只改变运行时投影，不修改用户保存的按钮配置。
@@ -605,7 +607,7 @@ gmake clean package FINALPACKAGE=1
 | 动作过滤 | 支持页面显示；不支持页面提前隐藏；返回支持页面后自动恢复 |
 | 动作执行 | 每个动作至少在一个支持页面执行；页面切换竞态能安全提示而不崩溃 |
 | 斗图助手 | 动作选择页可添加且不能重复添加；插件开启且聊天输入工具存在时显示并可通过 `doutuAction` 唤起；原按钮隐藏且停用集成后恢复；其他页面提前过滤；浅色和深色图标正确 |
-| 语音转述 | 全新空输入框显示；从空输入框手动输入且微信移除原生 control 后平滑隐藏；清空并恢复原生 control 后平滑补回；通过语音转述产生或保留文字时，只要原生 control 仍存在就继续显示；转述期间键盘手动输入导致微信退出激活态时绿色描边同步取消但动作继续显示；保留已有文字再次启动转述并从光标处写入时绿色描边保持；随后再次键盘输入时描边取消；退出并重进带草稿聊天时按原生 control 重新判断；手动收起不结束转述 |
+| 语音转述 | 全新空输入框显示；从空输入框手动输入且微信移除原生 control 后平滑隐藏；清空并恢复原生 control 后平滑补回；通过语音转述产生或保留文字时，只要原生 control 仍存在就继续显示；转述期间键盘手动输入导致微信退出激活态时绿色图标同步取消但动作继续显示；保留已有文字再次启动转述并从光标处写入时绿色图标保持；随后再次键盘输入时图标恢复；退出并重进带草稿聊天时按原生 control 重新判断；手动收起不结束转述 |
 | 键盘避让 | 菜单收起和展开两种状态下唤起、切换及收起键盘；锚点与所有 orb 均不被遮挡，动画与键盘同步且收起后恢复原位置 |
 | 图标 | 环形菜单和动作选择页使用微信原生黑灰风格；无问号兜底；收起锚点不重复功能图标 |
 | 配置 | 排序、显隐、替换、添加、删除、恢复默认和重启微信后持久化正确 |
