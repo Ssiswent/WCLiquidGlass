@@ -976,7 +976,7 @@ static CGRect WCLiquidGlassHomeCornerSectionFrame(UITableView *tableView,
     CGRect sectionFrame = CGRectUnion(firstSectionFrame, lastSectionFrame);
     if (role == WCLiquidGlassHomeCornerTableRoleOtherTab) {
         sectionFrame.origin.x = 16.0;
-        sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - 40.0);
+        sectionFrame.size.width = MAX(0.0, CGRectGetWidth(tableView.bounds) - 48.0);
         sectionFrame = CGRectInset(sectionFrame, 0.0, -8.0);
     } else {
         CGFloat inset = WCLiquidGlassPreferences.homeCornerInset;
@@ -1222,14 +1222,9 @@ static void WCLiquidGlassHomeCornerContactsCellLayoutSubviews(UITableViewCell *s
     if (role != WCLiquidGlassHomeCornerTableRoleOtherTab || !indexPath) {
         return;
     }
-    NSRange visualSectionRange = WCLiquidGlassHomeCornerVisualSectionRange(tableView,
-                                                                          indexPath.section,
-                                                                          role);
-    if (visualSectionRange.location == 0) {
-        WCLiquidGlassHomeCornerCellLayoutApplying = YES;
-        WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
-        WCLiquidGlassHomeCornerCellLayoutApplying = NO;
-    }
+    WCLiquidGlassHomeCornerCellLayoutApplying = YES;
+    WCLiquidGlassHomeCornerApplyCell(tableView, self, role);
+    WCLiquidGlassHomeCornerCellLayoutApplying = NO;
     WCLiquidGlassHomeCornerPreserveContactsAvatarCorners(self.contentView);
 }
 
@@ -1625,8 +1620,7 @@ static void WCLiquidGlassHomeCornersCaptureCurrentPageHierarchyDiagnosticsOnMain
         [report appendString:@"No visible window found.\n"];
     }
 
-    NSURL *URL = [WCLiquidGlassCrashLogger.sharedLogger writeDiagnosticReportWithTitle:@"Current Page Hierarchy"
-                                                                                content:report];
+    NSURL *URL = [WCLiquidGlassCrashLogger.sharedLogger writePageHierarchyDiagnosticWithContent:report];
     if (URL) {
         UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
         [feedback prepare];
@@ -1659,14 +1653,20 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
     [super viewDidLoad];
     self.title = @"首页圆角与液态";
     WCLiquidGlassConfigureSettingsTableBackground(self);
+    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64.0;
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
     [WCLiquidGlassPreferences registerDefaults];
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(wc_preferencesChanged:)
                                                name:WCLiquidGlassPreferencesDidChangeNotification
                                              object:nil];
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (void)dealloc {
@@ -1679,12 +1679,6 @@ static NSString *WCLiquidGlassHomeCornersDisplayValue(CGFloat value) {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return 6;
-}
-
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleSettingsCardCell(cell, indexPath, tableView);
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {

@@ -2,6 +2,7 @@
 
 NSNotificationName const WCLiquidGlassPreferencesDidChangeNotification = @"WCLiquidGlass.PreferencesChanged";
 NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification = @"WCLiquidGlass.WCGlassCompatibilityChanged";
+NSString *const WCLiquidGlassMaterialFileProtectionDarwinNotification = @"com.ssiswent.wcliquidglass.material-file-protection-changed";
 
 NSString *const WCLiquidGlassActionSettings = @"wcliquidglass_settings";
 NSString *const WCLiquidGlassActionWCGlassSettings = @"wcglass_settings";
@@ -33,11 +34,22 @@ NSString *const WCLiquidGlassActionFullInput = @"full_input";
 NSString *const WCLiquidGlassActionPageHierarchyDiagnostics = @"page_hierarchy_diagnostics";
 
 static NSString *const WCLiquidGlassEnabledKey = @"WCLiquidGlass.Enabled";
-static NSString *const WCLiquidGlassSizeModeKey = @"WCLiquidGlass.SizeMode";
 static NSString *const WCLiquidGlassCompactLayoutStyleKey = @"WCLiquidGlass.CompactLayoutStyle";
 static NSString *const WCLiquidGlassGlassAppearanceKey = @"WCLiquidGlass.GlassAppearance";
+static NSString *const WCLiquidGlassMenuStyleKey = @"WCLiquidGlass.MenuStyle";
+static NSString *const WCLiquidGlassMenuStylePresentationKey = @"WCLiquidGlass.MenuStylePresentation";
+static NSString *const WCLiquidGlassMenuElementSizeKey = @"WCLiquidGlass.MenuElementSize";
+static NSString *const WCLiquidGlassFloatingMenuStrategyKey = @"WCLiquidGlass.FloatingMenuStrategy";
 static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
+static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
+static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
+static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquidGlass.UnreadMessageTipGlassEnabled";
+static NSString *const WCLiquidGlassMessageSwipeActionsEnabledKey = @"WCLiquidGlass.MessageSwipeActionsEnabled";
+static NSString *const WCLiquidGlassMessageSwipeMenuElementSizeKey = @"WCLiquidGlass.MessageSwipe.MenuElementSize";
+static NSString *const WCLiquidGlassMessageNotificationCornerRadiusKey = @"WCLiquidGlass.MessageNotification.CornerRadius";
+static NSString *const WCLiquidGlassMessageNotificationPaddingKey = @"WCLiquidGlass.MessageNotification.Padding";
+static NSString *const WCLiquidGlassMessageNotificationGlassAppearanceKey = @"WCLiquidGlass.MessageNotification.GlassAppearance";
 static NSString *const WCLiquidGlassHomeCornersEnabledKey = @"WCLiquidGlass.HomeCorners.Enabled";
 static NSString *const WCLiquidGlassHomeCornerInsetKey = @"WCLiquidGlass.HomeCorners.Inset";
 static NSString *const WCLiquidGlassHomeCornerRadiusKey = @"WCLiquidGlass.HomeCorners.Radius";
@@ -46,13 +58,133 @@ static NSString *const WCLiquidGlassHomeCardGapKey = @"WCLiquidGlass.HomeCorners
 static NSString *const WCLiquidGlassHomeLiquidBackgroundEnabledKey = @"WCLiquidGlass.HomeCorners.LiquidBackgroundEnabled";
 static NSString *const WCLiquidGlassAnchorOnLeftKey = @"WCLiquidGlass.Anchor.OnLeft";
 static NSString *const WCLiquidGlassAnchorYKey = @"WCLiquidGlass.Anchor.YFraction";
-static NSString *const WCLiquidGlassFullCrashReportsEnabledKey = @"WCLiquidGlass.Diagnostics.FullCrashReportsEnabled";
 static NSString *const WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey = @"WCLiquidGlass.Compatibility.WCGlassIOS27ReturnCrashFixEnabled";
-static NSString *const WCLiquidGlassChatToolbarEnabledKey = @"WCLiquidGlass.ChatToolbarEnabled";
 static NSString *const WCLiquidGlassMaterialFileProtectionEnabledKey = @"WCLiquidGlass.MaterialFileProtectionEnabled";
 static NSString *const WCLiquidGlassButtonItemsKey = @"WCLiquidGlass.ButtonItems";
 static NSString *const WCLiquidGlassLegacySearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded";
 static NSString *const WCLiquidGlassSearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded.V2";
+
+static CFStringRef WCLiquidGlassMainPreferencesApplicationID(void) {
+    return CFSTR("com.tencent.xin");
+}
+
+static void WCLiquidGlassPostMaterialFileProtectionChanged(void) {
+    CFPreferencesAppSynchronize(WCLiquidGlassMainPreferencesApplicationID());
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                         (__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionDarwinNotification,
+                                         NULL,
+                                         NULL,
+                                         YES);
+}
+
+static NSString *const WCLiquidGlassConfigurationFormat = @"com.ssiswent.wcliquidglass.configuration";
+static NSString *const WCLiquidGlassConfigurationFormatKey = @"format";
+static NSString *const WCLiquidGlassConfigurationVersionKey = @"version";
+static NSString *const WCLiquidGlassConfigurationPreferencesKey = @"preferences";
+
+static NSArray<NSString *> *WCLiquidGlassConfigurationKeys(void) {
+    static NSArray<NSString *> *keys;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        keys = @[
+            WCLiquidGlassEnabledKey,
+            WCLiquidGlassCompactLayoutStyleKey,
+            WCLiquidGlassGlassAppearanceKey,
+            WCLiquidGlassMenuStyleKey,
+            WCLiquidGlassMenuStylePresentationKey,
+            WCLiquidGlassMenuElementSizeKey,
+            WCLiquidGlassFloatingMenuStrategyKey,
+            WCLiquidGlassChatTimeGlassEnabledKey,
+            WCLiquidGlassContactsIndexGlassEnabledKey,
+            WCLiquidGlassWCGlassLongPressMenuEnabledKey,
+            WCLiquidGlassMessageNotificationGlassEnabledKey,
+            WCLiquidGlassUnreadMessageTipGlassEnabledKey,
+            WCLiquidGlassMessageSwipeActionsEnabledKey,
+            WCLiquidGlassMessageSwipeMenuElementSizeKey,
+            WCLiquidGlassMessageNotificationCornerRadiusKey,
+            WCLiquidGlassMessageNotificationPaddingKey,
+            WCLiquidGlassMessageNotificationGlassAppearanceKey,
+            WCLiquidGlassHomeCornersEnabledKey,
+            WCLiquidGlassHomeCornerInsetKey,
+            WCLiquidGlassHomeCornerRadiusKey,
+            WCLiquidGlassHomeSeparateCardsEnabledKey,
+            WCLiquidGlassHomeCardGapKey,
+            WCLiquidGlassHomeLiquidBackgroundEnabledKey,
+            WCLiquidGlassAnchorOnLeftKey,
+            WCLiquidGlassAnchorYKey,
+            WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey,
+            WCLiquidGlassMaterialFileProtectionEnabledKey,
+            WCLiquidGlassButtonItemsKey
+        ];
+    });
+    return keys;
+}
+
+static BOOL WCLiquidGlassSetConfigurationError(NSError **error, NSString *description) {
+    if (error) {
+        *error = [NSError errorWithDomain:WCLiquidGlassConfigurationFormat
+                                     code:1
+                                 userInfo:@{NSLocalizedDescriptionKey: description}];
+    }
+    return NO;
+}
+
+static BOOL WCLiquidGlassIsKnownAction(NSString *identifier) {
+    for (NSDictionary<NSString *, NSString *> *action in WCLiquidGlassActionCatalog()) {
+        if ([action[@"identifier"] isEqualToString:identifier]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL WCLiquidGlassConfigurationValueIsValid(NSString *key, id value) {
+    if ([key isEqualToString:WCLiquidGlassButtonItemsKey]) {
+        if (![value isKindOfClass:NSArray.class] || [value count] > 16) {
+            return NO;
+        }
+        for (id item in value) {
+            if (![item isKindOfClass:NSDictionary.class] ||
+                ![item[@"slot"] isKindOfClass:NSString.class] ||
+                ![item[@"action"] isKindOfClass:NSString.class] ||
+                !WCLiquidGlassIsKnownAction(item[@"action"])) {
+                return NO;
+            }
+        }
+        return YES;
+    }
+    return [value isKindOfClass:NSNumber.class];
+}
+
+static NSDictionary<NSString *, id> *WCLiquidGlassConfigurationPreferencesFromData(NSData *data,
+                                                                                     NSError **error) {
+    id document = [NSJSONSerialization JSONObjectWithData:data options:0 error:error];
+    if (![document isKindOfClass:NSDictionary.class] ||
+        ![document[WCLiquidGlassConfigurationFormatKey] isEqual:WCLiquidGlassConfigurationFormat] ||
+        [document[WCLiquidGlassConfigurationVersionKey] integerValue] != 1 ||
+        ![document[WCLiquidGlassConfigurationPreferencesKey] isKindOfClass:NSDictionary.class]) {
+        WCLiquidGlassSetConfigurationError(error, @"不是有效的 WCLiquidGlass 配置文件。");
+        return nil;
+    }
+    NSDictionary<NSString *, id> *preferences = document[WCLiquidGlassConfigurationPreferencesKey];
+    NSUInteger validCount = 0;
+    for (NSString *key in WCLiquidGlassConfigurationKeys()) {
+        id value = preferences[key];
+        if (!value) {
+            continue;
+        }
+        if (!WCLiquidGlassConfigurationValueIsValid(key, value)) {
+            WCLiquidGlassSetConfigurationError(error, @"配置文件包含无效的设置内容。");
+            return nil;
+        }
+        validCount += 1;
+    }
+    if (validCount == 0) {
+        WCLiquidGlassSetConfigurationError(error, @"配置文件不包含可恢复的 WCLiquidGlass 设置。");
+        return nil;
+    }
+    return preferences;
+}
 
 static NSArray<NSDictionary<NSString *, id> *> *WCLiquidGlassDefaultButtonItems(void) {
     static NSArray<NSDictionary<NSString *, id> *> *items;
@@ -120,7 +252,7 @@ NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void
             @{@"identifier": WCLiquidGlassActionContacts, @"title": @"通讯录", @"symbol": @"person.2.fill"},
             @{@"identifier": WCLiquidGlassActionDiscover, @"title": @"发现", @"symbol": @"safari.fill"},
             @{@"identifier": WCLiquidGlassActionMe, @"title": @"我", @"symbol": @"person.crop.circle.fill"},
-            @{@"identifier": WCLiquidGlassActionPageHierarchyDiagnostics, @"title": @"当前页面层级诊断", @"symbol": @"rectangle.3.group.bubble.left"},
+            @{@"identifier": WCLiquidGlassActionPageHierarchyDiagnostics, @"title": @"页面层级诊断", @"symbol": @"rectangle.3.group.bubble.left"},
             @{@"identifier": WCLiquidGlassActionPlugins, @"title": @"插件列表", @"symbol": @"shippingbox.fill"},
             @{@"identifier": WCLiquidGlassActionDoutuAssistant, @"title": @"斗图助手", @"symbol": @"face.smiling"},
             @{@"identifier": WCLiquidGlassActionMoments, @"title": @"朋友圈", @"symbol": @"circle.hexagongrid.fill"},
@@ -198,13 +330,30 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 @implementation WCLiquidGlassPreferences
 
 + (void)registerDefaults {
-    [NSUserDefaults.standardUserDefaults registerDefaults:@{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSDictionary<NSString *, id> *persistentPreferences =
+        [defaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier] ?: @{};
+    NSNumber *existingNotificationAppearance = persistentPreferences[WCLiquidGlassMessageNotificationGlassAppearanceKey];
+    NSNumber *currentGlassAppearance = persistentPreferences[WCLiquidGlassGlassAppearanceKey]
+        ?: @(WCLiquidGlassGlassAppearanceBalanced);
+    [defaults registerDefaults:@{
         WCLiquidGlassEnabledKey: @NO,
-        WCLiquidGlassSizeModeKey: @1,
         WCLiquidGlassCompactLayoutStyleKey: @(WCLiquidGlassCompactLayoutStyleDoubleCrescent),
         WCLiquidGlassGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceClear),
+        WCLiquidGlassMenuStyleKey: @(WCLiquidGlassMenuStyleRing),
+        WCLiquidGlassMenuStylePresentationKey: @(WCLiquidGlassMenuStylePresentationHierarchyMenu),
+        WCLiquidGlassMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
+        WCLiquidGlassFloatingMenuStrategyKey: @(WCLiquidGlassFloatingMenuStrategyPreflightSpring),
         WCLiquidGlassChatTimeGlassEnabledKey: @YES,
+        WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
+        WCLiquidGlassMessageNotificationGlassEnabledKey: @YES,
+        WCLiquidGlassUnreadMessageTipGlassEnabledKey: @NO,
+        WCLiquidGlassMessageSwipeActionsEnabledKey: @NO,
+        WCLiquidGlassMessageSwipeMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
+        WCLiquidGlassMessageNotificationCornerRadiusKey: @36.0,
+        WCLiquidGlassMessageNotificationPaddingKey: @8.0,
+        WCLiquidGlassMessageNotificationGlassAppearanceKey: @(WCLiquidGlassGlassAppearanceBalanced),
         WCLiquidGlassHomeCornersEnabledKey: @NO,
         WCLiquidGlassHomeCornerInsetKey: @16.0,
         WCLiquidGlassHomeCornerRadiusKey: @32.0,
@@ -213,12 +362,14 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassHomeLiquidBackgroundEnabledKey: @NO,
         WCLiquidGlassAnchorOnLeftKey: @NO,
         WCLiquidGlassAnchorYKey: @0.62,
-        WCLiquidGlassFullCrashReportsEnabledKey: @NO,
         WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey: @YES,
-        WCLiquidGlassChatToolbarEnabledKey: @YES,
         WCLiquidGlassMaterialFileProtectionEnabledKey: @YES,
         WCLiquidGlassButtonItemsKey: WCLiquidGlassDefaultButtonItems()
     }];
+    if (!existingNotificationAppearance) {
+        [defaults setInteger:currentGlassAppearance.integerValue
+                      forKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
+    }
     WCLiquidGlassMigrateButtonItemsIfNeeded();
 }
 
@@ -228,16 +379,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (NSInteger)sizeMode {
-    return MIN(2, MAX(0, [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassSizeModeKey]));
-}
-
-+ (void)setSizeMode:(NSInteger)sizeMode {
-    [NSUserDefaults.standardUserDefaults setInteger:MIN(2, MAX(0, sizeMode))
-                                            forKey:WCLiquidGlassSizeModeKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -271,6 +412,69 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
++ (WCLiquidGlassMenuStyle)menuStyle {
+    NSInteger style = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuStyleKey];
+    return MIN(WCLiquidGlassMenuStyleLiquidPanel, MAX(WCLiquidGlassMenuStyleRing, style));
+}
+
++ (void)setMenuStyle:(WCLiquidGlassMenuStyle)style {
+    NSInteger clampedStyle = MIN(WCLiquidGlassMenuStyleLiquidPanel,
+                                 MAX(WCLiquidGlassMenuStyleRing, style));
+    if ([self menuStyle] == clampedStyle) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedStyle forKey:WCLiquidGlassMenuStyleKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassMenuStylePresentation)menuStylePresentation {
+    NSInteger presentation = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuStylePresentationKey];
+    return MIN(WCLiquidGlassMenuStylePresentationSecondarySheet,
+               MAX(WCLiquidGlassMenuStylePresentationHierarchyMenu, presentation));
+}
+
++ (void)setMenuStylePresentation:(WCLiquidGlassMenuStylePresentation)presentation {
+    NSInteger clampedPresentation = MIN(WCLiquidGlassMenuStylePresentationSecondarySheet,
+                                        MAX(WCLiquidGlassMenuStylePresentationHierarchyMenu, presentation));
+    if ([self menuStylePresentation] == clampedPresentation) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedPresentation forKey:WCLiquidGlassMenuStylePresentationKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassMenuElementSize)menuElementSize {
+    NSInteger size = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMenuElementSizeKey];
+    return MIN(WCLiquidGlassMenuElementSizeAutomatic,
+               MAX(WCLiquidGlassMenuElementSizeSmall, size));
+}
+
++ (void)setMenuElementSize:(WCLiquidGlassMenuElementSize)size {
+    NSInteger clampedSize = MIN(WCLiquidGlassMenuElementSizeAutomatic,
+                                MAX(WCLiquidGlassMenuElementSizeSmall, size));
+    if ([self menuElementSize] == clampedSize) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedSize forKey:WCLiquidGlassMenuElementSizeKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassFloatingMenuStrategy)floatingMenuStrategy {
+    NSInteger strategy = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassFloatingMenuStrategyKey];
+    return MIN(WCLiquidGlassFloatingMenuStrategyPreflightSpring,
+               MAX(WCLiquidGlassFloatingMenuStrategyHiddenAnchor, strategy));
+}
+
++ (void)setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)strategy {
+    NSInteger clampedStrategy = MIN(WCLiquidGlassFloatingMenuStrategyPreflightSpring,
+                                    MAX(WCLiquidGlassFloatingMenuStrategyHiddenAnchor, strategy));
+    if ([self floatingMenuStrategy] == clampedStrategy) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedStrategy forKey:WCLiquidGlassFloatingMenuStrategyKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
 + (BOOL)chatTimeGlassEnabled {
     return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassChatTimeGlassEnabledKey];
 }
@@ -280,12 +484,101 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
++ (BOOL)contactsIndexGlassEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassContactsIndexGlassEnabledKey];
+}
+
++ (void)setContactsIndexGlassEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassContactsIndexGlassEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
 + (BOOL)wcGlassLongPressMenuEnabled {
     return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassWCGlassLongPressMenuEnabledKey];
 }
 
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassWCGlassLongPressMenuEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)messageNotificationGlassEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
+}
+
++ (void)setMessageNotificationGlassEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMessageNotificationGlassEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)unreadMessageTipGlassEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
+}
+
++ (void)setUnreadMessageTipGlassEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassUnreadMessageTipGlassEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)messageSwipeActionsEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+}
+
++ (void)setMessageSwipeActionsEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassMenuElementSize)messageSwipeMenuElementSize {
+    NSInteger size = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMessageSwipeMenuElementSizeKey];
+    return MIN(WCLiquidGlassMenuElementSizeAutomatic,
+               MAX(WCLiquidGlassMenuElementSizeSmall, size));
+}
+
++ (void)setMessageSwipeMenuElementSize:(WCLiquidGlassMenuElementSize)size {
+    NSInteger clampedSize = MIN(WCLiquidGlassMenuElementSizeAutomatic,
+                                MAX(WCLiquidGlassMenuElementSizeSmall, size));
+    if ([self messageSwipeMenuElementSize] == clampedSize) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedSize forKey:WCLiquidGlassMessageSwipeMenuElementSizeKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (CGFloat)messageNotificationCornerRadius {
+    return MIN(64.0, MAX(0.0, [NSUserDefaults.standardUserDefaults doubleForKey:WCLiquidGlassMessageNotificationCornerRadiusKey]));
+}
+
++ (void)setMessageNotificationCornerRadius:(CGFloat)radius {
+    [NSUserDefaults.standardUserDefaults setDouble:MIN(64.0, MAX(0.0, radius))
+                                            forKey:WCLiquidGlassMessageNotificationCornerRadiusKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (CGFloat)messageNotificationPadding {
+    return MIN(32.0, MAX(0.0, [NSUserDefaults.standardUserDefaults doubleForKey:WCLiquidGlassMessageNotificationPaddingKey]));
+}
+
++ (void)setMessageNotificationPadding:(CGFloat)padding {
+    [NSUserDefaults.standardUserDefaults setDouble:MIN(32.0, MAX(0.0, padding))
+                                            forKey:WCLiquidGlassMessageNotificationPaddingKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassGlassAppearance)messageNotificationGlassAppearance {
+    NSInteger appearance = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
+    return MIN(WCLiquidGlassGlassAppearanceTinted,
+               MAX(WCLiquidGlassGlassAppearanceClear, appearance));
+}
+
++ (void)setMessageNotificationGlassAppearance:(WCLiquidGlassGlassAppearance)appearance {
+    NSInteger clampedAppearance = MIN(WCLiquidGlassGlassAppearanceTinted,
+                                      MAX(WCLiquidGlassGlassAppearanceClear, appearance));
+    if ([self messageNotificationGlassAppearance] == clampedAppearance) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedAppearance
+                                            forKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -358,15 +651,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
                                             forKey:WCLiquidGlassAnchorYKey];
 }
 
-+ (BOOL)fullCrashReportsEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassFullCrashReportsEnabledKey];
-}
-
-+ (void)setFullCrashReportsEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassFullCrashReportsEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
 + (BOOL)wcGlassIOS27CompatibilityEnabled {
     return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey];
 }
@@ -377,24 +661,25 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
                                                       object:nil];
 }
 
-+ (BOOL)chatToolbarEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassChatToolbarEnabledKey];
-}
-
-+ (void)setChatToolbarEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatToolbarEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
 + (BOOL)materialFileProtectionEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassMaterialFileProtectionEnabledKey];
+    CFPropertyListRef storedValue = CFPreferencesCopyAppValue(
+        (__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionEnabledKey,
+        WCLiquidGlassMainPreferencesApplicationID());
+    if (!storedValue) {
+        return YES;
+    }
+    BOOL enabled = [(__bridge id)storedValue boolValue];
+    CFRelease(storedValue);
+    return enabled;
 }
 
 + (void)setMaterialFileProtectionEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMaterialFileProtectionEnabledKey];
+    CFPreferencesSetAppValue((__bridge CFStringRef)WCLiquidGlassMaterialFileProtectionEnabledKey,
+                             (__bridge CFPropertyListRef)@(enabled),
+                             WCLiquidGlassMainPreferencesApplicationID());
+    WCLiquidGlassPostMaterialFileProtectionChanged();
     WCLiquidGlassNotifyPreferencesChanged();
 }
-
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems {
     NSArray *storedItems = [NSUserDefaults.standardUserDefaults arrayForKey:WCLiquidGlassButtonItemsKey];
     if (![storedItems isKindOfClass:NSArray.class] || storedItems.count == 0) {
@@ -430,30 +715,70 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
++ (NSData *)configurationExportData:(NSError **)error {
+    [self registerDefaults];
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSMutableDictionary<NSString *, id> *preferences = [NSMutableDictionary dictionary];
+    for (NSString *key in WCLiquidGlassConfigurationKeys()) {
+        id value = [key isEqualToString:WCLiquidGlassMaterialFileProtectionEnabledKey]
+            ? @(self.materialFileProtectionEnabled)
+            : [defaults objectForKey:key];
+        if (value) {
+            preferences[key] = value;
+        }
+    }
+    return [NSJSONSerialization dataWithJSONObject:@{
+        WCLiquidGlassConfigurationFormatKey: WCLiquidGlassConfigurationFormat,
+        WCLiquidGlassConfigurationVersionKey: @1,
+        WCLiquidGlassConfigurationPreferencesKey: preferences
+    }
+                                           options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys
+                                             error:error];
+}
+
++ (BOOL)restoreConfigurationFromData:(NSData *)data error:(NSError **)error {
+    NSDictionary<NSString *, id> *preferences = WCLiquidGlassConfigurationPreferencesFromData(data, error);
+    if (!preferences) {
+        return NO;
+    }
+
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    for (NSString *key in WCLiquidGlassConfigurationKeys()) {
+        id value = preferences[key];
+        if (!value) {
+            continue;
+        }
+        if ([key isEqualToString:WCLiquidGlassMaterialFileProtectionEnabledKey]) {
+            CFPreferencesSetAppValue((__bridge CFStringRef)key,
+                                     (__bridge CFPropertyListRef)value,
+                                     WCLiquidGlassMainPreferencesApplicationID());
+        } else {
+            [defaults setObject:value forKey:key];
+        }
+    }
+    [defaults setBool:YES forKey:WCLiquidGlassSearchRecordsMigrationKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+    WCLiquidGlassPostMaterialFileProtectionChanged();
+    [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
+                                                      object:nil];
+    return YES;
+}
+
 + (void)restoreDefaults {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    [defaults removeObjectForKey:WCLiquidGlassEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassSizeModeKey];
-    [defaults removeObjectForKey:WCLiquidGlassCompactLayoutStyleKey];
-    [defaults removeObjectForKey:WCLiquidGlassGlassAppearanceKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeCornersEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeCornerInsetKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeCornerRadiusKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeSeparateCardsEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeCardGapKey];
-    [defaults removeObjectForKey:WCLiquidGlassHomeLiquidBackgroundEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassChatTimeGlassEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassWCGlassLongPressMenuEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassAnchorOnLeftKey];
-    [defaults removeObjectForKey:WCLiquidGlassAnchorYKey];
-    [defaults removeObjectForKey:WCLiquidGlassFullCrashReportsEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassWCGlassIOS27CompatibilityEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassChatToolbarEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassMaterialFileProtectionEnabledKey];
-    [defaults removeObjectForKey:WCLiquidGlassButtonItemsKey];
+    for (NSString *key in WCLiquidGlassConfigurationKeys()) {
+        if ([key isEqualToString:WCLiquidGlassMaterialFileProtectionEnabledKey]) {
+            CFPreferencesSetAppValue((__bridge CFStringRef)key,
+                                     NULL,
+                                     WCLiquidGlassMainPreferencesApplicationID());
+        } else {
+            [defaults removeObjectForKey:key];
+        }
+    }
     [defaults removeObjectForKey:WCLiquidGlassLegacySearchRecordsMigrationKey];
     [defaults removeObjectForKey:WCLiquidGlassSearchRecordsMigrationKey];
     WCLiquidGlassNotifyPreferencesChanged();
+    WCLiquidGlassPostMaterialFileProtectionChanged();
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
                                                       object:nil];
 }

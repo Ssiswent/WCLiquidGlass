@@ -13,6 +13,14 @@ static BOOL WCLiquidGlassWCGlassSearchTabBarHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassWCGlassSearchTabBarHookInstallAttempts = 0;
 static void (*WCLiquidGlassOriginalWCGlassSearchTabBarSelectIndex)(id, SEL, NSInteger) = NULL;
 
+static Class WCLiquidGlassWCGlassSearchTabBarOverlayClass(void) {
+    Class legacyClass = NSClassFromString(@"WCLGSearchTabBarOverlay");
+    if (legacyClass) {
+        return legacyClass;
+    }
+    return NSClassFromString(@"qz64vfjsximzq3xbay5woqdm");
+}
+
 static id WCLiquidGlassWCGlassSearchTabBarObjectValue(id target, SEL selector) {
     if (!target || !selector || ![target respondsToSelector:selector]) {
         return nil;
@@ -165,10 +173,11 @@ void WCLiquidGlassInstallWCGlassSearchTabBarHooks(void) {
         return;
     }
 
-    Class overlayClass = NSClassFromString(@"WCLGSearchTabBarOverlay");
+    Class overlayClass = WCLiquidGlassWCGlassSearchTabBarOverlayClass();
     SEL selectIndexSelector = NSSelectorFromString(@"selectIndex:");
-    Method selectIndexMethod = class_getInstanceMethod(overlayClass,
-                                                        selectIndexSelector);
+    Method selectIndexMethod = overlayClass
+        ? class_getInstanceMethod(overlayClass, selectIndexSelector)
+        : NULL;
     if (overlayClass == Nil || selectIndexMethod == NULL) {
         if (!WCLiquidGlassWCGlassSearchTabBarHookRetryScheduled &&
             WCLiquidGlassWCGlassSearchTabBarHookInstallAttempts < 20) {

@@ -6,9 +6,13 @@
 
 #import "WCLiquidGlass.h"
 #import "WCLiquidGlassChatTime.h"
+#import "WCLiquidGlassContactsIndex.h"
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassMaterialFileProtection.h"
+#import "WCLiquidGlassMessageSwipe.h"
+#import "WCLiquidGlassMessageNotification.h"
+#import "WCLiquidGlassUnreadMessageTip.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 #import "WCLiquidGlassWCGlassLongPress.h"
@@ -475,13 +479,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             return;
         }
 
+        if (isMainWeChatProcess) {
+            [WCLiquidGlassCrashLogger.sharedLogger start];
+        }
         [WCLiquidGlassPreferences registerDefaults];
         WCLiquidGlassInstallMaterialFileProtectionHooks();
         if (!isMainWeChatProcess) {
             return;
         }
-
-        [WCLiquidGlassCrashLogger.sharedLogger start];
 
         dispatch_async(dispatch_get_main_queue(), ^{
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
@@ -489,6 +494,10 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             WCLiquidGlassInstallWCGlassSearchTabBarHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();
             WCLiquidGlassInstallHomeCornersHooks();
+            WCLiquidGlassInstallContactsIndexHooks();
+            WCLiquidGlassInstallMessageSwipeHooks();
+            WCLiquidGlassInstallMessageNotificationHooks();
+            WCLiquidGlassInstallUnreadMessageTipHooks();
             [WCLiquidGlassManager.sharedManager start];
             WCLiquidGlassTryRegisterPlugin();
         });
@@ -496,14 +505,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassTryRegisterPlugin();
         }];
 
         [NSNotificationCenter.defaultCenter addObserverForName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             if (WCLiquidGlassPreferences.wcGlassIOS27CompatibilityEnabled) {
                 WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             } else if (WCLiquidGlassWCGlassRowGuardActive ||
@@ -515,14 +524,14 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillShowNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassKeyboardVisible = YES;
         }];
 
         [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidHideNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
-                                                    usingBlock:^(NSNotification *notification) {
+                                                    usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassKeyboardVisible = NO;
         }];
 

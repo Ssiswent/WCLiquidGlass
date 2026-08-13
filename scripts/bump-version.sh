@@ -11,20 +11,21 @@ if [ "$mode" != "--next" ] && [ "$mode" != "--apply" ]; then
 fi
 
 current_version=$(sed -n 's/^Version:[[:space:]]*//p' "$control_file")
+base_version=${current_version%%~*}
 old_ifs=$IFS
 IFS=.
-set -- $current_version
+set -- $base_version
 IFS=$old_ifs
 
 if [ "$#" -ne 3 ]; then
-    echo "Expected Version in $control_file to use MAJOR.MINOR.PATCH format; found: $current_version" >&2
+    echo "Expected Version in $control_file to use MAJOR.MINOR.PATCH or a legacy ~suffix; found: $current_version" >&2
     exit 65
 fi
 
 for component in "$@"; do
     case "$component" in
         ''|*[!0-9]*)
-            echo "Expected Version in $control_file to use numeric MAJOR.MINOR.PATCH format; found: $current_version" >&2
+            echo "Expected Version in $control_file to use numeric MAJOR.MINOR.PATCH or a legacy ~suffix; found: $current_version" >&2
             exit 65
             ;;
     esac

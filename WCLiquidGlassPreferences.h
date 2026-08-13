@@ -5,6 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 extern NSNotificationName const WCLiquidGlassPreferencesDidChangeNotification;
 extern NSNotificationName const WCLiquidGlassWCGlassCompatibilityDidChangeNotification;
+extern NSString *const WCLiquidGlassMaterialFileProtectionDarwinNotification;
 
 extern NSString *const WCLiquidGlassActionSettings;
 extern NSString *const WCLiquidGlassActionWCGlassSettings;
@@ -48,21 +49,65 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
     WCLiquidGlassGlassAppearanceTinted
 };
 
+typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStyle) {
+    WCLiquidGlassMenuStyleRing = 0,
+    WCLiquidGlassMenuStyleLiquidPanel
+};
+
+typedef NS_ENUM(NSInteger, WCLiquidGlassMenuStylePresentation) {
+    WCLiquidGlassMenuStylePresentationHierarchyMenu = 0,
+    WCLiquidGlassMenuStylePresentationSecondarySheet
+};
+
+typedef NS_ENUM(NSInteger, WCLiquidGlassMenuElementSize) {
+    WCLiquidGlassMenuElementSizeSmall = 0,
+    WCLiquidGlassMenuElementSizeMedium,
+    WCLiquidGlassMenuElementSizeLarge,
+    WCLiquidGlassMenuElementSizeAutomatic
+};
+
+typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
+    WCLiquidGlassFloatingMenuStrategyHiddenAnchor = 0,
+    WCLiquidGlassFloatingMenuStrategyPreflightSpring
+};
+
 @interface WCLiquidGlassPreferences : NSObject
 
 + (void)registerDefaults;
 + (BOOL)enabled;
 + (void)setEnabled:(BOOL)enabled;
-+ (NSInteger)sizeMode;
-+ (void)setSizeMode:(NSInteger)sizeMode;
 + (WCLiquidGlassCompactLayoutStyle)compactLayoutStyle;
 + (void)setCompactLayoutStyle:(WCLiquidGlassCompactLayoutStyle)style;
 + (WCLiquidGlassGlassAppearance)glassAppearance;
 + (void)setGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
++ (WCLiquidGlassMenuStyle)menuStyle;
++ (void)setMenuStyle:(WCLiquidGlassMenuStyle)style;
++ (WCLiquidGlassMenuStylePresentation)menuStylePresentation;
++ (void)setMenuStylePresentation:(WCLiquidGlassMenuStylePresentation)presentation;
++ (WCLiquidGlassMenuElementSize)menuElementSize;
++ (void)setMenuElementSize:(WCLiquidGlassMenuElementSize)size;
++ (WCLiquidGlassFloatingMenuStrategy)floatingMenuStrategy;
++ (void)setFloatingMenuStrategy:(WCLiquidGlassFloatingMenuStrategy)strategy;
 + (BOOL)chatTimeGlassEnabled;
 + (void)setChatTimeGlassEnabled:(BOOL)enabled;
++ (BOOL)contactsIndexGlassEnabled;
++ (void)setContactsIndexGlassEnabled:(BOOL)enabled;
 + (BOOL)wcGlassLongPressMenuEnabled;
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled;
++ (BOOL)messageNotificationGlassEnabled;
++ (void)setMessageNotificationGlassEnabled:(BOOL)enabled;
++ (BOOL)unreadMessageTipGlassEnabled;
++ (void)setUnreadMessageTipGlassEnabled:(BOOL)enabled;
++ (BOOL)messageSwipeActionsEnabled;
++ (void)setMessageSwipeActionsEnabled:(BOOL)enabled;
++ (WCLiquidGlassMenuElementSize)messageSwipeMenuElementSize;
++ (void)setMessageSwipeMenuElementSize:(WCLiquidGlassMenuElementSize)size;
++ (CGFloat)messageNotificationCornerRadius;
++ (void)setMessageNotificationCornerRadius:(CGFloat)radius;
++ (CGFloat)messageNotificationPadding;
++ (void)setMessageNotificationPadding:(CGFloat)padding;
++ (WCLiquidGlassGlassAppearance)messageNotificationGlassAppearance;
++ (void)setMessageNotificationGlassAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (BOOL)homeCornersEnabled;
 + (void)setHomeCornersEnabled:(BOOL)enabled;
 + (CGFloat)homeCornerInset;
@@ -78,17 +123,15 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassGlassAppearance) {
 + (BOOL)anchorOnLeft;
 + (CGFloat)anchorYFraction;
 + (void)setAnchorOnLeft:(BOOL)anchorOnLeft yFraction:(CGFloat)yFraction;
-+ (BOOL)fullCrashReportsEnabled;
-+ (void)setFullCrashReportsEnabled:(BOOL)enabled;
 + (BOOL)wcGlassIOS27CompatibilityEnabled;
 + (void)setWCGlassIOS27CompatibilityEnabled:(BOOL)enabled;
-+ (BOOL)chatToolbarEnabled;
-+ (void)setChatToolbarEnabled:(BOOL)enabled;
 + (BOOL)materialFileProtectionEnabled;
 + (void)setMaterialFileProtectionEnabled:(BOOL)enabled;
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems;
 + (void)setButtonItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
 + (void)restoreDefaultButtonItems;
++ (nullable NSData *)configurationExportData:(NSError * _Nullable * _Nullable)error;
++ (BOOL)restoreConfigurationFromData:(NSData *)data error:(NSError * _Nullable * _Nullable)error;
 + (void)restoreDefaults;
 
 @end
