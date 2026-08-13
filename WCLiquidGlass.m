@@ -1377,7 +1377,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 1 : 6;
+    return section == 0 ? 1 : 7;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -1426,11 +1426,12 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         @"长按菜单液态",
         @"通讯录索引液态",
         @"未读消息提示液态",
+        @"聊天输入工具栏",
         @"通知圆角与液态",
         @"首页圆角与液态"
     ];
     WCLiquidGlassConfigureCell(cell, titles[indexPath.row], nil, image, UIColor.labelColor);
-    if (indexPath.row < 4) {
+    if (indexPath.row < 5) {
         UISwitch *toggle = [[UISwitch alloc] init];
         switch (indexPath.row) {
             case 0:
@@ -1445,9 +1446,13 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                 toggle.on = WCLiquidGlassPreferences.contactsIndexGlassEnabled;
                 [toggle addTarget:self action:@selector(wc_contactsChanged:) forControlEvents:UIControlEventValueChanged];
                 break;
-            default:
+            case 3:
                 toggle.on = WCLiquidGlassPreferences.unreadMessageTipGlassEnabled;
                 [toggle addTarget:self action:@selector(wc_unreadChanged:) forControlEvents:UIControlEventValueChanged];
+                break;
+            default:
+                toggle.on = WCLiquidGlassPreferences.chatToolbarEnabled;
+                [toggle addTarget:self action:@selector(wc_chatToolbarChanged:) forControlEvents:UIControlEventValueChanged];
                 break;
         }
         cell.accessoryView = toggle;
@@ -1475,9 +1480,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
-    } else if (indexPath.row == 4) {
-        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.row == 5) {
+        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
+    } else if (indexPath.row == 6) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     }
 }
@@ -1496,6 +1501,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_unreadChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setUnreadMessageTipGlassEnabled:sender.isOn];
+}
+
+- (void)wc_chatToolbarChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setChatToolbarEnabled:sender.isOn];
 }
 
 @end

@@ -34,6 +34,8 @@ BOOL WCLiquidGlassCurrentChatInputHasText(void);
 BOOL WCLiquidGlassShouldReportManualTextEdit(void);
 void WCLiquidGlassRefreshDoutuConfiguration(void);
 void WCLiquidGlassUpdateDoutuButtonVisibility(id inputToolView);
+void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView);
+void WCLiquidGlassReapplyChatTableBottomInset(UITableView *tableView);
 id _Nullable WCLiquidGlassCurrentTabController(void);
 extern NSString *const WCLiquidGlassManualTextEditNotification;
 
