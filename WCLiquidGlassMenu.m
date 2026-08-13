@@ -1576,6 +1576,53 @@ static BOOL WCLiquidGlassOpenControllerNamed(NSArray<NSString *> *classNames) {
     return NO;
 }
 
+static NSString *WCLiquidGlassWCGlassControllerClassName(void) {
+    @try {
+    Class pluginsManagerClass = NSClassFromString(@"WCPluginsMgr");
+    SEL sharedInstanceSelector = NSSelectorFromString(@"sharedInstance");
+    if (!pluginsManagerClass ||
+        ![pluginsManagerClass respondsToSelector:sharedInstanceSelector]) {
+        return nil;
+    }
+    id pluginsManager = ((id (*)(id, SEL))objc_msgSend)(pluginsManagerClass,
+                                                        sharedInstanceSelector);
+    SEL pluginsSelector = NSSelectorFromString(@"plugins");
+    if (!pluginsManager || ![pluginsManager respondsToSelector:pluginsSelector]) {
+        return nil;
+    }
+    id plugins = ((id (*)(id, SEL))objc_msgSend)(pluginsManager, pluginsSelector);
+    if (![plugins isKindOfClass:NSArray.class]) {
+        return nil;
+    }
+    NSArray *pluginsSnapshot = [plugins copy];
+    SEL isControllerSelector = NSSelectorFromString(@"isController");
+    SEL titleSelector = NSSelectorFromString(@"title");
+    SEL controllerSelector = NSSelectorFromString(@"controller");
+    for (id plugin in pluginsSnapshot) {
+        if (![plugin respondsToSelector:isControllerSelector] ||
+            ![plugin respondsToSelector:titleSelector] ||
+            ![plugin respondsToSelector:controllerSelector]) {
+            continue;
+        }
+        NSString *title = ((id (*)(id, SEL))objc_msgSend)(plugin, titleSelector);
+        if (![title isKindOfClass:NSString.class] || ![title isEqualToString:@"WCGlass"] ||
+            !((BOOL (*)(id, SEL))objc_msgSend)(plugin, isControllerSelector)) {
+            continue;
+        }
+        NSString *controllerClassName = ((id (*)(id, SEL))objc_msgSend)(plugin,
+                                                                          controllerSelector);
+        if ([controllerClassName isKindOfClass:NSString.class] &&
+            controllerClassName.length > 0 &&
+            NSClassFromString(controllerClassName)) {
+            return controllerClassName;
+        }
+    }
+    return nil;
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
 static BOOL WCLiquidGlassCanSelectTab(id tabController, NSInteger index) {
     NSArray *sources = WCLiquidGlassPrivateTabSources(tabController);
     NSUInteger tabCount = sources.count;
@@ -1620,7 +1667,7 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
             [availableActions addObject:actionIdentifier];
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
             if (navigationController &&
-                (NSClassFromString(@"q7ar2wl2d3z44fwr25h2f2lx") || NSClassFromString(@"WCPluginsViewController"))) {
+                (WCLiquidGlassWCGlassControllerClassName() || NSClassFromString(@"WCPluginsViewController"))) {
                 [availableActions addObject:actionIdentifier];
             }
         } else if ([actionIdentifier isEqualToString:WCLiquidGlassActionPlugins]) {
@@ -1706,7 +1753,9 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     }
 
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionWCGlassSettings]) {
-        if (WCLiquidGlassOpenControllerNamed(@[@"q7ar2wl2d3z44fwr25h2f2lx", @"WCPluginsViewController"])) {
+        NSString *controllerClassName = WCLiquidGlassWCGlassControllerClassName();
+        if ((controllerClassName && WCLiquidGlassOpenControllerNamed(@[controllerClassName])) ||
+            WCLiquidGlassOpenControllerNamed(@[@"WCPluginsViewController"])) {
             return;
         }
         WCLiquidGlassShowActionError(@"没有找到 WCGlass 设置入口。");

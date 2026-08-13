@@ -150,7 +150,7 @@ WCLiquidGlass 可以独立使用；安装 WCGlass 后，以下能力会自动在
 | WCGlass 长按菜单液态 | 可由“长按菜单液态”开关接管视觉呈现，保留微信原生菜单内容与交互。 |
 | iOS 27 分组返回闪退 | 针对 WCGlass 横向胶囊 / 全屏分组，在“键盘已弹出且输入框非空”的风险窗口保护过期 section 请求，不改动可见列表数据。 |
 | 底栏搜索框模式切换黑屏 | 对普通四个微信 Tab 保留 WCGlass 的反馈与收起动画，但把真实页面选择收敛为一次原生 `setSelectedIndex:`，避免冷启动切换竞争。 |
-| WCGlass 设置入口 | 悬浮菜单中的 WCGlass 动作直接打开 WCGlass 3.0.4-8 公开注册的设置控制器；类不存在或打开失败时安全回退到原生插件列表。 |
+| WCGlass 设置入口 | 悬浮菜单从 `WCPluginsMgr` 当前公开注册的 WCGlass controller 动态解析设置控制器；无法解析或打开失败时安全回退到原生插件列表。 |
 | 语音转述图标 | 显示与隐藏由 WCGlass 作者恢复的原生设置开关管理；WCLiquidGlass 不再强行改写该开关。 |
 
 对当前 Tab 的重复点击、WCGlass 特殊选项、运行时无法确认真实 TabController 或已有切换事务等情况，兼容层会主动回退到 WCGlass 原实现。

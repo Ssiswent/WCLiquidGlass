@@ -1,7 +1,7 @@
 ---
 title: WCLiquidGlass 插件架构与微信插件开发规范
 date: 2026-07-19
-last_updated: 2026-08-12
+last_updated: 2026-08-13
 category: architecture-patterns
 module: WCLiquidGlass
 problem_type: architecture_pattern
@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.15（2026-08-12）
+> 当前基线：WCLiquidGlass 2.0.17（2026-08-13）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -104,7 +104,7 @@ flowchart TD
 
 注册方法为 `registerControllerWithTitle:version:controller:`。当前微信插件管理器要求 controller 参数传控制器**类名字符串**，即 `NSStringFromClass(WCLiquidGlass.class)`，不能擅自改为 `Class` 对象。调用前应继续检查方法签名和参数类型，并保留有限次数重试以及 App 回到前台后的补偿注册。
 
-WCGlass 3.0.4-8 在插件管理公开注册的设置控制器经真机导航确认是 `q7ar2wl2d3z44fwr25h2f2lx`。悬浮按钮打开的菜单中，WCGlass 动作优先直接打开该控制器；类不存在或初始化失败时回退 `WCPluginsViewController`，不自动选择插件列表行。“按钮与行为”页面仅配置该动作是否出现在悬浮菜单，并不是 WCGlass 的运行入口。2.0.13–2.0.14 使用过的注册 Hook、全局导航 Hook、入口快照和专用诊断 API 已全部删除；只有 WCGlass 再次变更公开注册控制器时，才应重新进行一次有限诊断。
+悬浮按钮打开的菜单中，WCGlass 动作每次从 `WCPluginsMgr.sharedInstance.plugins` 的快照中查找标题恰为 `WCGlass`、`isController` 为真且可解析的 controller 类名，再直接打开该控制器；无法解析或初始化失败时回退 `WCPluginsViewController`，不自动选择插件列表行。“按钮与行为”页面仅配置该动作是否出现在悬浮菜单，并不是 WCGlass 的运行入口。2.0.13–2.0.14 使用过的注册 Hook、全局导航 Hook、入口快照和专用诊断 API 已全部删除；不为该入口增加持久化、缓存或诊断机制。
 
 #### 3.2 配置刷新
 

@@ -33,7 +33,23 @@ grep -Fq 'shouldRegisterUncaughtExceptionHandler:YES' WCLiquidGlassCrashLogger.m
 custom_data_assignments=$(grep -c 'reporter.customData =' WCLiquidGlassCrashLogger.m || true)
 [ "$custom_data_assignments" -eq 1 ] || fail "PLCrashReporter customData must be assigned exactly once before enable"
 grep -Fq '@".failed"' WCLiquidGlassCrashLogger.m || fail "failed pending crash report isolation is missing"
-grep -Fq '@"q7ar2wl2d3z44fwr25h2f2lx"' WCLiquidGlassMenu.m || fail "verified WCGlass settings controller is missing"
+if grep -Fq 'q7ar2wl2d3z44fwr25h2f2lx' WCLiquidGlassMenu.m; then
+    fail "hardcoded WCGlass settings controller remains"
+fi
+for resolver_marker in \
+    'WCLiquidGlassWCGlassControllerClassName' \
+    'NSClassFromString(@"WCPluginsMgr")' \
+    'NSSelectorFromString(@"sharedInstance")' \
+    'NSSelectorFromString(@"plugins")' \
+    'NSSelectorFromString(@"isController")' \
+    'NSSelectorFromString(@"title")' \
+    'NSSelectorFromString(@"controller")' \
+    '@"WCGlass"'; do
+    grep -Fq "$resolver_marker" WCLiquidGlassMenu.m || fail "WCGlass registry resolver marker is missing: $resolver_marker"
+done
+resolver_calls=$(grep -c 'WCLiquidGlassWCGlassControllerClassName()' WCLiquidGlassMenu.m || true)
+[ "$resolver_calls" -ge 2 ] || fail "WCGlass registry resolver must be used by availability and execute paths"
+grep -Fq 'WCLiquidGlassOpenControllerNamed(@[@"WCPluginsViewController"])' WCLiquidGlassMenu.m || fail "WCGlass plugin-list fallback is missing"
 if grep -Fq 'purgePendingCrashReport' WCLiquidGlassCrashLogger.m; then
     fail "single-slot purgePendingCrashReport path remains"
 fi
