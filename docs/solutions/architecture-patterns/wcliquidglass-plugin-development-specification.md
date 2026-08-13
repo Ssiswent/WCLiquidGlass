@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.17（2026-08-13）
+> 当前基线：WCLiquidGlass 2.0.18（2026-08-13）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -117,6 +117,14 @@ flowchart TD
 - overlay window 的显示状态。
 
 不要从设置控制器直接操作菜单内部视图，这会造成两个模块之间的隐式状态依赖。
+
+#### 3.3 聊天输入工具栏
+
+2.0.18 起，聊天输入工具栏不属于 overlay window 或 `WCLiquidGlassHostView`。`%hook MMInputToolView` 在原生 `layoutSubviews` 完成后调用 `WCLiquidGlassLayoutChatToolbarForInput`，并在 `didMoveToWindow` 后补一次布局。函数通过关联对象让每个输入工具视图拥有唯一的 `WCLiquidGlassChatToolbarView`；工具栏可以随着输入层级迁移到新的宿主祖先，但不扫描控制器、窗口或全局视图树。
+
+挂载时从 `MMInputToolView.superview` 向上寻找最近的非 `UIWindow`、可交互且可见的原生祖先，只有该祖先的 `bounds` 完整容纳输入工具视图上方 48pt 矩形（历史间距 10pt）才挂载。无法找到安全祖先、输入窗口不可用、输入视图隐藏/透明或“聊天输入工具栏”开关关闭时，工具栏立即移除并隐藏，下一次原生布局再重试。位置使用同一 UIKit 布局事务中的 frame 写入，不添加工具栏位置、键盘或控制器转场动画；祖先层级自然保证其位于 Sheet、Alert 和 Modal 下方。
+
+工具栏创建时以及收到 `WCLiquidGlassPreferencesDidChangeNotification` 时读取完整的 `buttonItems` 顺序；布局阶段不做页面可用性筛选，也不重复扫描。配置动作统一交给既有 `WCLiquidGlassPerformAction` 路由，横向 `UIScrollView` 承载全部已配置按钮。语音转述按钮的激活描边是唯一独立维护的动态状态。WCGlass 若在 `MMInputToolView` 外部渲染引用层，源码无法推断其扩展范围，仍需在目标设备检查实际层级和交互式转场。
 
 ### 4. 配置与数据契约
 

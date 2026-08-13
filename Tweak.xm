@@ -391,44 +391,12 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
-    [WCLiquidGlassManager.sharedManager refreshChatToolbar];
+    WCLiquidGlassLayoutChatToolbarForInput(self);
 }
 
-%end
-
-%hook BaseMsgContentViewController
-
-- (void)viewWillDisappear:(BOOL)animated {
-    [WCLiquidGlassManager.sharedManager hideChatToolbarImmediately];
+- (void)didMoveToWindow {
     %orig;
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-    [WCLiquidGlassManager.sharedManager beginChatToolbarAppearanceTransition];
-    %orig;
-    [WCLiquidGlassManager.sharedManager resumeChatToolbarImmediately];
-    UIViewController *chatController = (UIViewController *)self;
-    id<UIViewControllerTransitionCoordinator> coordinator = chatController.transitionCoordinator;
-    if (coordinator) {
-        [coordinator animateAlongsideTransition:nil
-                                     completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
-            [WCLiquidGlassManager.sharedManager endChatToolbarAppearanceTransition];
-        }];
-    } else {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [WCLiquidGlassManager.sharedManager endChatToolbarAppearanceTransition];
-        });
-    }
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig;
-    [WCLiquidGlassManager.sharedManager resumeChatToolbarImmediately];
-}
-
-- (void)viewDidDisappear:(BOOL)animated {
-    %orig;
-    [WCLiquidGlassManager.sharedManager refreshChatToolbar];
+    WCLiquidGlassLayoutChatToolbarForInput(self);
 }
 
 %end

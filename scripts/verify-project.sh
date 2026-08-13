@@ -56,6 +56,16 @@ fi
 if grep -Eq 'WCGlassEntry|WCLiquidGlassCaptureWCGlassRegistration|WCLiquidGlassObserveWCGlassPluginListNavigation' Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m; then
     fail "temporary WCGlass entry diagnostics remain"
 fi
+grep -Fq 'WCLiquidGlassLayoutChatToolbarForInput(self);' Tweak.xm || fail "MMInputToolView per-input toolbar attach is missing"
+grep -Fq '@interface WCLiquidGlassChatToolbarView' WCLiquidGlassMenu.m || fail "chat toolbar view definition is missing"
+grep -Fq 'WCLiquidGlassChatToolbarEnabledKey' WCLiquidGlassPreferences.m || fail "chat toolbar preference definition is missing"
+grep -Fq 'BOOL inputAvailable = WCLiquidGlassPreferences.enabled &&' WCLiquidGlassMenu.m || fail "chat toolbar master enable gate is missing"
+if grep -Fq 'buttonsByAction' WCLiquidGlassMenu.m; then
+    fail "chat toolbar still keys buttons by action"
+fi
+if grep -Eq 'WCLiquidGlassCurrentChatInputToolFrames|chatToolbarRefreshQueued|chatToolbarSuppressed|wc_refreshChatToolbarAnimated|wc_scheduleChatToolbarLayoutAnimated|wc_layoutChatToolbarAnimated|beginChatToolbarAppearanceTransition|endChatToolbarAppearanceTransition|hideChatToolbarImmediately|resumeChatToolbarImmediately' Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m; then
+    fail "obsolete global chat toolbar lifecycle remains"
+fi
 for runtime_file in Tweak.xm WCLiquidGlass*.h WCLiquidGlass*.m WCLiquidGlass*.xm; do
     [ -f "$runtime_file" ] || continue
     if grep -Fq 'fullCrashReportsEnabled' "$runtime_file" ||
