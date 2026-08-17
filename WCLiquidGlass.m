@@ -868,8 +868,47 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
 @interface WCLiquidGlassButtonEditorController : UITableViewController
 
 @property(nonatomic, strong) NSMutableArray<NSMutableDictionary<NSString *, id> *> *items;
-@property(nonatomic, copy) NSArray<NSString *> *availableNavigationActions;
-@property(nonatomic, copy) NSArray<NSString *> *availableChatActions;
+
+@end
+
+@interface WCLiquidGlassButtonEditorCell : UITableViewCell
+
+@property(nonatomic, strong) UISwitch *actionSwitch;
+@property(nonatomic, strong) UIView *actionDivider;
+
+@end
+
+@implementation WCLiquidGlassButtonEditorCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+    if (self) {
+        _actionSwitch = [[UISwitch alloc] init];
+        _actionSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:_actionSwitch];
+
+        UIView *divider = [[UIView alloc] init];
+        divider.translatesAutoresizingMaskIntoConstraints = NO;
+        divider.backgroundColor = [UIColor.separatorColor colorWithAlphaComponent:0.20];
+        self.actionDivider = divider;
+        [self addSubview:divider];
+        [NSLayoutConstraint activateConstraints:@[
+            [_actionSwitch.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [_actionSwitch.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-84.0],
+            [divider.topAnchor constraintEqualToAnchor:self.topAnchor],
+            [divider.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+            [divider.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-70.0],
+            [divider.widthAnchor constraintEqualToConstant:1.0]
+        ]];
+    }
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    [self bringSubviewToFront:self.actionSwitch];
+    [self bringSubviewToFront:self.actionDivider];
+}
 
 @end
 
@@ -884,18 +923,21 @@ static NSString *WCLiquidGlassGlassAppearanceTitle(WCLiquidGlassGlassAppearance 
     [super viewDidLoad];
     self.title = @"按钮与动作";
     WCLiquidGlassConfigureTableBackground(self);
-    self.tableView.separatorColor = [UIColor.separatorColor colorWithAlphaComponent:0.30];
-    self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 66.0;
-    self.tableView.allowsSelectionDuringEditing = YES;
-    self.navigationItem.rightBarButtonItem = self.editButtonItem;
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    self.tableView.separatorColor = [UIColor.whiteColor colorWithAlphaComponent:0.52];
+    self.tableView.rowHeight = 63.0;
+    self.tableView.estimatedRowHeight = 63.0;
+    self.tableView.layoutMargins = UIEdgeInsetsMake(0.0, 32.0, 0.0, 16.0);
+    self.tableView.allowsSelectionDuringEditing = NO;
+    [self.tableView setEditing:YES animated:NO];
     [self wc_reloadItems];
 }
 
-- (void)tableView:(UITableView *)tableView
-  willDisplayCell:(UITableViewCell *)cell
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
+- (void)setEditing:(BOOL)editing animated:(BOOL)animated {
+    [super setEditing:editing animated:animated];
+    if (self.tableView.editing != editing) {
+        [self.tableView setEditing:editing animated:animated];
+    }
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -908,11 +950,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_reloadItems {
     NSMutableArray *items = [NSMutableArray array];
-    for (NSDictionary<NSString *, id> *item in WCLiquidGlassPreferences.buttonItems) {
+    for (NSDictionary<NSString *, id> *item in WCLiquidGlassPreferences.allButtonItems) {
         [items addObject:item.mutableCopy];
     }
     self.items = items;
-    [self wc_rebuildAvailableActions];
     [self.tableView reloadData];
 }
 
@@ -920,197 +961,70 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [WCLiquidGlassPreferences setButtonItems:self.items.copy];
 }
 
-- (NSSet<NSString *> *)wc_currentActionIdentifiers {
-    NSMutableSet<NSString *> *actionIdentifiers = [NSMutableSet set];
-    [self.items enumerateObjectsUsingBlock:^(NSDictionary<NSString *, id> *item, __unused NSUInteger index, __unused BOOL *stop) {
-        if ([item[@"action"] isKindOfClass:NSString.class]) {
-            [actionIdentifiers addObject:item[@"action"]];
-        }
-    }];
-    return actionIdentifiers.copy;
-}
-
-- (void)wc_rebuildAvailableActions {
-    NSSet<NSString *> *currentActions = [self wc_currentActionIdentifiers];
-    NSArray<NSString *> *navigationActions = @[
-        WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
-        WCLiquidGlassActionChats, WCLiquidGlassActionContacts,
-        WCLiquidGlassActionDiscover, WCLiquidGlassActionMe,
-        WCLiquidGlassActionPageHierarchyDiagnostics,
-        WCLiquidGlassActionPlugins,
-        WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
-    ];
-    NSArray<NSString *> *chatActions = @[
-        WCLiquidGlassActionDoutuAssistant, WCLiquidGlassActionSearchRecords,
-        WCLiquidGlassActionAlbum, WCLiquidGlassActionCamera, WCLiquidGlassActionVideoCall,
-        WCLiquidGlassActionRedPacket, WCLiquidGlassActionFiles, WCLiquidGlassActionTransfer,
-        WCLiquidGlassActionLocation, WCLiquidGlassActionFavorites, WCLiquidGlassActionTranslate,
-        WCLiquidGlassActionScan, WCLiquidGlassActionPayment, WCLiquidGlassActionContactCard,
-        WCLiquidGlassActionVoiceInput, WCLiquidGlassActionNewLine,
-        WCLiquidGlassActionMention, WCLiquidGlassActionFullInput
-    ];
-    NSPredicate *availablePredicate = [NSPredicate predicateWithBlock:^BOOL(NSString *actionIdentifier,
-                                                                           __unused NSDictionary *bindings) {
-        return ![currentActions containsObject:actionIdentifier];
-    }];
-    self.availableNavigationActions = [navigationActions filteredArrayUsingPredicate:availablePredicate];
-    self.availableChatActions = [chatActions filteredArrayUsingPredicate:availablePredicate];
-}
-
-- (NSArray<NSString *> *)wc_availableActionsForSection:(NSInteger)section {
-    return section == 1 ? self.availableNavigationActions : self.availableChatActions;
-}
-
-- (NSInteger)wc_availableSectionForAction:(NSString *)actionIdentifier {
-    NSArray<NSString *> *navigationActions = @[
-        WCLiquidGlassActionSettings, WCLiquidGlassActionWCGlassSettings,
-        WCLiquidGlassActionChats, WCLiquidGlassActionContacts,
-        WCLiquidGlassActionDiscover, WCLiquidGlassActionMe,
-        WCLiquidGlassActionPageHierarchyDiagnostics,
-        WCLiquidGlassActionPlugins,
-        WCLiquidGlassActionMoments, WCLiquidGlassActionChannels
-    ];
-    return [navigationActions containsObject:actionIdentifier] ? 1 : 2;
-}
-
-- (void)wc_reloadAvailableSectionsWithoutAnimation {
-    [UIView performWithoutAnimation:^{
-        [self.tableView reloadSections:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(1, 2)]
-                      withRowAnimation:UITableViewRowAnimationNone];
-    }];
-}
-
-- (void)wc_confirmRestoreButtonsFromView:(UIView *)sourceView {
-    UIAlertController *sheet = WCLiquidGlassMakeActionSheet(sourceView,
-                                                             @"恢复默认按钮？",
-                                                             @"按钮顺序和已添加动作会恢复，其他设置不受影响。");
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"恢复"
-                                             style:UIAlertActionStyleDestructive
-                                           handler:^(__unused UIAlertAction *action) {
-        [WCLiquidGlassPreferences restoreDefaultButtonItems];
-        [self wc_reloadItems];
-    }]];
-    [self presentViewController:sheet animated:YES completion:nil];
-}
-
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 4;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) {
-        return self.items.count;
-    }
-    if (section == 1 || section == 2) {
-        return [self wc_availableActionsForSection:section].count;
-    }
     return 1;
 }
 
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return self.items.count;
+}
+
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    NSArray<NSString *> *titles = @[@"已添加", @"导航与入口", @"聊天工具", @"管理"];
-    return WCLiquidGlassSectionLabel(titles[section], UIColor.secondaryLabelColor);
+    return nil;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return WCLiquidGlassSectionHeaderHeight();
+    return CGFLOAT_MIN;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-    if (section == 0) {
-        return WCLiquidGlassFooterLabel(@"最多可添加 16 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。");
-    }
-    if (section == 2) {
-        return WCLiquidGlassFooterLabel(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。");
-    }
     return nil;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    if (section == 0) {
-        return WCLiquidGlassFooterHeight(@"最多可添加 16 个动作；环形菜单会按当前页面自动隐藏不可用的动作。点按右上角“编辑”后，可删除按钮或按住右侧把手调整顺序。", 54.0);
-    }
-    if (section == 2) {
-        return WCLiquidGlassFooterHeight(@"编辑时轻点加号即可添加；已添加的动作不会重复显示。", 54.0);
-    }
     return CGFLOAT_MIN;
 }
 
 - (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
-    return self.editing && indexPath.section == 0;
+    return tableView.editing && indexPath.section == 0;
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 0) {
-        return self.editing;
-    }
-    return self.editing && (indexPath.section == 1 || indexPath.section == 2)
-        && self.items.count < WCLiquidGlassMaximumButtonCount;
+    return tableView.editing && indexPath.section == 0;
 }
 
 - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (self.editing && indexPath.section == 0) {
-        return UITableViewCellEditingStyleDelete;
-    }
-    if (self.editing && (indexPath.section == 1 || indexPath.section == 2)
-        && self.items.count < WCLiquidGlassMaximumButtonCount) {
-        return UITableViewCellEditingStyleInsert;
-    }
     return UITableViewCellEditingStyleNone;
 }
 
 - (BOOL)tableView:(UITableView *)tableView shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath *)indexPath {
-    return self.editing && indexPath.section < 3;
+    return NO;
 }
 
-- (void)tableView:(UITableView *)tableView
-commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
- forRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (editingStyle == UITableViewCellEditingStyleDelete && indexPath.section == 0) {
-        NSString *actionIdentifier = self.items[indexPath.row][@"action"];
-        BOOL wasAtMaximum = self.items.count == WCLiquidGlassMaximumButtonCount;
-        [self.items removeObjectAtIndex:indexPath.row];
-        [self wc_rebuildAvailableActions];
-        [self wc_saveItems];
-        NSInteger destinationSection = [self wc_availableSectionForAction:actionIdentifier];
-        NSUInteger destinationRow = [[self wc_availableActionsForSection:destinationSection] indexOfObject:actionIdentifier];
-        [tableView performBatchUpdates:^{
-            [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
-            if (destinationRow != NSNotFound) {
-                NSIndexPath *destination = [NSIndexPath indexPathForRow:destinationRow inSection:destinationSection];
-                [tableView insertRowsAtIndexPaths:@[destination] withRowAnimation:UITableViewRowAnimationAutomatic];
-            }
-        } completion:^(__unused BOOL finished) {
-            if (wasAtMaximum) {
-                [self wc_reloadAvailableSectionsWithoutAnimation];
-            }
-        }];
+- (NSUInteger)wc_enabledItemCount {
+    NSUInteger count = 0;
+    for (NSDictionary<NSString *, id> *item in self.items) {
+        count += ![item[@"hidden"] boolValue];
+    }
+    return count;
+}
+
+- (void)wc_actionSwitchChanged:(UISwitch *)sender {
+    NSInteger row = sender.tag;
+    if (row < 0 || row >= (NSInteger)self.items.count) {
         return;
     }
-    if (editingStyle != UITableViewCellEditingStyleInsert
-        || (indexPath.section != 1 && indexPath.section != 2)
-        || self.items.count >= WCLiquidGlassMaximumButtonCount) {
+    if (sender.isOn && [self wc_enabledItemCount] >= WCLiquidGlassMaximumButtonCount) {
+        sender.on = NO;
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"已达到动作上限"
+                                                                       message:@"最多同时启用 16 个动作，请先关闭一个动作。"
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
         return;
     }
-    NSString *actionIdentifier = [self wc_availableActionsForSection:indexPath.section][indexPath.row];
-    NSUInteger destinationRow = self.items.count;
-    [self.items addObject:[@{
-        @"slot": [NSString stringWithFormat:@"slot.%@", NSUUID.UUID.UUIDString],
-        @"action": actionIdentifier
-    } mutableCopy]];
-    [self wc_rebuildAvailableActions];
+    self.items[(NSUInteger)row][@"hidden"] = @(!sender.isOn);
     [self wc_saveItems];
-    BOOL reachedMaximum = self.items.count == WCLiquidGlassMaximumButtonCount;
-    [tableView performBatchUpdates:^{
-        [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
-        NSIndexPath *destination = [NSIndexPath indexPathForRow:destinationRow inSection:0];
-        [tableView insertRowsAtIndexPaths:@[destination] withRowAnimation:UITableViewRowAnimationAutomatic];
-    } completion:^(__unused BOOL finished) {
-        if (reachedMaximum) {
-            [self wc_reloadAvailableSectionsWithoutAnimation];
-        }
-    }];
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -1133,47 +1047,65 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)sourceIndexPath
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *identifier = @"WCLiquidGlassButtonEditorCell";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
+    WCLiquidGlassButtonEditorCell *cell = (WCLiquidGlassButtonEditorCell *)[tableView dequeueReusableCellWithIdentifier:identifier];
     if (!cell) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier];
+        cell = [[WCLiquidGlassButtonEditorCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifier];
     }
 
-    if (indexPath.section == 3) {
-        WCLiquidGlassConfigureCell(cell,
-                                   @"恢复默认按钮",
-                                   @"恢复为最初的按钮与顺序",
-                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindRestore, 32.0),
-                                   UIColor.systemRedColor);
-        WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
-        cell.accessoryType = UITableViewCellAccessoryNone;
-        cell.showsReorderControl = NO;
-        cell.contentView.alpha = 1.0;
-        return cell;
-    }
-
-    NSString *actionIdentifier = indexPath.section == 0
-        ? self.items[indexPath.row][@"action"]
-        : [self wc_availableActionsForSection:indexPath.section][indexPath.row];
+    NSString *actionIdentifier = self.items[indexPath.row][@"action"];
+    BOOL hidden = [self.items[indexPath.row][@"hidden"] boolValue];
+    UIImage *actionImage = [WCLiquidGlassImageForAction(actionIdentifier, 60.0)
+                            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     WCLiquidGlassConfigureCell(cell,
                                WCLiquidGlassActionTitle(actionIdentifier),
                                nil,
-                               WCLiquidGlassImageForAction(actionIdentifier, 60.0),
+                               actionImage,
                                UIColor.labelColor);
-    WCLiquidGlassStyleCardCell(cell, indexPath, tableView);
+    UIListContentConfiguration *content = (UIListContentConfiguration *)cell.contentConfiguration;
+    content.imageProperties.tintColor = UIColor.labelColor;
+    content.secondaryTextProperties.font = WCLiquidGlassFont(13.0, UIFontWeightRegular);
+    content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(0.0, 11.0, 0.0, 104.0);
+    cell.preservesSuperviewLayoutMargins = NO;
+    cell.layoutMargins = UIEdgeInsetsMake(0.0, 16.0, 0.0, 16.0);
+    cell.contentView.layoutMargins = UIEdgeInsetsZero;
+    cell.contentConfiguration = content;
+    UIView *groupBackground = [[UIView alloc] init];
+    groupBackground.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+        return traits.userInterfaceStyle == UIUserInterfaceStyleDark
+            ? [UIColor colorWithWhite:0.12 alpha:1.0]
+            : [UIColor colorWithRed:0.93 green:0.98 blue:0.96 alpha:1.0];
+    }];
+    groupBackground.layer.cornerCurve = kCACornerCurveContinuous;
+    groupBackground.layer.cornerRadius = 22.0;
+    if (indexPath.row > 0) {
+        groupBackground.layer.maskedCorners &= ~(kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner);
+    }
+    if (indexPath.row + 1 < (NSInteger)self.items.count) {
+        groupBackground.layer.maskedCorners &= ~(kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner);
+    }
+    cell.backgroundView = groupBackground;
+    cell.backgroundConfiguration = nil;
+    cell.backgroundColor = UIColor.clearColor;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.accessoryView = nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
-    cell.showsReorderControl = indexPath.section == 0;
-    cell.contentView.alpha = (indexPath.section > 0
-                              && self.items.count >= WCLiquidGlassMaximumButtonCount) ? 0.45 : 1.0;
+    WCLiquidGlassButtonEditorCell *editorCell = (WCLiquidGlassButtonEditorCell *)cell;
+    UISwitch *toggle = editorCell.actionSwitch;
+    toggle.on = !hidden;
+    toggle.tag = indexPath.row;
+    toggle.accessibilityLabel = WCLiquidGlassActionTitle(actionIdentifier);
+    toggle.accessibilityValue = hidden ? @"关闭" : @"开启";
+    [toggle removeTarget:nil action:NULL forControlEvents:UIControlEventValueChanged];
+    [toggle addTarget:self action:@selector(wc_actionSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+    cell.accessoryView = nil;
+    cell.showsReorderControl = YES;
+    [cell bringSubviewToFront:toggle];
+    [cell bringSubviewToFront:editorCell.actionDivider];
+    cell.contentView.alpha = 1.0;
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (indexPath.section == 3) {
-        [self wc_confirmRestoreButtonsFromView:[tableView cellForRowAtIndexPath:indexPath]];
-    }
 }
 
 @end
@@ -1357,7 +1289,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @interface WCLiquidGlassLiquidFeaturesController : UITableViewController
 @end
 
-
 @implementation WCLiquidGlassLiquidFeaturesController
 
 - (instancetype)init {
@@ -1430,17 +1361,21 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         @"通知圆角与液态",
         @"首页圆角与液态"
     ];
-    WCLiquidGlassConfigureCell(cell, titles[indexPath.row], nil, image, UIColor.labelColor);
+    NSString *detail = nil;
+    if (indexPath.row == 1) {
+        detail = [self wc_longPressAppearanceTitle];
+    }
+    WCLiquidGlassConfigureCell(cell, titles[indexPath.row], detail, image, UIColor.labelColor);
+    if (indexPath.row == 1) {
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        return cell;
+    }
     if (indexPath.row < 5) {
         UISwitch *toggle = [[UISwitch alloc] init];
         switch (indexPath.row) {
             case 0:
                 toggle.on = WCLiquidGlassPreferences.chatTimeGlassEnabled;
                 [toggle addTarget:self action:@selector(wc_chatTimeChanged:) forControlEvents:UIControlEventValueChanged];
-                break;
-            case 1:
-                toggle.on = WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled;
-                [toggle addTarget:self action:@selector(wc_longPressChanged:) forControlEvents:UIControlEventValueChanged];
                 break;
             case 2:
                 toggle.on = WCLiquidGlassPreferences.contactsIndexGlassEnabled;
@@ -1480,6 +1415,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == 0) {
         [self.navigationController pushViewController:[[WCLiquidGlassGlassAppearanceController alloc] init] animated:YES];
+    } else if (indexPath.row == 1) {
+        [self wc_presentLongPressAppearancePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.row == 5) {
         [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     } else if (indexPath.row == 6) {
@@ -1489,10 +1426,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_chatTimeChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setChatTimeGlassEnabled:sender.isOn];
-}
-
-- (void)wc_longPressChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setWCGlassLongPressMenuEnabled:sender.isOn];
 }
 
 - (void)wc_contactsChanged:(UISwitch *)sender {
@@ -1505,6 +1438,56 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_chatToolbarChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setChatToolbarEnabled:sender.isOn];
+}
+
+- (NSString *)wc_longPressAppearanceTitle {
+    if (!WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled) {
+        return @"关闭";
+    }
+    switch (WCLiquidGlassPreferences.wcGlassLongPressMenuAppearance) {
+        case WCLiquidGlassGlassAppearanceBalanced:
+            return @"平衡";
+        case WCLiquidGlassGlassAppearanceTinted:
+            return @"色调";
+        default:
+            return @"透明";
+    }
+}
+
+- (void)wc_presentLongPressAppearancePickerFromView:(UIView *)sourceView {
+    NSInteger currentAppearance = WCLiquidGlassPreferences.wcGlassLongPressMenuAppearance;
+    BOOL enabled = WCLiquidGlassPreferences.wcGlassLongPressMenuEnabled;
+    NSMutableArray<NSString *> *options = [NSMutableArray arrayWithObject:@"关闭"];
+    NSArray<NSString *> *appearanceTitles = @[@"透明", @"平衡", @"色调"];
+    for (NSInteger appearance = WCLiquidGlassGlassAppearanceClear;
+         appearance <= WCLiquidGlassGlassAppearanceTinted;
+         appearance += 1) {
+        NSString *title = appearanceTitles[(NSUInteger)appearance];
+        if (enabled && appearance == currentAppearance) {
+            title = [title stringByAppendingString:@" ✓"];
+        }
+        [options addObject:title];
+    }
+    if (!enabled) {
+        options[0] = @"关闭 ✓";
+    }
+    WCLiquidGlassPresentActionSheet(self,
+                                    sourceView,
+                                    @"液态效果",
+                                    @"仅应用于消息长按菜单",
+                                    options,
+                                    ^(NSUInteger index) {
+        if (index == 0) {
+            [WCLiquidGlassPreferences setWCGlassLongPressMenuEnabled:NO];
+            [self.tableView reloadData];
+            return;
+        }
+        WCLiquidGlassGlassAppearance appearance =
+            (WCLiquidGlassGlassAppearance)(index - 1);
+        [WCLiquidGlassPreferences setWCGlassLongPressMenuAppearance:appearance];
+        [WCLiquidGlassPreferences setWCGlassLongPressMenuEnabled:YES];
+        [self.tableView reloadData];
+    });
 }
 
 @end
@@ -2024,7 +2007,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.section == 1) {
         NSString *key = self.wc_contentRowKeys[indexPath.row];
         if ([key isEqualToString:@"buttonActions"]) {
-            NSString *count = [NSString stringWithFormat:@"%lu 个槽位", (unsigned long)WCLiquidGlassPreferences.buttonItems.count];
+            NSString *count = [NSString stringWithFormat:@"%lu 个已启用", (unsigned long)WCLiquidGlassPreferences.buttonItems.count];
             WCLiquidGlassConfigureCell(cell, @"按钮与动作", count,
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindActions, 32.0), UIColor.labelColor);
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;

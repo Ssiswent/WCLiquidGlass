@@ -94,6 +94,8 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)setContactsIndexGlassEnabled:(BOOL)enabled;
 + (BOOL)wcGlassLongPressMenuEnabled;
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled;
++ (WCLiquidGlassGlassAppearance)wcGlassLongPressMenuAppearance;
++ (void)setWCGlassLongPressMenuAppearance:(WCLiquidGlassGlassAppearance)appearance;
 + (BOOL)chatToolbarEnabled;
 + (void)setChatToolbarEnabled:(BOOL)enabled;
 + (BOOL)messageNotificationGlassEnabled;
@@ -129,6 +131,7 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)setWCGlassIOS27CompatibilityEnabled:(BOOL)enabled;
 + (BOOL)materialFileProtectionEnabled;
 + (void)setMaterialFileProtectionEnabled:(BOOL)enabled;
++ (NSArray<NSDictionary<NSString *, id> *> *)allButtonItems;
 + (NSArray<NSDictionary<NSString *, id> *> *)buttonItems;
 + (void)setButtonItems:(NSArray<NSDictionary<NSString *, id> *> *)items;
 + (void)restoreDefaultButtonItems;

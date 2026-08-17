@@ -29,9 +29,13 @@ for source_file in ./*.m ./*.xm ./*.c; do
     grep -Fq "$source_name" Makefile || fail "$source_name is missing from Makefile"
 done
 
-grep -Fq 'shouldRegisterUncaughtExceptionHandler:YES' WCLiquidGlassCrashLogger.m || fail "PLCrashReporter Objective-C exception handler is not enabled"
+grep -Fq 'WCLiquidGlassStartCrashMarker' WCLiquidGlassCrashLogger.m || fail "fixed signal crash marker is missing"
+grep -Fq 'NSSetUncaughtExceptionHandler(WCLiquidGlassHandleException)' WCLiquidGlassCrashLogger.m || fail "uncaught exception handler is missing"
+if grep -Fq 'shouldRegisterUncaughtExceptionHandler:YES' WCLiquidGlassCrashLogger.m; then
+    fail "PLCrashReporter must not own the process exception handler"
+fi
 custom_data_assignments=$(grep -c 'reporter.customData =' WCLiquidGlassCrashLogger.m || true)
-[ "$custom_data_assignments" -eq 1 ] || fail "PLCrashReporter customData must be assigned exactly once before enable"
+[ "$custom_data_assignments" -eq 0 ] || fail "legacy PLCrashReporter customData path must remain disabled"
 grep -Fq '@".failed"' WCLiquidGlassCrashLogger.m || fail "failed pending crash report isolation is missing"
 if grep -Fq 'q7ar2wl2d3z44fwr25h2f2lx' WCLiquidGlassMenu.m; then
     fail "hardcoded WCGlass settings controller remains"
@@ -61,21 +65,35 @@ grep -Fq '@interface WCLiquidGlassChatToolbarView' WCLiquidGlassMenu.m || fail "
 grep -Fq '@interface WCLiquidGlassToolbarButton : UIButton' WCLiquidGlassMenu.m || fail "chat toolbar must use native UIButton controls"
 grep -Fq 'WCLiquidGlassChatToolbarButtonSide = 40.0' WCLiquidGlassMenu.m || fail "chat toolbar compact button size is missing"
 grep -Fq 'WCLiquidGlassChatToolbarGap = 8.0' WCLiquidGlassMenu.m || fail "chat toolbar gap is missing"
+grep -Fq 'WCLiquidGlassChatToolbarHorizontalMargin = 8.0' WCLiquidGlassMenu.m || fail "chat toolbar fixed horizontal margin is missing"
+if grep -Eq 'WCLiquidGlassFindInputEdgeControls|WCLiquidGlassInputRowFrameForMountingView' WCLiquidGlassMenu.m; then
+    fail "chat toolbar must not derive geometry from input row controls"
+fi
 grep -Fq '![actionIdentifier isEqualToString:WCLiquidGlassActionVoiceInput]' WCLiquidGlassMenu.m || fail "chat toolbar must hide voice transcription"
 grep -Fq '![actionIdentifier isEqualToString:WCLiquidGlassActionDoutuAssistant]' WCLiquidGlassMenu.m || fail "chat toolbar must hide doutu assistant"
 if grep -Eq 'WCLiquidGlassToggleVoiceTranscription|WCLiquidGlassSharedVoiceTranscription|VoiceTranscriptionStateDidChangeNotification|WCLiquidGlassVoiceControlAssociationKey|WCLiquidGlassActiveChatInputToolView' WCLiquidGlassMenu.m; then
     fail "toolbar-specific shared voice transcription code remains"
 fi
 grep -Fq 'background.strokeWidth = 0.0' WCLiquidGlassMenu.m || fail "chat toolbar active icon must not add a border"
-grep -Fq -- '- (void)setFrame:(CGRect)frame' Tweak.xm || fail "MMInputToolView frame synchronization is missing"
-grep -Fq -- '- (void)setBounds:(CGRect)bounds' Tweak.xm || fail "MMInputToolView bounds synchronization is missing"
-grep -Fq -- '- (void)setHidden:(BOOL)hidden' Tweak.xm || fail "MMInputToolView visibility synchronization is missing"
-grep -Fq -- '- (void)willMoveToWindow:(UIWindow *)window' Tweak.xm || fail "MMInputToolView window migration synchronization is missing"
+grep -Fq -- '- (void)updateToolViewHeight:(BOOL)animated' Tweak.xm || fail "MMInputToolView native height hook is missing"
+grep -Fq -- '- (void)layoutSubviews' Tweak.xm || fail "MMInputToolView layout hook is missing"
+grep -Fq -- '- (void)didMoveToWindow' Tweak.xm || fail "MMInputToolView window migration synchronization is missing"
 grep -Fq -- '- (void)didMoveToSuperview' Tweak.xm || fail "MMInputToolView reparent synchronization is missing"
 grep -Fq 'WCLiquidGlassChatToolbarEnabledKey' WCLiquidGlassPreferences.m || fail "chat toolbar preference definition is missing"
 grep -Fq 'BOOL inputAvailable = WCLiquidGlassPreferences.enabled &&' WCLiquidGlassMenu.m || fail "chat toolbar master preference gate is missing"
-grep -Fq 'WCLiquidGlassUpdateChatTableBottomInset' WCLiquidGlassMenu.m || fail "chat table bottom inset synchronization is missing"
-grep -Fq 'verticalScrollIndicatorInsets' WCLiquidGlassMenu.m || fail "chat table scroll indicator inset synchronization is missing"
+grep -Fq 'WCLiquidGlassUpdateChatTableBottomInset' WCLiquidGlassMenu.m || fail "chat table bottom inset integration is missing"
+grep -Fq 'WCLiquidGlassChatTableInsetForHost' WCLiquidGlassMenu.h || fail "chat table host inset composition API is missing"
+grep -Fq '%hook MMTableView' Tweak.xm || fail "chat table inset hook is missing"
+grep -Fq 'setScrollIndicatorInsets:(UIEdgeInsets)insets' Tweak.xm || fail "chat table scroll-indicator tracking is missing"
+grep -Fq 'WCLiquidGlassChatTableInsetForHost(table, inset, NO)' Tweak.xm || fail "chat table content inset composition is missing"
+grep -Fq 'WCLiquidGlassChatTableInsetForHost(table, insets, YES)' Tweak.xm || fail "chat table indicator inset composition is missing"
+if grep -Eq 'setContentSize:\(CGSize\)size|setContentOffset:\(CGPoint\)offset|WCLiquidGlassChatTableDidMutate|WCLiquidGlassChatTableOffsetForInput|WCLiquidGlassReanchorChatTableForInput|WCLiquidGlassKeyboardTransitionActive|WCLiquidGlassKeyboardOffsetRepairDepth' Tweak.xm WCLiquidGlassMenu.h WCLiquidGlassMenu.m; then
+    fail "chat table active offset/content-size correction remains"
+fi
+if grep -Fq 'UIScrollViewContentInsetAdjustmentNever' WCLiquidGlassMenu.m; then
+    fail "chat table must not override UIKit inset adjustment behavior"
+fi
+grep -Fq 'verticalScrollIndicatorInsets' WCLiquidGlassMenu.m || fail "chat table indicator inset integration is missing"
 if grep -Fq 'buttonsByAction' WCLiquidGlassMenu.m; then
     fail "chat toolbar still keys buttons by action"
 fi

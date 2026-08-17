@@ -127,7 +127,9 @@ static void WCLiquidGlassWCGlassLongPressFinishAppearance(
 
 static UIVisualEffectView *WCLiquidGlassWCGlassLongPressGlassView(CGRect frame) {
     UIVisualEffectView *glassView =
-        [[UIVisualEffectView alloc] initWithEffect:WCLiquidGlassCurrentGlassEffect()];
+        [[UIVisualEffectView alloc]
+            initWithEffect:WCLiquidGlassGlassEffectForAppearance(
+                WCLiquidGlassPreferences.wcGlassLongPressMenuAppearance)];
     glassView.frame = frame;
     glassView.userInteractionEnabled = NO;
     glassView.opaque = NO;
@@ -174,7 +176,8 @@ static void WCLiquidGlassWCGlassLongPressTakeOver(UIVisualEffectView *wcGlassVie
         if (existingState.dismissing) {
             return;
         }
-        existingState.morphGlassView.effect = WCLiquidGlassCurrentGlassEffect();
+        existingState.morphGlassView.effect = WCLiquidGlassGlassEffectForAppearance(
+            WCLiquidGlassPreferences.wcGlassLongPressMenuAppearance);
         menuContentView.hidden = NO;
         hostView.hidden = NO;
         hostView.alpha = 1.0;
@@ -499,7 +502,8 @@ static void WCLiquidGlassRefreshVisibleWCGlassLongPressViews(void) {
             WCLiquidGlassWCGlassLongPressState *state =
                 objc_getAssociatedObject(window, WCLiquidGlassWCGlassLongPressStateKey);
             if (state) {
-                state.morphGlassView.effect = WCLiquidGlassCurrentGlassEffect();
+                state.morphGlassView.effect = WCLiquidGlassGlassEffectForAppearance(
+                    WCLiquidGlassPreferences.wcGlassLongPressMenuAppearance);
                 WCLiquidGlassWCGlassLongPressApplyTransparentHost(state.hostView);
             }
         }

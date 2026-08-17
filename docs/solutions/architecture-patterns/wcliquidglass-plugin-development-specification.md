@@ -1,7 +1,7 @@
 ---
 title: WCLiquidGlass 插件架构与微信插件开发规范
 date: 2026-07-19
-last_updated: 2026-08-13
+last_updated: 2026-08-17
 category: architecture-patterns
 module: WCLiquidGlass
 problem_type: architecture_pattern
@@ -15,7 +15,7 @@ tags: [ios, wechat-plugin, theos, objective-c, architecture, liquid-glass, runti
 
 # WCLiquidGlass 插件架构与微信插件开发规范
 
-> 当前基线：WCLiquidGlass 2.0.33（2026-08-13）
+> 当前基线：WCLiquidGlass 2.1.0（2026-08-17）
 > 适用对象：继续维护本插件的开发者、Codex、Claude Code 及其他 AI 编程工具。  
 > 事实来源：运行代码优先于本文，本文优先于概览型 README 和历史截图。
 
@@ -120,13 +120,15 @@ flowchart TD
 
 #### 3.3 聊天输入工具栏
 
-2.0.18 起，聊天输入工具栏不属于 overlay window 或 `WCLiquidGlassHostView`。函数通过关联对象让每个 `MMInputToolView` 拥有唯一的 `WCLiquidGlassChatToolbarView`；工具栏跟随输入所属页面控制器的 view，不扫描控制器、窗口或全局视图树来寻找输入。2.0.19 补齐 `layoutSubviews`、`setFrame:`、`setBounds:`、`setHidden:`、`setAlpha:`、`setUserInteractionEnabled:`、`willMoveToWindow:`、`didMoveToWindow` 和 `didMoveToSuperview` 的同一布局入口，覆盖输入高度、位置、可见性和同窗口换宿主；2.0.21 起优先复用输入所属聊天控制器的 `getInputToolViewFrame`，避免微信输入容器的内部布局坐标把工具栏放到全屏页顶部或 sheet 顶部。
+2.0.18 起，聊天输入工具栏不属于 overlay window 或 `WCLiquidGlassHostView`。函数通过关联对象让每个 `MMInputToolView` 拥有唯一的 `WCLiquidGlassChatToolbarView`；工具栏跟随输入所属页面控制器的 view，不扫描控制器、窗口或全局视图树来寻找输入。当前布局入口只保留 `layoutSubviews`、`updateToolViewHeight:`、`didMoveToWindow` 和 `didMoveToSuperview`；高度更新先执行微信原始实现，再更新工具栏，避免插件打断输入行和键盘转场。2.0.21 起优先复用输入所属聊天控制器的 `getInputToolViewFrame`，避免微信输入容器的内部布局坐标把工具栏放到全屏页顶部或 sheet 顶部。
 
-挂载时从 `MMInputToolView.superview` 向上寻找最近的非 `UIWindow`、可见且能接收触摸的原生祖先，只有该祖先的 `bounds` 完整容纳输入行上方 8pt 间距和 40pt 工具栏矩形才挂载；工具栏横向边界优先取输入行内左右两个可见圆形控件的外沿（加号和语音按钮），找不到两个控件时才回退到微信 `getInputToolViewFrame`，并在多行文字或引用布局改变时由同一原生布局事务重新计算。工具栏显示的高度加 8pt 间距会以关联状态同步加入同一聊天页面 `MMTableView` 的 `contentInset.bottom` 与 `verticalScrollIndicatorInsets.bottom`，切换输入宿主或隐藏工具栏时只移除插件增加的部分并保留微信原生 inset；微信在键盘转场中重设表格 inset 时，定向复用同一同步入口恢复插件额外空间，位于列表底部时保持滚动位置。聊天表格在首次挂载时解析一次并缓存，后续输入布局复用缓存，不参与聊天列表滚动。中间的布局容器即使关闭交互也不会提前截断搜索。输入工具本身只要在可见窗口中且总开关与“聊天输入工具栏”开关同时开启即可。无法找到安全祖先、输入窗口不可用、输入视图隐藏/透明或工具栏开关关闭时，工具栏立即移除并隐藏，下一次原生布局再重试。位置和透明度在输入视图的同一 UIKit 事务中更新，不叠加自定义键盘或转场动画；祖先层级自然保证其位于 Sheet、Alert 和 Modal 下方；外部 sibling 引用层不做推测性扫描。
+挂载时从 `MMInputToolView.superview` 向上寻找最近的非 `UIWindow`、可见且能接收触摸的原生祖先，只有该祖先的 `bounds` 完整容纳输入行上方 8pt 间距和 40pt 工具栏矩形才挂载；工具栏横向使用该稳定宿主的安全区域加固定 8pt 最小边距，不读取加号、表情、发送或语音按钮的坐标，纵向锚点仍使用输入所属控制器的 `getInputToolViewFrame`，并在多行文字或引用布局改变时由同一原生布局事务重新计算。工具栏将自身高度与间距作为固定额外空间：每次微信写入对应 `MMTableView` 的 `contentInset` 或滚动指示器 inset 前，插件保留微信传入的基线并直接叠加该空间；如果这是首次叠加或微信改变底部基线且列表原本贴底，则只在同一轮 `MMTableView` 原生布局结束时消费一次新的底部锚点，避免后置异步滚动造成可见跳动。除此之外不覆盖 `contentInsetAdjustmentBehavior`，不持续重写 `contentOffset` 或 `contentSize`。键盘展开、收起、消息发送、引用高度变化和语音转文字高度变化都由微信原生表格布局与滚动动画处理。交互式返回取消期间，输入视图短暂 hidden/alpha 或宿主暂时不可见不会清除已安装的表格空间；同一窗口内的缓存表格也不会因转场中的控制器层级暂时变化而切换，只有输入视图真正脱离窗口或 superview、功能关闭或没有按钮时才恢复原值。该路径不在滚动帧扫描消息视图或重排工具栏。中间的布局容器即使关闭交互也不会提前截断搜索。输入工具本身只要在可见窗口中且总开关与“聊天输入工具栏”开关同时开启即可。无法找到安全祖先、输入窗口不可用、输入视图隐藏/透明或工具栏开关关闭时，工具栏隐藏并在输入仍挂载时保留已叠加的表格 inset，下一次原生布局再重试；真正脱离层级时才恢复原值。位置和透明度在输入视图的同一 UIKit 事务中更新，不叠加自定义键盘或转场动画；祖先层级自然保证其位于 Sheet、Alert 和 Modal 下方；外部 sibling 引用层不做推测性扫描。
+
+页面层级诊断还会去重记录上述底部状态链路：键盘通知、工具栏布局/隐藏、每次宿主 inset 写入的请求值与叠加值，以及工具栏宿主和表格 `bounds`。诊断不持续记录或修正表格 `contentSize`、`contentOffset`，不在滚动帧中连续采样。
 
 工具栏只使用一层原生 Liquid Glass 背景，其内使用 40pt `UIButton` 和系统按压反馈，不再在玻璃上叠加按钮玻璃或手工缩放。图标沿用 `WCLiquidGlassImageForAction` 的资源路径并在工具栏内统一以模板色渲染；WCGlass 单独使用更小的符号尺寸，使其与其他动作的视觉重量一致。工具栏始终过滤 `voice_input` 与 `doutu_assistant`，不显示或维护这两个动作的状态；环形菜单和液态面板继续使用各自原有的微信入口与点击逻辑。创建时以及收到 `WCLiquidGlassPreferencesDidChangeNotification` 时读取完整的 `buttonItems` 顺序；布局阶段不做页面可用性筛选，也不重复扫描。已创建工具栏直接复用按钮数量，避免在输入布局热路径读取偏好数组。配置动作统一交给既有 `WCLiquidGlassPerformAction` 路由，横向 `UIScrollView` 以默认触摸仲裁承载全部已配置按钮。工具栏布局不扫描语音或斗图控件，其他配置动作统一交给既有 `WCLiquidGlassPerformAction` 路由，避免插件按钮递归触发微信原生控件。
 
-本基线中，`voice_input` 与 `doutu_assistant` 明确只属于环形菜单和液态面板；聊天输入工具栏在构建按钮序列时始终过滤这两个动作，不创建对应状态或原生控件关联。工具栏外框按按钮数量自适应，按钮不足时相对输入行居中，超过可用宽度时保留横向滚动。微信键盘或输入层转场重写 `MMTableView` inset 时，由表格自身的定向同步入口把最新微信 inset 作为基线恢复工具栏额外空间，并在列表位于底部时定位到新的底部，避免键盘收起后消息被遮挡；该入口只在 inset 发生变化时工作，不参与列表滚动。
+本基线中，`voice_input` 与 `doutu_assistant` 明确只属于环形菜单和液态面板；聊天输入工具栏在构建按钮序列时始终过滤这两个动作，不创建对应状态或原生控件关联。工具栏外框使用稳定宿主安全区域的固定 8pt 左右边距，按钮不足时按内容宽度居中，超过可用宽度时保留横向滚动；下面输入行内部控件的增删、隐藏和位置变化不会改变工具栏外框。聊天表格 inset 只由与输入工具栏绑定的状态叠加一次；首次叠加或微信改变底部基线且列表贴底时，在同一轮 `MMTableView` 原生布局中消费一次底部锚点，之后的内容尺寸和滚动位置始终交给微信原生实现，不在消息更新后持续执行插件重锚定。
 
 ### 4. 配置与数据契约
 

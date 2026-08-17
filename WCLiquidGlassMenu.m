@@ -2,6 +2,7 @@
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassIconAssets.h"
 #import "WCLiquidGlassPreferences.h"
+#import "WCLiquidGlassCrashLogger.h"
 
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
@@ -12,6 +13,7 @@ static const CGFloat WCLiquidGlassSelectedScale = 1.5;
 static const CGFloat WCLiquidGlassFloatingButtonDiameter = 48.0;
 static const CGFloat WCLiquidGlassChatToolbarHeight = 40.0;
 static const CGFloat WCLiquidGlassChatToolbarGap = 8.0;
+static const CGFloat WCLiquidGlassChatToolbarHorizontalMargin = 8.0;
 static const CGFloat WCLiquidGlassChatToolbarButtonSide = 40.0;
 static const CGFloat WCLiquidGlassChatToolbarButtonSpacing = 2.0;
 static const NSUInteger WCLiquidGlassCompactMinimumCount = 7;
@@ -22,10 +24,11 @@ static BOOL WCLiquidGlassDoutuConfiguredCached = NO;
 static char WCLiquidGlassDoutuCachedButtonKey;
 static char WCLiquidGlassDoutuLastVisibilityKey;
 static char WCLiquidGlassChatToolbarAssociationKey;
+static char WCLiquidGlassChatToolbarTraceKey;
 static char WCLiquidGlassChatTableInsetExtraKey;
 static char WCLiquidGlassChatTableAssociationKey;
+static char WCLiquidGlassChatTableTraceKey;
 static NSUInteger WCLiquidGlassChatTableInsetWriteDepth;
-static BOOL WCLiquidGlassKeyboardReanchorPending;
 
 static void WCLiquidGlassAppendArcOffsets(NSMutableArray<NSValue *> *offsets,
                                            NSUInteger count,
@@ -2158,22 +2161,6 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
                                            selector:@selector(wc_preferencesChanged:)
                                                name:WCLiquidGlassPreferencesDidChangeNotification
                                              object:nil];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                           selector:@selector(wc_keyboardDidChange:)
-                                               name:UIKeyboardWillChangeFrameNotification
-                                             object:nil];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                           selector:@selector(wc_keyboardDidChange:)
-                                               name:UIKeyboardDidChangeFrameNotification
-                                             object:nil];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                           selector:@selector(wc_keyboardDidChange:)
-                                               name:UIKeyboardWillHideNotification
-                                             object:nil];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                           selector:@selector(wc_keyboardDidChange:)
-                                               name:UIKeyboardDidHideNotification
-                                             object:nil];
     return self;
 }
 
@@ -2267,28 +2254,15 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     WCLiquidGlassLayoutChatToolbarForInput(self.inputView);
 }
 
-- (void)wc_keyboardDidChange:(NSNotification *)notification {
-    (void)notification;
-    UIView *inputView = self.inputView;
-    if (!inputView) {
-        return;
-    }
-    WCLiquidGlassKeyboardReanchorPending = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        WCLiquidGlassLayoutChatToolbarForInput(inputView);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            WCLiquidGlassLayoutChatToolbarForInput(inputView);
-            WCLiquidGlassKeyboardReanchorPending = NO;
-        });
-    });
-}
-
 - (void)wc_buttonTapped:(WCLiquidGlassToolbarButton *)button {
     if (button.actionIdentifier.length == 0) {
         return;
     }
     [self.selectionFeedbackGenerator selectionChanged];
     [self.selectionFeedbackGenerator prepare];
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+                                                        @"ChatToolbar action=%@ tapped",
+                                                        button.actionIdentifier]];
     WCLiquidGlassPerformAction(button.actionIdentifier);
 }
 
@@ -2298,12 +2272,100 @@ static void WCLiquidGlassUpdateChatTableBottomInset(UIView *inputView,
                                                     UIViewController *controller,
                                                     CGFloat extra);
 
-static void WCLiquidGlassHideChatToolbar(WCLiquidGlassChatToolbarView *toolbar) {
-    WCLiquidGlassUpdateChatTableBottomInset(toolbar.inputView, nil, 0.0);
+static NSString *WCLiquidGlassChatTableTraceKeyForSource(NSString *source,
+                                                          UITableView *table) {
+    NSDictionary<NSString *, NSNumber *> *state = objc_getAssociatedObject(table,
+                                                                            &WCLiquidGlassChatTableInsetExtraKey);
+    if (!state || state[@"extra"].doubleValue <= 0.0) {
+        return nil;
+    }
+    UIEdgeInsets contentInset = table.contentInset;
+    UIEdgeInsets adjusted = table.adjustedContentInset;
+    return [NSString stringWithFormat:
+            @"%@ table=%p bounds={%.1f,%.1f} content={%.1f,%.1f} offset={%.1f,%.1f} inset={%.1f,%.1f,%.1f,%.1f} adjusted={%.1f,%.1f,%.1f,%.1f} extra=%.1f",
+            source ?: @"table", table,
+            CGRectGetWidth(table.bounds), CGRectGetHeight(table.bounds),
+            table.contentSize.width, table.contentSize.height,
+            table.contentOffset.x, table.contentOffset.y,
+            contentInset.top, contentInset.left, contentInset.bottom, contentInset.right,
+            adjusted.top, adjusted.left, adjusted.bottom, adjusted.right,
+            state[@"extra"].doubleValue];
+}
+
+void WCLiquidGlassTraceChatTableInsetMutation(UITableView *table,
+                                               NSString *source,
+                                               UIEdgeInsets requested,
+                                               UIEdgeInsets applied,
+                                               UIEdgeInsets beforeInset,
+                                               CGPoint beforeOffset) {
+    NSString *snapshot = WCLiquidGlassChatTableTraceKeyForSource(source, table);
+    if (!snapshot) {
+        return;
+    }
+    snapshot = [snapshot stringByAppendingFormat:
+                @" requestedBottom=%.1f appliedBottom=%.1f beforeBottom=%.1f beforeOffsetY=%.1f",
+                requested.bottom, applied.bottom, beforeInset.bottom, beforeOffset.y];
+    NSString *last = objc_getAssociatedObject(table, &WCLiquidGlassChatTableTraceKey);
+    if ([last isEqualToString:snapshot]) {
+        return;
+    }
+    objc_setAssociatedObject(table, &WCLiquidGlassChatTableTraceKey, snapshot, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:snapshot];
+}
+
+void WCLiquidGlassTraceChatToolbarForInput(id inputToolView, NSString *source) {
+    UIView *inputView = [inputToolView isKindOfClass:UIView.class] ? inputToolView : nil;
+    if (!inputView) {
+        return;
+    }
+    WCLiquidGlassChatToolbarView *toolbar = objc_getAssociatedObject(inputView,
+                                                                      &WCLiquidGlassChatToolbarAssociationKey);
+    UITableView *table = objc_getAssociatedObject(inputView, &WCLiquidGlassChatTableAssociationKey);
+    NSString *snapshot = [NSString stringWithFormat:
+                           @"ChatToolbar source=%@ input=%p frame={%.1f,%.1f,%.1f,%.1f} hidden=%@ alpha=%.2f toolbar=%p toolbarFrame={%.1f,%.1f,%.1f,%.1f} toolbarHidden=%@ toolbarAlpha=%.2f host=%@ table=%p",
+                           source ?: @"layout", inputView,
+                           inputView.frame.origin.x, inputView.frame.origin.y,
+                           inputView.frame.size.width, inputView.frame.size.height,
+                           inputView.hidden ? @"YES" : @"NO", inputView.alpha,
+                           toolbar,
+                           toolbar.frame.origin.x, toolbar.frame.origin.y,
+                           toolbar.frame.size.width, toolbar.frame.size.height,
+                           toolbar.hidden ? @"YES" : @"NO", toolbar.alpha,
+                           NSStringFromClass(toolbar.superview.class), table];
+    NSString *last = objc_getAssociatedObject(inputView, &WCLiquidGlassChatToolbarTraceKey);
+    if ([last isEqualToString:snapshot]) {
+        return;
+    }
+    objc_setAssociatedObject(inputView, &WCLiquidGlassChatToolbarTraceKey, snapshot, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:snapshot];
+    if (table) {
+        NSString *tableSnapshot = WCLiquidGlassChatTableTraceKeyForSource(@"ChatToolbar table", table);
+        if (tableSnapshot.length > 0) {
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:tableSnapshot];
+        }
+    }
+}
+
+static BOOL WCLiquidGlassChatToolbarShouldClearInset(WCLiquidGlassChatToolbarView *toolbar) {
+    UIView *inputView = toolbar.inputView;
+    return !inputView.window || !inputView.superview ||
+        !WCLiquidGlassPreferences.enabled ||
+        !WCLiquidGlassPreferences.chatToolbarEnabled ||
+        toolbar.buttons.count == 0;
+}
+
+static void WCLiquidGlassHideChatToolbar(WCLiquidGlassChatToolbarView *toolbar,
+                                         BOOL clearInset) {
+    if (clearInset) {
+        WCLiquidGlassUpdateChatTableBottomInset(toolbar.inputView, nil, 0.0);
+    }
     toolbar.hidden = YES;
     toolbar.alpha = 0.0;
     toolbar.userInteractionEnabled = NO;
-    [toolbar removeFromSuperview];
+    if (clearInset) {
+        [toolbar removeFromSuperview];
+    }
+    WCLiquidGlassTraceChatToolbarForInput(toolbar.inputView, clearInset ? @"hide-clear" : @"hide-keep-inset");
 }
 
 static UIViewController *WCLiquidGlassChatToolbarViewController(UIView *inputView) {
@@ -2331,8 +2393,7 @@ static void WCLiquidGlassFindChatTableInView(UIView *view,
     if ([view isKindOfClass:UITableView.class]) {
         UITableView *table = (UITableView *)view;
         if (!table.hidden && table.alpha > 0.01) {
-            NSString *className = NSStringFromClass(table.class);
-            NSInteger score = [className containsString:@"MMTableView"] ? 1000 : 0;
+            NSInteger score = [NSStringFromClass(table.class) containsString:@"MMTableView"] ? 1000 : 0;
             for (UITableViewCell *cell in table.visibleCells) {
                 if ([NSStringFromClass(cell.class) containsString:@"ChatTableViewCell"]) {
                     score += 500;
@@ -2353,17 +2414,12 @@ static void WCLiquidGlassFindChatTableInView(UIView *view,
 
 static UITableView *WCLiquidGlassChatTableViewForInput(UIView *inputView,
                                                        UIViewController *controller) {
-    if (!inputView) {
-        return nil;
-    }
     UITableView *cachedTable = objc_getAssociatedObject(inputView,
                                                          &WCLiquidGlassChatTableAssociationKey);
-    UIView *root = controller.viewIfLoaded;
-    if (cachedTable && cachedTable.window == inputView.window &&
-        !cachedTable.hidden && cachedTable.alpha > 0.01 &&
-        (!root || [cachedTable isDescendantOfView:root])) {
+    if (cachedTable && cachedTable.window == inputView.window) {
         return cachedTable;
     }
+    UIView *root = controller.viewIfLoaded;
     if (!controller) {
         controller = WCLiquidGlassChatToolbarViewController(inputView);
         root = controller.viewIfLoaded;
@@ -2383,7 +2439,46 @@ static UITableView *WCLiquidGlassChatTableViewForInput(UIView *inputView,
     return table;
 }
 
-static void WCLiquidGlassApplyChatTableBottomInset(UITableView *table, CGFloat extra) {
+UIEdgeInsets WCLiquidGlassChatTableInsetForHost(UITableView *table,
+                                                 UIEdgeInsets inset,
+                                                 BOOL indicatorInset) {
+    if (!table || WCLiquidGlassChatTableInsetWriteDepth > 0) {
+        return inset;
+    }
+    NSDictionary<NSString *, NSNumber *> *state = objc_getAssociatedObject(table,
+                                                                            &WCLiquidGlassChatTableInsetExtraKey);
+    CGFloat extra = state[@"extra"].doubleValue;
+    if (extra <= 0.0) {
+        return inset;
+    }
+    NSString *baseKey = indicatorInset ? @"indicator" : @"content";
+    NSString *lastKey = indicatorInset ? @"lastIndicator" : @"lastContent";
+    CGFloat lastBottom = state[lastKey].doubleValue;
+    if (fabs(inset.bottom - lastBottom) <= 0.1) {
+        return inset;
+    }
+    UIEdgeInsets adjustedBefore = table.adjustedContentInset;
+    CGFloat beforeBottomOffset = MAX(-adjustedBefore.top,
+                                     table.contentSize.height - CGRectGetHeight(table.bounds) +
+                                         adjustedBefore.bottom);
+    BOOL wasAtBottom = table.contentSize.height > CGRectGetHeight(table.bounds) &&
+        table.contentOffset.y >= beforeBottomOffset - 2.0;
+    NSMutableDictionary<NSString *, NSNumber *> *nextState = [state mutableCopy];
+    nextState[baseKey] = @(inset.bottom);
+    nextState[lastKey] = @(inset.bottom + extra);
+    if (!indicatorInset && wasAtBottom) {
+        nextState[@"anchorPending"] = @YES;
+    }
+    objc_setAssociatedObject(table,
+                             &WCLiquidGlassChatTableInsetExtraKey,
+                             nextState,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    inset.bottom += extra;
+    return inset;
+}
+
+static void WCLiquidGlassApplyChatTableBottomInset(UITableView *table,
+                                                   CGFloat extra) {
     if (!table) {
         return;
     }
@@ -2392,98 +2487,61 @@ static void WCLiquidGlassApplyChatTableBottomInset(UITableView *table, CGFloat e
                                                                             &WCLiquidGlassChatTableInsetExtraKey);
     CGFloat baseContentBottom = state ? state[@"content"].doubleValue : table.contentInset.bottom;
     CGFloat baseIndicatorBottom = state ? state[@"indicator"].doubleValue : table.verticalScrollIndicatorInsets.bottom;
-    if (state && fabs(table.contentInset.bottom - state[@"lastContent"].doubleValue) > 0.1) {
-        baseContentBottom = table.contentInset.bottom;
-    }
-    if (state && fabs(table.verticalScrollIndicatorInsets.bottom - state[@"lastIndicator"].doubleValue) > 0.1) {
-        baseIndicatorBottom = table.verticalScrollIndicatorInsets.bottom;
-    }
+    BOOL anchorPending = state[@"anchorPending"].boolValue;
     UIEdgeInsets contentInset = table.contentInset;
     UIEdgeInsets indicatorInset = table.verticalScrollIndicatorInsets;
     CGFloat desiredContentBottom = baseContentBottom + extra;
     CGFloat desiredIndicatorBottom = baseIndicatorBottom + extra;
-    if (fabs(contentInset.bottom - desiredContentBottom) <= 0.1 &&
-        fabs(indicatorInset.bottom - desiredIndicatorBottom) <= 0.1) {
-        if (WCLiquidGlassKeyboardReanchorPending && extra > 0.0) {
-            UIEdgeInsets adjusted = table.adjustedContentInset;
-            CGFloat bottomOffset = MAX(-adjusted.top,
-                                       table.contentSize.height - CGRectGetHeight(table.bounds) +
-                                       adjusted.bottom);
-            if (table.contentOffset.y >= bottomOffset - extra - 2.0) {
-                [UIView performWithoutAnimation:^{
-                    table.contentOffset = CGPointMake(table.contentOffset.x, bottomOffset);
-                }];
-            }
-        }
-        if (extra <= 0.0) {
-            objc_setAssociatedObject(table,
-                                     &WCLiquidGlassChatTableInsetExtraKey,
-                                     nil,
-                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        } else {
-            objc_setAssociatedObject(table,
-                                     &WCLiquidGlassChatTableInsetExtraKey,
-                                     @{@"extra": @(extra),
-                                       @"content": @(baseContentBottom),
-                                       @"indicator": @(baseIndicatorBottom),
-                                       @"lastContent": @(desiredContentBottom),
-                                       @"lastIndicator": @(desiredIndicatorBottom)},
-                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        return;
-    }
-
-    CGPoint offset = table.contentOffset;
+    BOOL shouldAnchorAtBottom = extra > 0.0 && state == nil &&
+        table.contentSize.height > CGRectGetHeight(table.bounds);
+    CGPoint beforeOffset = table.contentOffset;
     UIEdgeInsets adjustedBefore = table.adjustedContentInset;
-    CGFloat bottomOffset = MAX(-adjustedBefore.top,
-                               table.contentSize.height - CGRectGetHeight(table.bounds) +
-                               adjustedBefore.bottom);
-    BOOL wasAtBottom = offset.y >= bottomOffset - 2.0;
-    contentInset.bottom = desiredContentBottom;
-    indicatorInset.bottom = desiredIndicatorBottom;
-    WCLiquidGlassChatTableInsetWriteDepth += 1;
-    @try {
-        [UIView performWithoutAnimation:^{
+    CGFloat beforeBottomOffset = MAX(-adjustedBefore.top,
+                                     table.contentSize.height - CGRectGetHeight(table.bounds) +
+                                     adjustedBefore.bottom);
+    shouldAnchorAtBottom = shouldAnchorAtBottom &&
+        beforeOffset.y >= beforeBottomOffset - 2.0;
+    BOOL insetChanged = fabs(contentInset.bottom - desiredContentBottom) > 0.1 ||
+        fabs(indicatorInset.bottom - desiredIndicatorBottom) > 0.1;
+    if (insetChanged) {
+        contentInset.bottom = desiredContentBottom;
+        indicatorInset.bottom = desiredIndicatorBottom;
+        WCLiquidGlassChatTableInsetWriteDepth += 1;
+        @try {
             table.contentInset = contentInset;
             table.verticalScrollIndicatorInsets = indicatorInset;
-            if (wasAtBottom) {
-                UIEdgeInsets adjustedAfter = table.adjustedContentInset;
-                CGFloat newBottomOffset = MAX(-adjustedAfter.top,
-                                              table.contentSize.height - CGRectGetHeight(table.bounds) +
-                                              adjustedAfter.bottom);
-                table.contentOffset = CGPointMake(offset.x, newBottomOffset);
-            }
-        }];
-    } @finally {
-        WCLiquidGlassChatTableInsetWriteDepth -= 1;
+        } @finally {
+            WCLiquidGlassChatTableInsetWriteDepth -= 1;
+        }
+    }
+    if (shouldAnchorAtBottom) {
+        UIEdgeInsets adjustedAfter = table.adjustedContentInset;
+        CGFloat afterBottomOffset = MAX(-adjustedAfter.top,
+                                        table.contentSize.height - CGRectGetHeight(table.bounds) +
+                                        adjustedAfter.bottom);
+        if (fabs(table.contentOffset.y - afterBottomOffset) > 0.5) {
+            table.contentOffset = CGPointMake(table.contentOffset.x, afterBottomOffset);
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+                                                                @"ChatTable toolbar anchor table=%p beforeOffsetY=%.1f afterOffsetY=%.1f extra=%.1f",
+                                                                table, beforeOffset.y, afterBottomOffset, extra]];
+        }
     }
     if (extra <= 0.0) {
         objc_setAssociatedObject(table,
                                  &WCLiquidGlassChatTableInsetExtraKey,
                                  nil,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    } else {
-        objc_setAssociatedObject(table,
-                                 &WCLiquidGlassChatTableInsetExtraKey,
-                                 @{@"extra": @(extra),
-                                   @"content": @(baseContentBottom),
-                                   @"indicator": @(baseIndicatorBottom),
-                                   @"lastContent": @(desiredContentBottom),
-                                   @"lastIndicator": @(desiredIndicatorBottom)},
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-}
-
-void WCLiquidGlassReapplyChatTableBottomInset(UITableView *table) {
-    if (!table || WCLiquidGlassChatTableInsetWriteDepth > 0) {
         return;
     }
-    NSDictionary<NSString *, NSNumber *> *state = objc_getAssociatedObject(table,
-                                                                            &WCLiquidGlassChatTableInsetExtraKey);
-    NSNumber *extra = state[@"extra"];
-    if (extra != nil) {
-        WCLiquidGlassApplyChatTableBottomInset(table, extra.doubleValue);
-    }
+    objc_setAssociatedObject(table,
+                             &WCLiquidGlassChatTableInsetExtraKey,
+                             @{ @"extra": @(extra),
+                                @"content": @(baseContentBottom),
+                                @"indicator": @(baseIndicatorBottom),
+                                @"lastContent": @(desiredContentBottom),
+                                @"lastIndicator": @(desiredIndicatorBottom),
+                                @"anchorPending": @(anchorPending) },
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void WCLiquidGlassUpdateChatTableBottomInset(UIView *inputView,
@@ -2503,10 +2561,19 @@ static void WCLiquidGlassUpdateChatTableBottomInset(UIView *inputView,
         return;
     }
     UITableView *table = WCLiquidGlassChatTableViewForInput(inputView, controller);
-    if (previousTable && previousTable != table) {
+    if (previousTable && table && previousTable != table) {
         WCLiquidGlassApplyChatTableBottomInset(previousTable, 0.0);
     }
     if (!table) {
+        if (previousTable && inputView.window && inputView.superview) {
+            NSDictionary<NSString *, NSNumber *> *state = objc_getAssociatedObject(previousTable,
+                                                                                    &WCLiquidGlassChatTableInsetExtraKey);
+            if (state[@"extra"]) {
+                WCLiquidGlassApplyChatTableBottomInset(previousTable,
+                                                       state[@"extra"].doubleValue);
+            }
+            return;
+        }
         if (previousTable) {
             WCLiquidGlassApplyChatTableBottomInset(previousTable, 0.0);
         }
@@ -2521,6 +2588,43 @@ static void WCLiquidGlassUpdateChatTableBottomInset(UIView *inputView,
                              &WCLiquidGlassChatTableAssociationKey,
                              table,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+void WCLiquidGlassApplyPendingChatTableAnchor(UITableView *table) {
+    if (!table) {
+        return;
+    }
+    NSDictionary<NSString *, NSNumber *> *state = objc_getAssociatedObject(table,
+                                                                            &WCLiquidGlassChatTableInsetExtraKey);
+    if (!state[@"anchorPending"].boolValue) {
+        return;
+    }
+    NSMutableDictionary<NSString *, NSNumber *> *nextState = [state mutableCopy];
+    nextState[@"anchorPending"] = @NO;
+    objc_setAssociatedObject(table,
+                             &WCLiquidGlassChatTableInsetExtraKey,
+                             nextState,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    CGFloat extra = state[@"extra"].doubleValue;
+    if (extra <= 0.0 || table.contentSize.height <= CGRectGetHeight(table.bounds)) {
+        return;
+    }
+    UIEdgeInsets adjusted = table.adjustedContentInset;
+    CGFloat bottomOffset = MAX(-adjusted.top,
+                               table.contentSize.height - CGRectGetHeight(table.bounds) +
+                                   adjusted.bottom);
+    CGFloat beforeOffsetY = table.contentOffset.y;
+    if (fabs(beforeOffsetY - bottomOffset) <= 0.5 ||
+        beforeOffsetY < bottomOffset - extra - 2.0 ||
+        beforeOffsetY > bottomOffset + 0.5) {
+        return;
+    }
+    [UIView performWithoutAnimation:^{
+        table.contentOffset = CGPointMake(table.contentOffset.x, bottomOffset);
+    }];
+    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+                                                        @"ChatTable inset layout anchor table=%p beforeOffsetY=%.1f afterOffsetY=%.1f extra=%.1f",
+                                                        table, beforeOffsetY, bottomOffset, extra]];
 }
 
 static BOOL WCLiquidGlassMethodReturnsCGRect(NSMethodSignature *signature) {
@@ -2554,79 +2658,18 @@ static CGRect WCLiquidGlassInputFrameForMountingView(UIView *inputView,
     return [inputView convertRect:inputView.bounds toView:mountingView];
 }
 
-static void WCLiquidGlassFindInputEdgeControls(UIView *view,
-                                                UIView *mountingView,
-                                                CGRect rowFrame,
-                                                NSInteger depth,
-                                                CGFloat *leftEdge,
-                                                CGFloat *rightEdge,
-                                                NSUInteger *count) {
-    if (!view || depth < 0) {
-        return;
+static CGRect WCLiquidGlassChatToolbarHorizontalFrame(UIView *mountingView) {
+    CGRect bounds = mountingView.bounds;
+    UIEdgeInsets safeArea = mountingView.safeAreaInsets;
+    CGFloat minX = CGRectGetMinX(bounds) + safeArea.left + WCLiquidGlassChatToolbarHorizontalMargin;
+    CGFloat maxX = CGRectGetMaxX(bounds) - safeArea.right - WCLiquidGlassChatToolbarHorizontalMargin;
+    if (maxX <= minX) {
+        return CGRectNull;
     }
-    if ([view isKindOfClass:UIControl.class]) {
-        UIControl *control = (UIControl *)view;
-        CGRect frame = [control convertRect:control.bounds toView:mountingView];
-        CGFloat width = CGRectGetWidth(frame);
-        CGFloat height = CGRectGetHeight(frame);
-        CGFloat aspect = height > 0.0 ? width / height : 0.0;
-        CGFloat centerDelta = fabs(CGRectGetMidY(frame) - CGRectGetMidY(rowFrame));
-        if (!control.hidden && control.alpha > 0.01 && control.window == mountingView.window &&
-            width >= 32.0 && width <= 80.0 && height >= 32.0 && height <= 80.0 &&
-            aspect >= 0.8 && aspect <= 1.25 && centerDelta <= MAX(24.0, CGRectGetHeight(rowFrame))) {
-            *leftEdge = MIN(*leftEdge, CGRectGetMinX(frame));
-            *rightEdge = MAX(*rightEdge, CGRectGetMaxX(frame));
-            *count += 1;
-        }
-    }
-    if (depth == 0) {
-        return;
-    }
-    for (UIView *subview in view.subviews) {
-        WCLiquidGlassFindInputEdgeControls(subview,
-                                           mountingView,
-                                           rowFrame,
-                                           depth - 1,
-                                           leftEdge,
-                                           rightEdge,
-                                           count);
-    }
-}
-
-static CGRect WCLiquidGlassInputRowFrameForMountingView(UIView *inputView,
-                                                         UIViewController *controller,
-                                                         UIView *mountingView) {
-    CGRect rowFrame = WCLiquidGlassInputFrameForMountingView(inputView, controller, mountingView);
-    if (CGRectGetWidth(rowFrame) <= 1.0 || CGRectGetHeight(rowFrame) <= 1.0) {
-        return rowFrame;
-    }
-    CGFloat leftEdge = CGFLOAT_MAX;
-    CGFloat rightEdge = -CGFLOAT_MAX;
-    NSUInteger count = 0;
-    WCLiquidGlassFindInputEdgeControls(inputView,
-                                       mountingView,
-                                       rowFrame,
-                                       3,
-                                       &leftEdge,
-                                       &rightEdge,
-                                       &count);
-    if (count < 2) {
-        UIView *container = inputView.superview;
-        WCLiquidGlassFindInputEdgeControls(container,
-                                           mountingView,
-                                           rowFrame,
-                                           2,
-                                           &leftEdge,
-                                           &rightEdge,
-                                           &count);
-    }
-    if (count >= 2 && leftEdge < rightEdge &&
-        leftEdge >= CGRectGetMinX(rowFrame) - 24.0 &&
-        rightEdge <= CGRectGetMaxX(rowFrame) + 24.0) {
-        rowFrame.origin.x = leftEdge;
-        rowFrame.size.width = rightEdge - leftEdge;
-    }
-    return rowFrame;
+    return CGRectMake(minX,
+                      CGRectGetMinY(bounds),
+                      maxX - minX,
+                      CGRectGetHeight(bounds));
 }
 
 static CGFloat WCLiquidGlassChatToolbarWidth(WCLiquidGlassChatToolbarView *toolbar,
@@ -2668,7 +2711,8 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         inputView.alpha > 0.01;
     if (!inputAvailable) {
         if (toolbar) {
-            WCLiquidGlassHideChatToolbar(toolbar);
+            WCLiquidGlassHideChatToolbar(toolbar,
+                                         WCLiquidGlassChatToolbarShouldClearInset(toolbar));
         }
         return;
     }
@@ -2692,7 +2736,8 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
          host && ![host isKindOfClass:UIWindow.class];
          host = host.superview) {
         if (host.hidden || host.alpha <= 0.01 || host.window != inputView.window) {
-            WCLiquidGlassHideChatToolbar(toolbar);
+            WCLiquidGlassHideChatToolbar(toolbar,
+                                         WCLiquidGlassChatToolbarShouldClearInset(toolbar));
             return;
         }
     }
@@ -2704,18 +2749,19 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     }
     CGRect targetFrame = CGRectNull;
     if (mountingAncestor) {
-        CGRect inputFrame = WCLiquidGlassInputRowFrameForMountingView(inputView,
-                                                                       inputController,
-                                                                       mountingAncestor);
+        CGRect inputFrame = WCLiquidGlassInputFrameForMountingView(inputView,
+                                                                    inputController,
+                                                                    mountingAncestor);
+        CGRect horizontalFrame = WCLiquidGlassChatToolbarHorizontalFrame(mountingAncestor);
         CGFloat toolbarHeight = WCLiquidGlassChatToolbarHeight;
         CGFloat toolbarWidth = WCLiquidGlassChatToolbarWidth(toolbar,
-                                                             CGRectGetWidth(inputFrame));
-        if (toolbarWidth >= 1.0) {
-            CGRect proposedFrame = CGRectIntegral(CGRectMake(CGRectGetMinX(inputFrame),
+                                                             CGRectGetWidth(horizontalFrame));
+        if (!CGRectIsNull(horizontalFrame) && toolbarWidth >= 1.0) {
+            CGRect proposedFrame = CGRectIntegral(CGRectMake(CGRectGetMinX(horizontalFrame),
                                                              CGRectGetMinY(inputFrame) - WCLiquidGlassChatToolbarGap - toolbarHeight,
                                                              toolbarWidth,
                                                              toolbarHeight));
-            proposedFrame.origin.x = CGRectGetMidX(inputFrame) - toolbarWidth * 0.5;
+            proposedFrame.origin.x = CGRectGetMidX(horizontalFrame) - toolbarWidth * 0.5;
             if (mountingAncestor.clipsToBounds &&
                 !CGRectContainsRect(mountingAncestor.bounds, proposedFrame)) {
                 mountingAncestor = nil;
@@ -2729,17 +2775,18 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
              ancestor && ![ancestor isKindOfClass:UIWindow.class];
              ancestor = ancestor.superview) {
             CGRect inputFrame = [inputView convertRect:inputView.bounds toView:ancestor];
+            CGRect horizontalFrame = WCLiquidGlassChatToolbarHorizontalFrame(ancestor);
             CGFloat toolbarHeight = WCLiquidGlassChatToolbarHeight;
             CGFloat toolbarWidth = WCLiquidGlassChatToolbarWidth(toolbar,
-                                                                 CGRectGetWidth(inputFrame));
-            if (toolbarWidth < 1.0) {
+                                                                 CGRectGetWidth(horizontalFrame));
+            if (CGRectIsNull(horizontalFrame) || toolbarWidth < 1.0) {
                 continue;
             }
-            CGRect proposedFrame = CGRectIntegral(CGRectMake(CGRectGetMinX(inputFrame),
+            CGRect proposedFrame = CGRectIntegral(CGRectMake(CGRectGetMinX(horizontalFrame),
                                                              CGRectGetMinY(inputFrame) - WCLiquidGlassChatToolbarGap - toolbarHeight,
                                                              toolbarWidth,
                                                              toolbarHeight));
-            proposedFrame.origin.x = CGRectGetMidX(inputFrame) - toolbarWidth * 0.5;
+            proposedFrame.origin.x = CGRectGetMidX(horizontalFrame) - toolbarWidth * 0.5;
             if (!ancestor.userInteractionEnabled || !CGRectContainsRect(ancestor.bounds, proposedFrame)) {
                 continue;
             }
@@ -2750,7 +2797,8 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     }
 
     if (!mountingAncestor || CGRectIsNull(targetFrame)) {
-        WCLiquidGlassHideChatToolbar(toolbar);
+        WCLiquidGlassHideChatToolbar(toolbar,
+                                     WCLiquidGlassChatToolbarShouldClearInset(toolbar));
         return;
     }
     BOOL movedToNewHost = toolbar.superview != mountingAncestor;
@@ -2767,6 +2815,9 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     WCLiquidGlassUpdateChatTableBottomInset(inputView,
                                             inputController,
                                             CGRectGetHeight(toolbar.bounds) + WCLiquidGlassChatToolbarGap);
+    UITableView *table = objc_getAssociatedObject(inputView,
+                                                   &WCLiquidGlassChatTableAssociationKey);
+    WCLiquidGlassApplyPendingChatTableAnchor(table);
     toolbar.hidden = NO;
     CGFloat toolbarAlpha = inputView.alpha;
     for (UIView *host = inputView.superview;
@@ -2776,6 +2827,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     }
     toolbar.alpha = toolbarAlpha;
     toolbar.userInteractionEnabled = YES;
+    WCLiquidGlassTraceChatToolbarForInput(inputView, @"layout");
 }
 
 @interface WCLiquidGlassHostView : UIView <UIGestureRecognizerDelegate, UIToolbarDelegate>
@@ -3173,7 +3225,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 - (UIMenu *)wc_makeNativeMenu {
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray arrayWithCapacity:self.visibleItems.count];
     __weak typeof(self) weakSelf = self;
-    for (NSDictionary<NSString *, id> *item in self.visibleItems) {
+    for (NSDictionary<NSString *, id> *item in self.visibleItems.reverseObjectEnumerator) {
         NSString *actionIdentifier = item[@"action"];
         UIImage *image = WCLiquidGlassImageForAction(actionIdentifier, 56.0);
         UIAction *action = [UIAction actionWithTitle:WCLiquidGlassActionTitle(actionIdentifier)

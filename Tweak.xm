@@ -17,6 +17,7 @@
 #import "WCLiquidGlassPreferences.h"
 #import "WCLiquidGlassWCGlassLongPress.h"
 #import "WCLiquidGlassWCGlassSearchTabBar.h"
+#import "WCLiquidGlassWCGlassFloatingBall.h"
 
 #ifndef WCLIQUIDGLASS_VERSION
 #define WCLIQUIDGLASS_VERSION "Unknown"
@@ -388,43 +389,19 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 
 %hook MMInputToolView
 
-- (void)setFrame:(CGRect)frame {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-- (void)setBounds:(CGRect)bounds {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-- (void)setHidden:(BOOL)hidden {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-- (void)setAlpha:(CGFloat)alpha {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-- (void)setUserInteractionEnabled:(BOOL)userInteractionEnabled {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
     WCLiquidGlassLayoutChatToolbarForInput(self);
 }
 
-- (void)didMoveToWindow {
+- (void)updateToolViewHeight:(BOOL)animated {
     %orig;
+    WCLiquidGlassUpdateDoutuButtonVisibility(self);
     WCLiquidGlassLayoutChatToolbarForInput(self);
 }
 
-- (void)willMoveToWindow:(UIWindow *)window {
+- (void)didMoveToWindow {
     %orig;
     WCLiquidGlassLayoutChatToolbarForInput(self);
 }
@@ -439,13 +416,30 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 %hook MMTableView
 
 - (void)setContentInset:(UIEdgeInsets)inset {
-    %orig;
-    WCLiquidGlassReapplyChatTableBottomInset((UITableView *)self);
+    UITableView *table = (UITableView *)self;
+    UIEdgeInsets beforeInset = table.contentInset;
+    CGPoint beforeOffset = table.contentOffset;
+    UIEdgeInsets applied = WCLiquidGlassChatTableInsetForHost(table, inset, NO);
+    %orig(applied);
+    WCLiquidGlassTraceChatTableInsetMutation(table, @"setContentInset", inset, applied, beforeInset, beforeOffset);
 }
 
 - (void)setVerticalScrollIndicatorInsets:(UIEdgeInsets)insets {
-    %orig;
-    WCLiquidGlassReapplyChatTableBottomInset((UITableView *)self);
+    UITableView *table = (UITableView *)self;
+    UIEdgeInsets beforeInset = table.verticalScrollIndicatorInsets;
+    CGPoint beforeOffset = table.contentOffset;
+    UIEdgeInsets applied = WCLiquidGlassChatTableInsetForHost(table, insets, YES);
+    %orig(applied);
+    WCLiquidGlassTraceChatTableInsetMutation(table, @"setVerticalScrollIndicatorInsets", insets, applied, beforeInset, beforeOffset);
+}
+
+- (void)setScrollIndicatorInsets:(UIEdgeInsets)insets {
+    UITableView *table = (UITableView *)self;
+    UIEdgeInsets beforeInset = table.verticalScrollIndicatorInsets;
+    CGPoint beforeOffset = table.contentOffset;
+    UIEdgeInsets applied = WCLiquidGlassChatTableInsetForHost(table, insets, YES);
+    %orig(applied);
+    WCLiquidGlassTraceChatTableInsetMutation(table, @"setScrollIndicatorInsets", insets, applied, beforeInset, beforeOffset);
 }
 
 %end
@@ -496,9 +490,6 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             return;
         }
 
-        if (isMainWeChatProcess) {
-            [WCLiquidGlassCrashLogger.sharedLogger start];
-        }
         [WCLiquidGlassPreferences registerDefaults];
         WCLiquidGlassInstallMaterialFileProtectionHooks();
         if (!isMainWeChatProcess) {
@@ -523,6 +514,8 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
                                                     usingBlock:^(__unused NSNotification *notification) {
+            [WCLiquidGlassCrashLogger.sharedLogger start];
+            [WCLiquidGlassWCGlassFloatingBallManager.sharedManager install];
             WCLiquidGlassTryRegisterPlugin();
         }];
 
@@ -541,8 +534,28 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillShowNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
+                                                        usingBlock:^(__unused NSNotification *notification) {
+            WCLiquidGlassKeyboardVisible = YES;
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:@"Keyboard will show"];
+        }];
+
+        [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidShowNotification
+                                                        object:nil
+                                                         queue:NSOperationQueue.mainQueue
                                                     usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassKeyboardVisible = YES;
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:@"Keyboard did show"];
+        }];
+
+        [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardWillChangeFrameNotification
+                                                        object:nil
+                                                        queue:NSOperationQueue.mainQueue
+                                                    usingBlock:^(NSNotification *notification) {
+            CGRect frame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+                                                                @"Keyboard will change frame end={x=%.1f y=%.1f w=%.1f h=%.1f}",
+                                                                frame.origin.x, frame.origin.y,
+                                                                frame.size.width, frame.size.height]];
         }];
 
         [NSNotificationCenter.defaultCenter addObserverForName:UIKeyboardDidHideNotification
@@ -550,6 +563,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
                                                          queue:NSOperationQueue.mainQueue
                                                     usingBlock:^(__unused NSNotification *notification) {
             WCLiquidGlassKeyboardVisible = NO;
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:@"Keyboard did hide"];
         }];
 
     }

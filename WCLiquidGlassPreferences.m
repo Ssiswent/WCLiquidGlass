@@ -44,6 +44,7 @@ static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.Ch
 static NSString *const WCLiquidGlassChatToolbarEnabledKey = @"WCLiquidGlass.ChatToolbarEnabled";
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
+static NSString *const WCLiquidGlassWCGlassLongPressMenuAppearanceKey = @"WCLiquidGlass.WCGlass.LongPressMenu.Appearance";
 static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
 static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquidGlass.UnreadMessageTipGlassEnabled";
 static NSString *const WCLiquidGlassMessageSwipeActionsEnabledKey = @"WCLiquidGlass.MessageSwipeActionsEnabled";
@@ -64,6 +65,7 @@ static NSString *const WCLiquidGlassMaterialFileProtectionEnabledKey = @"WCLiqui
 static NSString *const WCLiquidGlassButtonItemsKey = @"WCLiquidGlass.ButtonItems";
 static NSString *const WCLiquidGlassLegacySearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded";
 static NSString *const WCLiquidGlassSearchRecordsMigrationKey = @"WCLiquidGlass.Migration.SearchRecordsAdded.V2";
+static NSString *const WCLiquidGlassButtonCatalogMigrationKey = @"WCLiquidGlass.Migration.ButtonCatalog.V1";
 
 static CFStringRef WCLiquidGlassMainPreferencesApplicationID(void) {
     return CFSTR("com.tencent.xin");
@@ -99,6 +101,7 @@ static NSArray<NSString *> *WCLiquidGlassConfigurationKeys(void) {
             WCLiquidGlassChatToolbarEnabledKey,
             WCLiquidGlassContactsIndexGlassEnabledKey,
             WCLiquidGlassWCGlassLongPressMenuEnabledKey,
+            WCLiquidGlassWCGlassLongPressMenuAppearanceKey,
             WCLiquidGlassMessageNotificationGlassEnabledKey,
             WCLiquidGlassUnreadMessageTipGlassEnabledKey,
             WCLiquidGlassMessageSwipeActionsEnabledKey,
@@ -142,14 +145,15 @@ static BOOL WCLiquidGlassIsKnownAction(NSString *identifier) {
 
 static BOOL WCLiquidGlassConfigurationValueIsValid(NSString *key, id value) {
     if ([key isEqualToString:WCLiquidGlassButtonItemsKey]) {
-        if (![value isKindOfClass:NSArray.class] || [value count] > 16) {
+        if (![value isKindOfClass:NSArray.class] || [value count] > WCLiquidGlassActionCatalog().count) {
             return NO;
         }
         for (id item in value) {
             if (![item isKindOfClass:NSDictionary.class] ||
                 ![item[@"slot"] isKindOfClass:NSString.class] ||
                 ![item[@"action"] isKindOfClass:NSString.class] ||
-                !WCLiquidGlassIsKnownAction(item[@"action"])) {
+                !WCLiquidGlassIsKnownAction(item[@"action"]) ||
+                (item[@"hidden"] && ![item[@"hidden"] isKindOfClass:NSNumber.class])) {
                 return NO;
             }
         }
@@ -241,6 +245,52 @@ static void WCLiquidGlassMigrateButtonItemsIfNeeded(void) {
                                @"action": WCLiquidGlassActionSearchRecords}];
     [defaults setObject:migratedItems.copy forKey:WCLiquidGlassButtonItemsKey];
     [defaults setBool:YES forKey:WCLiquidGlassSearchRecordsMigrationKey];
+}
+
+static void WCLiquidGlassMigrateButtonCatalogIfNeeded(void) {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    if ([defaults boolForKey:WCLiquidGlassButtonCatalogMigrationKey]) {
+        return;
+    }
+
+    NSArray *storedItems = [defaults arrayForKey:WCLiquidGlassButtonItemsKey];
+    NSMutableArray<NSMutableDictionary<NSString *, id> *> *migratedItems = [NSMutableArray array];
+    NSMutableSet<NSString *> *knownActions = [NSMutableSet set];
+    for (id item in storedItems) {
+        if (![item isKindOfClass:NSDictionary.class] ||
+            ![item[@"action"] isKindOfClass:NSString.class] ||
+            !WCLiquidGlassIsKnownAction(item[@"action"])) {
+            continue;
+        }
+        NSString *actionIdentifier = item[@"action"];
+        if ([knownActions containsObject:actionIdentifier] || WCLiquidGlassActionWasRemoved(actionIdentifier)) {
+            continue;
+        }
+        NSMutableDictionary<NSString *, id> *normalizedItem = [item mutableCopy];
+        if (![normalizedItem[@"slot"] isKindOfClass:NSString.class]) {
+            normalizedItem[@"slot"] = [NSString stringWithFormat:@"slot.%@", actionIdentifier];
+        }
+        normalizedItem[@"hidden"] = @([normalizedItem[@"hidden"] boolValue]);
+        [migratedItems addObject:normalizedItem];
+        [knownActions addObject:actionIdentifier];
+    }
+
+    for (NSDictionary<NSString *, NSString *> *action in WCLiquidGlassActionCatalog()) {
+        NSString *actionIdentifier = action[@"identifier"];
+        if ([knownActions containsObject:actionIdentifier] || WCLiquidGlassActionWasRemoved(actionIdentifier)) {
+            continue;
+        }
+        [migratedItems addObject:[@{
+            @"slot": [NSString stringWithFormat:@"slot.%@", actionIdentifier],
+            @"action": actionIdentifier,
+            @"hidden": @YES
+        } mutableCopy]];
+    }
+
+    if (migratedItems.count > 0) {
+        [defaults setObject:migratedItems.copy forKey:WCLiquidGlassButtonItemsKey];
+    }
+    [defaults setBool:YES forKey:WCLiquidGlassButtonCatalogMigrationKey];
 }
 
 NSArray<NSDictionary<NSString *, NSString *> *> *WCLiquidGlassActionCatalog(void) {
@@ -336,6 +386,9 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     NSDictionary<NSString *, id> *persistentPreferences =
         [defaults persistentDomainForName:NSBundle.mainBundle.bundleIdentifier] ?: @{};
     NSNumber *existingNotificationAppearance = persistentPreferences[WCLiquidGlassMessageNotificationGlassAppearanceKey];
+    NSNumber *existingLongPressAppearance = persistentPreferences[WCLiquidGlassWCGlassLongPressMenuAppearanceKey];
+    NSNumber *storedGlassAppearance = persistentPreferences[WCLiquidGlassGlassAppearanceKey]
+        ?: @(WCLiquidGlassGlassAppearanceClear);
     NSNumber *currentGlassAppearance = persistentPreferences[WCLiquidGlassGlassAppearanceKey]
         ?: @(WCLiquidGlassGlassAppearanceBalanced);
     [defaults registerDefaults:@{
@@ -350,6 +403,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassChatToolbarEnabledKey: @YES,
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
+        WCLiquidGlassWCGlassLongPressMenuAppearanceKey: storedGlassAppearance,
         WCLiquidGlassMessageNotificationGlassEnabledKey: @YES,
         WCLiquidGlassUnreadMessageTipGlassEnabledKey: @NO,
         WCLiquidGlassMessageSwipeActionsEnabledKey: @NO,
@@ -373,7 +427,12 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         [defaults setInteger:currentGlassAppearance.integerValue
                       forKey:WCLiquidGlassMessageNotificationGlassAppearanceKey];
     }
+    if (!existingLongPressAppearance) {
+        [defaults setInteger:storedGlassAppearance.integerValue
+                      forKey:WCLiquidGlassWCGlassLongPressMenuAppearanceKey];
+    }
     WCLiquidGlassMigrateButtonItemsIfNeeded();
+    WCLiquidGlassMigrateButtonCatalogIfNeeded();
 }
 
 + (BOOL)enabled {
@@ -511,6 +570,23 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassWCGlassLongPressMenuEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (WCLiquidGlassGlassAppearance)wcGlassLongPressMenuAppearance {
+    NSInteger appearance = [NSUserDefaults.standardUserDefaults integerForKey:WCLiquidGlassWCGlassLongPressMenuAppearanceKey];
+    return MIN(WCLiquidGlassGlassAppearanceTinted,
+               MAX(WCLiquidGlassGlassAppearanceClear, appearance));
+}
+
++ (void)setWCGlassLongPressMenuAppearance:(WCLiquidGlassGlassAppearance)appearance {
+    NSInteger clampedAppearance = MIN(WCLiquidGlassGlassAppearanceTinted,
+                                      MAX(WCLiquidGlassGlassAppearanceClear, appearance));
+    if ([self wcGlassLongPressMenuAppearance] == clampedAppearance) {
+        return;
+    }
+    [NSUserDefaults.standardUserDefaults setInteger:clampedAppearance
+                                            forKey:WCLiquidGlassWCGlassLongPressMenuAppearanceKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -692,7 +768,10 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     WCLiquidGlassPostMaterialFileProtectionChanged();
     WCLiquidGlassNotifyPreferencesChanged();
 }
-+ (NSArray<NSDictionary<NSString *, id> *> *)buttonItems {
++ (NSArray<NSDictionary<NSString *, id> *> *)allButtonItems {
+    WCLiquidGlassMigrateButtonItemsIfNeeded();
+    WCLiquidGlassMigrateButtonCatalogIfNeeded();
+
     NSArray *storedItems = [NSUserDefaults.standardUserDefaults arrayForKey:WCLiquidGlassButtonItemsKey];
     if (![storedItems isKindOfClass:NSArray.class] || storedItems.count == 0) {
         return WCLiquidGlassDefaultButtonItems();
@@ -709,12 +788,24 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         if (WCLiquidGlassActionWasRemoved(actionIdentifier)) {
             continue;
         }
-        [validItems addObject:item];
+        NSMutableDictionary<NSString *, id> *normalizedItem = [item mutableCopy];
+        normalizedItem[@"hidden"] = @([normalizedItem[@"hidden"] boolValue]);
+        [validItems addObject:normalizedItem.copy];
     }
     if (validItems.count == 0) {
         return WCLiquidGlassDefaultButtonItems();
     }
     return validItems.copy;
+}
+
++ (NSArray<NSDictionary<NSString *, id> *> *)buttonItems {
+    NSMutableArray<NSDictionary<NSString *, id> *> *enabledItems = [NSMutableArray array];
+    for (NSDictionary<NSString *, id> *item in self.allButtonItems) {
+        if (![item[@"hidden"] boolValue]) {
+            [enabledItems addObject:item];
+        }
+    }
+    return enabledItems.copy;
 }
 
 + (void)setButtonItems:(NSArray<NSDictionary<NSString *, id> *> *)items {
@@ -723,7 +814,10 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 }
 
 + (void)restoreDefaultButtonItems {
-    [NSUserDefaults.standardUserDefaults removeObjectForKey:WCLiquidGlassButtonItemsKey];
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults removeObjectForKey:WCLiquidGlassButtonItemsKey];
+    [defaults removeObjectForKey:WCLiquidGlassSearchRecordsMigrationKey];
+    [defaults removeObjectForKey:WCLiquidGlassButtonCatalogMigrationKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
@@ -769,6 +863,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         }
     }
     [defaults setBool:YES forKey:WCLiquidGlassSearchRecordsMigrationKey];
+    [defaults removeObjectForKey:WCLiquidGlassButtonCatalogMigrationKey];
     WCLiquidGlassNotifyPreferencesChanged();
     WCLiquidGlassPostMaterialFileProtectionChanged();
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
@@ -789,6 +884,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
     }
     [defaults removeObjectForKey:WCLiquidGlassLegacySearchRecordsMigrationKey];
     [defaults removeObjectForKey:WCLiquidGlassSearchRecordsMigrationKey];
+    [defaults removeObjectForKey:WCLiquidGlassButtonCatalogMigrationKey];
     WCLiquidGlassNotifyPreferencesChanged();
     WCLiquidGlassPostMaterialFileProtectionChanged();
     [NSNotificationCenter.defaultCenter postNotificationName:WCLiquidGlassWCGlassCompatibilityDidChangeNotification
