@@ -17,7 +17,6 @@
 #import "WCLiquidGlassPreferences.h"
 #import "WCLiquidGlassWCGlassLongPress.h"
 #import "WCLiquidGlassWCGlassSearchTabBar.h"
-#import "WCLiquidGlassWCGlassFloatingBall.h"
 
 #ifndef WCLIQUIDGLASS_VERSION
 #define WCLIQUIDGLASS_VERSION "Unknown"
@@ -515,7 +514,6 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
                                                          queue:NSOperationQueue.mainQueue
                                                     usingBlock:^(__unused NSNotification *notification) {
             [WCLiquidGlassCrashLogger.sharedLogger start];
-            [WCLiquidGlassWCGlassFloatingBallManager.sharedManager install];
             WCLiquidGlassTryRegisterPlugin();
         }];
 
