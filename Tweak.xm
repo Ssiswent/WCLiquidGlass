@@ -489,6 +489,9 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             return;
         }
 
+        if (isMainWeChatProcess) {
+            [WCLiquidGlassCrashLogger.sharedLogger start];
+        }
         [WCLiquidGlassPreferences registerDefaults];
         WCLiquidGlassInstallMaterialFileProtectionHooks();
         if (!isMainWeChatProcess) {

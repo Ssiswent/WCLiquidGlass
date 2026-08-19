@@ -10,10 +10,10 @@ Internal/PLCrashReporter 保存 PLCrashReporter 的 live 单槽文件，Internal
 
 ## 启动与采集
 
-- 主微信进程在 %ctor 中尽早启动日志器，目录准备完成后先把现有 `crashReportPath` 原子移动到 `Internal/Pending`，再立即创建并启用 PLCrashReporter；staging 文件使用唯一名称，避免覆盖未处理报告。
-- PLCrashReporter 使用 PLCrashReporterSignalHandlerTypeMach、PLCrashReporterSymbolicationStrategyNone 和 shouldRegisterUncaughtExceptionHandler:YES，统一采集原生 Mach 异常与未捕获 Objective-C 异常。
+- 主微信进程在 `%ctor` 中尽早启动日志器，目录准备完成后先把现有 `crashReportPath` 原子移动到 `Internal/Pending`，再启用 PLCrashReporter；staging 文件使用唯一名称，避免覆盖未处理报告。应用回到前台时会再次调用幂等的启动入口，覆盖动态注入或错过首次通知的场景。
+- PLCrashReporter 使用 `PLCrashReporterSignalHandlerTypeMach` 和 `PLCrashReporterSymbolicationStrategyNone`，由 WCLiquidGlass 自己保留未捕获 Objective-C 异常处理器，避免与其他注入插件重复注册同一个异常处理器。独立的预打开 signal marker 作为 BSD signal 兜底；如果宿主已有 Mach handler 并先行处理异常，任何进程内采集器都可能无法收到该异常。
 - 调试器已附加时跳过启用，避免与调试器的 Mach handler 争用。
-- 日志器随后处理 pending 报告、注册生命周期观察并裁剪到最多 20 份；这些步骤的失败写入 recent event，不以重复的可见提示打扰用户。`customData` 只在 enable 前设置一次，避免生命周期回调与崩溃写入并发。
+- 日志器随后处理 pending 报告、注册生命周期观察并裁剪到最多 20 份；这些步骤的失败写入 recent event，不以重复的可见提示打扰用户。
 - 如果 staging 移动失败，日志器会在 enable 前处理并清理 live pending；失败时保持禁用，绝不在 enable 后调用单槽 purge。
 - staged 报告读取、解析、格式化、写入或清理失败时改名为唯一 `.failed` 文件；改名失败只记录 recent event。
 - 页面层级诊断是同一日志列表中的安全手动记录，文件名使用 PageHierarchy-<timestamp>.txt。
@@ -34,7 +34,7 @@ pending 报告根据 PLCrashReport.exceptionInfo 命名：
 
 日志可以包含崩溃堆栈、线程、寄存器、binary images、系统/设备/微信/WCLiquidGlass 版本、已加载注入 dylib 文件名、应用状态、进程运行时间和最近生命周期事件。日志器不主动读取聊天输入框、聊天文字、消息、联系人、账号、会话名称或媒体内容；页面层级诊断仍严格排除可见文本。系统生成的 crash reason 或对象描述可能带运行时上下文，崩溃报告不承诺对其脱敏，分享前应自行确认。
 
-Mach/Objective-C 采集仍受进程启动时机和宿主环境限制，不能可靠承诺捕获 Jetsam、watchdog、用户强制结束、内核直接终止或其他进程先行接管 handler 的情况。注入点早于 %ctor 或构造函数执行前发生的崩溃也没有机会安装采集器，这是启动阶段的固有限制。
+Mach/Objective-C/signal 采集仍受宿主环境限制，不能可靠承诺捕获 Jetsam、watchdog、用户强制结束、内核直接终止或其他进程先行接管 handler 的情况。注入点早于 `%ctor` 或构造函数执行前发生的崩溃也没有机会安装采集器，这是启动阶段的固有限制。
 
 ## 存储与维护
 

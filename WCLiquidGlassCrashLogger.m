@@ -418,6 +418,7 @@ static NSString *WCLiquidGlassReportHeader(NSString *level) {
 @property(nonatomic, strong) NSData *sessionID;
 
 - (void)wc_writeUncaughtException:(NSException *)exception;
+- (void)wc_enableCrashReporter;
 
 @end
 
@@ -484,8 +485,13 @@ static void WCLiquidGlassHandleException(NSException *exception) {
         [self wc_installExceptionHandler];
         [self wc_writeImageSnapshot];
         PLCrashReporter *reporter = [self wc_reporter];
-        if (![self wc_stagePendingCrashReportForEnable:reporter]) {
+        BOOL pendingReady = [self wc_stagePendingCrashReportForEnable:reporter];
+        if (!pendingReady) {
             WCLiquidGlassRecordEvent(@"Legacy PLCrashReporter pending report staging failed");
+        } else if (WCLiquidGlassDebuggerAttached()) {
+            WCLiquidGlassRecordEvent(@"PLCrashReporter skipped because debugger is attached");
+        } else {
+            [self wc_enableCrashReporter];
         }
     } else {
         WCLiquidGlassRecordEvent(@"Crash logging directories are unavailable");
@@ -916,6 +922,21 @@ static void WCLiquidGlassHandleException(NSException *exception) {
                                     maxReportBytes:5 * 1024 * 1024];
     self.reporter = [[PLCrashReporter alloc] initWithConfiguration:config];
     return self.reporter;
+}
+
+- (void)wc_enableCrashReporter {
+    PLCrashReporter *reporter = [self wc_reporter];
+    if (!reporter) {
+        WCLiquidGlassRecordEvent(@"PLCrashReporter initialization failed");
+        return;
+    }
+    NSError *enableError = nil;
+    if (![reporter enableCrashReporterAndReturnError:&enableError]) {
+        WCLiquidGlassRecordEvent([NSString stringWithFormat:@"PLCrashReporter enable failed: %@",
+                                  enableError.localizedDescription ?: @"Unknown error"]);
+    } else {
+        WCLiquidGlassRecordEvent(@"PLCrashReporter enabled");
+    }
 }
 
 - (NSURL *)wc_pendingStagingDirectoryURL {
