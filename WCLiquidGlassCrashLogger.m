@@ -60,7 +60,6 @@ static NSString *WCLiquidGlassRecentEventsPath;
 static NSUncaughtExceptionHandler *WCLiquidGlassPreviousExceptionHandler;
 static volatile sig_atomic_t WCLiquidGlassExceptionHandling = 0;
 static __weak WCLiquidGlassCrashLogger *WCLiquidGlassExceptionLogger;
-static BOOL WCLiquidGlassExceptionHandlerInstalled = NO;
 
 static void WCLiquidGlassHandleException(NSException *exception);
 
@@ -414,8 +413,12 @@ static NSString *WCLiquidGlassReportHeader(NSString *level) {
 @interface WCLiquidGlassCrashLogger ()
 
 @property(nonatomic) BOOL started;
+@property(nonatomic) BOOL earlyCaptureInstalled;
+@property(nonatomic) BOOL signalMarkerInstalled;
+@property(nonatomic) BOOL reporterEnabled;
 @property(nonatomic, strong) PLCrashReporter *reporter;
 @property(nonatomic, strong) NSData *sessionID;
+@property(nonatomic, copy) NSString *priorRecentEvents;
 
 - (void)wc_writeUncaughtException:(NSException *)exception;
 - (void)wc_enableCrashReporter;
@@ -424,9 +427,6 @@ static NSString *WCLiquidGlassReportHeader(NSString *level) {
 
 static void WCLiquidGlassHandleException(NSException *exception) {
     if (!__sync_bool_compare_and_swap(&WCLiquidGlassExceptionHandling, 0, 1)) {
-        if (WCLiquidGlassPreviousExceptionHandler) {
-            WCLiquidGlassPreviousExceptionHandler(exception);
-        }
         return;
     }
     @autoreleasepool {
@@ -462,8 +462,9 @@ static void WCLiquidGlassHandleException(NSException *exception) {
 }
 
 - (void)start {
+    [self installEarlyCrashCapture];
     @synchronized (self) {
-        if (self.started) {
+        if (self.started && self.signalMarkerInstalled) {
             return;
         }
         self.started = YES;
@@ -473,25 +474,30 @@ static void WCLiquidGlassHandleException(NSException *exception) {
     [self wc_recoverSignalCrashMarker];
     WCLiquidGlassResetRecentEvents();
     if (directoriesReady) {
-        self.sessionID = [self wc_newSessionID];
-        if (WCLiquidGlassDebuggerAttached()) {
-            WCLiquidGlassRecordEvent(@"Signal crash marker skipped because debugger is attached");
-        } else if (!WCLiquidGlassStartCrashMarker([self wc_crashMarkerURL].path, self.sessionID)) {
-            WCLiquidGlassRecordEvent(@"Signal crash marker installation failed");
-        } else {
-            WCLiquidGlassRecordEvent(@"Signal crash marker installed");
+        if (!self.signalMarkerInstalled) {
+            self.sessionID = [self wc_newSessionID];
+            if (WCLiquidGlassDebuggerAttached()) {
+                WCLiquidGlassRecordEvent(@"Signal crash marker skipped because debugger is attached");
+            } else if (!WCLiquidGlassStartCrashMarker([self wc_crashMarkerURL].path, self.sessionID)) {
+                WCLiquidGlassRecordEvent(@"Signal crash marker installation failed");
+            } else {
+                self.signalMarkerInstalled = YES;
+                WCLiquidGlassRecordEvent(@"Signal crash marker installed");
+            }
         }
         [self wc_writeSessionMetadata];
         [self wc_installExceptionHandler];
         [self wc_writeImageSnapshot];
         PLCrashReporter *reporter = [self wc_reporter];
-        BOOL pendingReady = [self wc_stagePendingCrashReportForEnable:reporter];
-        if (!pendingReady) {
-            WCLiquidGlassRecordEvent(@"Legacy PLCrashReporter pending report staging failed");
-        } else if (WCLiquidGlassDebuggerAttached()) {
-            WCLiquidGlassRecordEvent(@"PLCrashReporter skipped because debugger is attached");
-        } else {
-            [self wc_enableCrashReporter];
+        if (!self.reporterEnabled) {
+            BOOL pendingReady = [self wc_stagePendingCrashReportForEnable:reporter];
+            if (!pendingReady) {
+                WCLiquidGlassRecordEvent(@"Legacy PLCrashReporter pending report staging failed");
+            } else if (WCLiquidGlassDebuggerAttached()) {
+                WCLiquidGlassRecordEvent(@"PLCrashReporter skipped because debugger is attached");
+            } else {
+                [self wc_enableCrashReporter];
+            }
         }
     } else {
         WCLiquidGlassRecordEvent(@"Crash logging directories are unavailable");
@@ -764,11 +770,11 @@ static void WCLiquidGlassHandleException(NSException *exception) {
                                                                (NSTimeInterval)marker.timestampNanoseconds / 1000000000.0];
     NSArray<NSDictionary *> *images = [NSArray arrayWithContentsOfURL:[self wc_imageSnapshotURL]] ?: @[];
     NSDictionary *session = [NSDictionary dictionaryWithContentsOfURL:[self wc_sessionURL]] ?: @{};
-    NSString *previousEvents = WCLiquidGlassRecentEventsPath.length > 0
+    NSString *previousEvents = self.priorRecentEvents ?: (WCLiquidGlassRecentEventsPath.length > 0
         ? [NSString stringWithContentsOfFile:WCLiquidGlassRecentEventsPath
                                     encoding:NSUTF8StringEncoding
                                        error:nil]
-        : nil;
+        : nil);
     NSString *pcImage = WCLiquidGlassImagePathForAddress(images, marker.programCounter);
     NSString *lrImage = WCLiquidGlassImagePathForAddress(images, marker.linkRegister);
     NSString *faultImage = WCLiquidGlassImagePathForAddress(images, marker.faultAddress);
@@ -855,13 +861,12 @@ static void WCLiquidGlassHandleException(NSException *exception) {
 }
 
 - (void)wc_installExceptionHandler {
-    if (WCLiquidGlassExceptionHandlerInstalled) {
+    if (NSGetUncaughtExceptionHandler() == WCLiquidGlassHandleException) {
         return;
     }
     WCLiquidGlassExceptionLogger = self;
     WCLiquidGlassPreviousExceptionHandler = NSGetUncaughtExceptionHandler();
     NSSetUncaughtExceptionHandler(WCLiquidGlassHandleException);
-    WCLiquidGlassExceptionHandlerInstalled = YES;
 }
 
 - (void)wc_writeUncaughtException:(NSException *)exception {
@@ -924,10 +929,54 @@ static void WCLiquidGlassHandleException(NSException *exception) {
     return self.reporter;
 }
 
+- (void)installEarlyCrashCapture {
+    @synchronized (self) {
+        if (self.earlyCaptureInstalled) {
+            [self wc_installExceptionHandler];
+            return;
+        }
+    }
+    if (!self.priorRecentEvents) {
+        NSURL *runtimeURL = [[self.class.diagnosticsDirectoryURL URLByAppendingPathComponent:@"Internal"
+                                                                    isDirectory:YES]
+                              URLByAppendingPathComponent:@"Runtime" isDirectory:YES];
+        NSURL *eventsURL = [runtimeURL URLByAppendingPathComponent:@"recent-events.log" isDirectory:NO];
+        self.priorRecentEvents = [NSString stringWithContentsOfURL:eventsURL
+                                                              encoding:NSUTF8StringEncoding
+                                                                 error:nil];
+    }
+    if (![self wc_prepareDirectories]) {
+        WCLiquidGlassRecordEvent(@"Crash logging directories are unavailable");
+        return;
+    }
+    [self wc_installExceptionHandler];
+    if (WCLiquidGlassDebuggerAttached()) {
+        WCLiquidGlassRecordEvent(@"Early crash capture reporter skipped because debugger is attached");
+        return;
+    }
+    PLCrashReporter *reporter = [self wc_reporter];
+    BOOL hasPendingReport = [reporter hasPendingCrashReport] ||
+                            (reporter.crashReportPath.length > 0 &&
+                             [NSFileManager.defaultManager fileExistsAtPath:reporter.crashReportPath]);
+    BOOL captureReady = hasPendingReport;
+    if (hasPendingReport) {
+        WCLiquidGlassRecordEvent(@"PLCrashReporter enable deferred until pending report staging");
+    } else {
+        [self wc_enableCrashReporter];
+        captureReady = self.reporterEnabled;
+    }
+    @synchronized (self) {
+        self.earlyCaptureInstalled = captureReady;
+    }
+}
+
 - (void)wc_enableCrashReporter {
     PLCrashReporter *reporter = [self wc_reporter];
     if (!reporter) {
         WCLiquidGlassRecordEvent(@"PLCrashReporter initialization failed");
+        return;
+    }
+    if (self.reporterEnabled) {
         return;
     }
     NSError *enableError = nil;
@@ -935,6 +984,7 @@ static void WCLiquidGlassHandleException(NSException *exception) {
         WCLiquidGlassRecordEvent([NSString stringWithFormat:@"PLCrashReporter enable failed: %@",
                                   enableError.localizedDescription ?: @"Unknown error"]);
     } else {
+        self.reporterEnabled = YES;
         WCLiquidGlassRecordEvent(@"PLCrashReporter enabled");
     }
 }

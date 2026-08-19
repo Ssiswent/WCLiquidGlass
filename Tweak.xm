@@ -490,7 +490,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         }
 
         if (isMainWeChatProcess) {
-            [WCLiquidGlassCrashLogger.sharedLogger start];
+            [WCLiquidGlassCrashLogger.sharedLogger installEarlyCrashCapture];
         }
         [WCLiquidGlassPreferences registerDefaults];
         WCLiquidGlassInstallMaterialFileProtectionHooks();
@@ -499,6 +499,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
+            [WCLiquidGlassCrashLogger.sharedLogger start];
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallWCGlassSearchTabBarHooks();

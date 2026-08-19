@@ -32,15 +32,16 @@ done
 grep -Fq 'WCLiquidGlassStartCrashMarker' WCLiquidGlassCrashLogger.m || fail "fixed signal crash marker is missing"
 grep -Fq 'NSSetUncaughtExceptionHandler(WCLiquidGlassHandleException)' WCLiquidGlassCrashLogger.m || fail "uncaught exception handler is missing"
 grep -Fq 'enableCrashReporterAndReturnError' WCLiquidGlassCrashLogger.m || fail "PLCrashReporter enable path is missing"
+grep -Fq 'installEarlyCrashCapture' WCLiquidGlassCrashLogger.h || fail "early crash capture API is missing"
 if grep -Fq 'shouldRegisterUncaughtExceptionHandler:YES' WCLiquidGlassCrashLogger.m; then
     fail "PLCrashReporter must not own the process exception handler"
 fi
 custom_data_assignments=$(grep -c 'reporter.customData =' WCLiquidGlassCrashLogger.m || true)
 [ "$custom_data_assignments" -eq 0 ] || fail "legacy PLCrashReporter customData path must remain disabled"
 grep -Fq '@".failed"' WCLiquidGlassCrashLogger.m || fail "failed pending crash report isolation is missing"
-early_logger_line=$(grep -nF '[WCLiquidGlassCrashLogger.sharedLogger start];' Tweak.xm | head -n 1 | cut -d: -f1)
+early_logger_line=$(grep -nF '[WCLiquidGlassCrashLogger.sharedLogger installEarlyCrashCapture];' Tweak.xm | head -n 1 | cut -d: -f1)
 preferences_line=$(grep -nF '[WCLiquidGlassPreferences registerDefaults];' Tweak.xm | head -n 1 | cut -d: -f1)
-[ -n "$early_logger_line" ] || fail "early crash logger start is missing"
+[ -n "$early_logger_line" ] || fail "early crash capture is missing"
 [ -n "$preferences_line" ] || fail "preference registration is missing"
 [ "$early_logger_line" -lt "$preferences_line" ] || fail "crash logger must start before preference registration"
 if grep -Fq 'q7ar2wl2d3z44fwr25h2f2lx' WCLiquidGlassMenu.m; then

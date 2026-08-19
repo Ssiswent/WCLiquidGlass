@@ -6,14 +6,14 @@ WCLiquidGlass 默认启用尽可能详细的异常与崩溃采集，并在插件
 
     Documents/WCLiquidGlass/Diagnostics/Crashes
 
-Internal/PLCrashReporter 保存 PLCrashReporter 的 live 单槽文件，Internal/Pending 保存启动前原子移动出的唯一 staging `.plcrash` 文件；下次启动先移动现有 pending，再尽早安装采集器，随后在安全的 Objective-C 环境中逐个格式化 staging。只有最终文本成功写入后才删除对应 staging 文件；处理失败的 staging 会在同目录隔离为 `.failed`，保留取证且后续启动不自动重试。
+Internal/PLCrashReporter 保存 PLCrashReporter 的 live 单槽文件，Internal/Pending 保存启动后原子移动出的唯一 staging `.plcrash` 文件；下次启动先安装最小采集器，再在安全的 Objective-C 环境中移动并逐个格式化 staging。只有最终文本成功写入后才删除对应 staging 文件；处理失败的 staging 会在同目录隔离为 `.failed`，保留取证且后续启动不自动重试。
 
 ## 启动与采集
 
-- 主微信进程在 `%ctor` 中尽早启动日志器，目录准备完成后先把现有 `crashReportPath` 原子移动到 `Internal/Pending`，再启用 PLCrashReporter；staging 文件使用唯一名称，避免覆盖未处理报告。应用回到前台时会再次调用幂等的启动入口，覆盖动态注入或错过首次通知的场景。
+- 主微信进程在 `%ctor` 中只做最小早期安装：保存上一进程 recent events、创建诊断目录、安装 Objective-C 异常处理器，并在没有旧 pending 报告时启用 PLCrashReporter；旧报告的解析、marker 恢复、image snapshot 和裁剪延后到主线程初始化后的完整启动。应用回到前台时会再次尝试接管 Objective-C handler；Mach handler 只在 PLCrashReporter 首次 enable 时安装，不能安全重复启用。
 - PLCrashReporter 使用 `PLCrashReporterSignalHandlerTypeMach` 和 `PLCrashReporterSymbolicationStrategyNone`，由 WCLiquidGlass 自己保留未捕获 Objective-C 异常处理器，避免与其他注入插件重复注册同一个异常处理器。独立的预打开 signal marker 作为 BSD signal 兜底；如果宿主已有 Mach handler 并先行处理异常，任何进程内采集器都可能无法收到该异常。
 - 调试器已附加时跳过启用，避免与调试器的 Mach handler 争用。
-- 日志器随后处理 pending 报告、注册生命周期观察并裁剪到最多 20 份；这些步骤的失败写入 recent event，不以重复的可见提示打扰用户。
+- 完整启动随后安装 signal marker、处理 pending 报告、写入 session/image snapshot、注册生命周期观察并裁剪到最多 20 份；这些步骤的失败写入 recent event，不以重复的可见提示打扰用户。
 - 如果 staging 移动失败，日志器会在 enable 前处理并清理 live pending；失败时保持禁用，绝不在 enable 后调用单槽 purge。
 - staged 报告读取、解析、格式化、写入或清理失败时改名为唯一 `.failed` 文件；改名失败只记录 recent event。
 - 页面层级诊断是同一日志列表中的安全手动记录，文件名使用 PageHierarchy-<timestamp>.txt。
