@@ -2863,6 +2863,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 @property(nonatomic, strong) NSTimer *nativeHideTimer;
 @property(nonatomic, strong) NSTimer *nativeInteractionSettleTimer;
 @property(nonatomic, strong) NSTimer *nativeMenuMonitorTimer;
+@property(nonatomic, strong) NSHashTable<UIWindow *> *nativeMenuBaselineWindows;
 @property(nonatomic, assign) BOOL nativeMenuWasPresented;
 @property(nonatomic, assign) CFTimeInterval nativeMenuClosedAt;
 @property(nonatomic, assign) BOOL nativeToolbarPartiallyHidden;
@@ -3350,18 +3351,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 }
 
 - (CGRect)wc_nativeToolbarFrame {
-    CGFloat diameter = WCLiquidGlassButtonDiameter();
-    CGFloat width = CGRectGetWidth(self.bounds);
-    CGFloat x = self.anchorOnLeft
-        ? 0.0
-        : width - diameter;
-    UIEdgeInsets safeArea = self.safeAreaInsets;
-    CGFloat minimumY = safeArea.top + 16.0;
-    CGFloat maximumY = MAX(minimumY,
-                           [self wc_effectiveLayoutBottom] - diameter - 16.0);
-    CGFloat y = CGRectGetHeight(self.bounds) * WCLiquidGlassPreferences.anchorYFraction - diameter * 0.5;
-    y = MIN(maximumY, MAX(minimumY, y));
-    return CGRectMake(x, y, diameter, diameter);
+    return [self wc_nativeToolbarVisibleFrameForLeft:self.nativeToolbarSnapLeft];
 }
 
 - (CGRect)wc_nativeToolbarVisibleFrameForLeft:(BOOL)left {
@@ -3384,9 +3374,8 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     if (!self.nativeToolbar || self.nativeToolbarPositioned || CGRectGetWidth(self.bounds) <= 0.0) {
         return;
     }
-    self.nativeToolbar.frame = [self wc_nativeToolbarFrame];
     self.nativeToolbarSnapLeft = self.anchorOnLeft;
-    CGRect frame = self.nativeToolbar.frame;
+    CGRect frame = [self wc_nativeToolbarFrame];
     frame.origin.x = self.nativeToolbarSnapLeft
         ? -(CGRectGetWidth(frame) * 0.5)
         : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) * 0.5;
@@ -3419,8 +3408,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 - (void)wc_installNativeMenuPanel {
     [self wc_cancelNativeHide];
     if (self.nativeToolbar) {
-        ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).notifyBeforeHitTest =
-            WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring;
+        ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).notifyBeforeHitTest = YES;
         [self wc_positionNativeToolbarIfNeeded];
         [self wc_refreshNativeMenuImmediately];
         [self wc_scheduleNativeHide];
@@ -3431,15 +3419,9 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         WCLiquidGlassNativeToolbar *toolbar = [[WCLiquidGlassNativeToolbar alloc] initWithFrame:CGRectMake(0.0, 0.0, diameter, diameter)];
         __weak typeof(self) weakSelf = self;
         toolbar.touchBeganHandler = ^{
-            if (WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring) {
-                [weakSelf wc_nativeToolbarTouchBegan];
-            } else {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [weakSelf wc_nativeToolbarTouchBegan];
-                });
-            }
+            [weakSelf wc_nativeToolbarTouchBegan];
         };
-        toolbar.notifyBeforeHitTest = WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyPreflightSpring;
+        toolbar.notifyBeforeHitTest = YES;
         self.nativeToolbar = toolbar;
         self.nativeToolbar.delegate = self;
         self.nativeToolbar.accessibilityLabel = @"WCLiquidGlass 菜单";
@@ -3524,19 +3506,6 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     CALayer *presentationLayer = self.nativeToolbar.layer.presentationLayer;
     BOOL toolbarFrameIsMoving = presentationLayer &&
         !CGRectEqualToRect(presentationLayer.frame, self.nativeToolbar.frame);
-    BOOL preserveHiddenMenuSource = WCLiquidGlassPreferences.floatingMenuStrategy == WCLiquidGlassFloatingMenuStrategyHiddenAnchor;
-    if (preserveHiddenMenuSource && (self.nativeToolbarPartiallyHidden || self.nativeToolbarRestoring || toolbarFrameIsMoving)) {
-        if (toolbarFrameIsMoving || self.nativeToolbarRestoring) {
-            [self wc_stopNativeToolbarAnimation];
-        }
-        self.nativeToolbarPartiallyHidden = YES;
-        self.nativeToolbarRestoring = NO;
-        self.nativeToolbar.alpha = 1.0;
-        ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = NO;
-        [self wc_cancelNativeHide];
-        [self wc_cancelNativeToolbarInteractionSettle];
-        return;
-    }
     if (self.nativeToolbarPartiallyHidden || self.nativeToolbarRestoring || toolbarFrameIsMoving) {
         [self wc_stopNativeToolbarAnimation];
     }
@@ -3688,11 +3657,23 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 - (void)wc_cancelNativeMenuMonitor {
     [self.nativeMenuMonitorTimer invalidate];
     self.nativeMenuMonitorTimer = nil;
+    self.nativeMenuBaselineWindows = nil;
     self.nativeMenuWasPresented = NO;
     self.nativeMenuClosedAt = 0.0;
 }
 
 - (BOOL)wc_menuIsPresented {
+    Class menuControllerClass = NSClassFromString(@"UIMenuController");
+    SEL sharedMenuControllerSelector = NSSelectorFromString(@"sharedMenuController");
+    SEL menuVisibleSelector = NSSelectorFromString(@"isMenuVisible");
+    id menuController = menuControllerClass && [menuControllerClass respondsToSelector:sharedMenuControllerSelector]
+        ? ((id (*)(id, SEL))objc_msgSend)(menuControllerClass, sharedMenuControllerSelector)
+        : nil;
+    if (menuController && [menuController respondsToSelector:menuVisibleSelector] &&
+        ((BOOL (*)(id, SEL))objc_msgSend)(menuController, menuVisibleSelector)) {
+        return YES;
+    }
+
     UIViewController *controller = self.window.rootViewController;
     while (controller.presentedViewController) {
         controller = controller.presentedViewController;
@@ -3704,6 +3685,9 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     UIWindowScene *scene = self.window.windowScene;
     for (UIWindow *window in scene.windows) {
         if (window == self.window || window.hidden || window.alpha <= 0.01 || !window.rootViewController) {
+            continue;
+        }
+        if ([self.nativeMenuBaselineWindows containsObject:window]) {
             continue;
         }
         if (window.windowLevel > UIWindowLevelNormal) {
@@ -3721,6 +3705,11 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 
 - (void)wc_startNativeMenuMonitor {
     [self wc_cancelNativeMenuMonitor];
+    NSHashTable<UIWindow *> *baselineWindows = [NSHashTable weakObjectsHashTable];
+    for (UIWindow *window in self.window.windowScene.windows) {
+        [baselineWindows addObject:window];
+    }
+    self.nativeMenuBaselineWindows = baselineWindows;
     __weak typeof(self) weakSelf = self;
     self.nativeMenuMonitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.05
                                                                     repeats:YES
