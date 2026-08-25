@@ -2862,6 +2862,9 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 @property(nonatomic, strong) UIPanGestureRecognizer *nativePanGesture;
 @property(nonatomic, strong) NSTimer *nativeHideTimer;
 @property(nonatomic, strong) NSTimer *nativeInteractionSettleTimer;
+@property(nonatomic, strong) NSTimer *nativeMenuMonitorTimer;
+@property(nonatomic, assign) BOOL nativeMenuWasPresented;
+@property(nonatomic, assign) CFTimeInterval nativeMenuClosedAt;
 @property(nonatomic, assign) BOOL nativeToolbarPartiallyHidden;
 @property(nonatomic, assign) BOOL nativeToolbarPositioned;
 @property(nonatomic, assign) BOOL nativeToolbarRestoring;
@@ -2909,7 +2912,11 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 - (void)wc_cancelNativeToolbarInteractionSettle;
 - (void)wc_nativeToolbarPan:(UIPanGestureRecognizer *)gesture;
 - (void)wc_scheduleNativeHide;
+- (void)wc_hideNativeToolbarAnimated;
 - (void)wc_cancelNativeHide;
+- (void)wc_cancelNativeMenuMonitor;
+- (BOOL)wc_menuIsPresented;
+- (void)wc_startNativeMenuMonitor;
 - (void)wc_beginPressOnOrb:(WCLiquidGlassOrbView *)orb towardPoint:(CGPoint)point;
 - (void)wc_updatePressTowardPoint:(CGPoint)point;
 - (void)wc_endPressAnimated:(BOOL)animated;
@@ -2986,6 +2993,9 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         WCLiquidGlassManualTextEditMonitoringEnabled = NO;
         [NSNotificationCenter.defaultCenter removeObserver:self];
     }
+    [self wc_cancelNativeHide];
+    [self wc_cancelNativeToolbarInteractionSettle];
+    [self wc_cancelNativeMenuMonitor];
 }
 
 - (void)setVoiceTranscriptionActive:(BOOL)voiceTranscriptionActive {
@@ -3341,11 +3351,11 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 
 - (CGRect)wc_nativeToolbarFrame {
     CGFloat diameter = WCLiquidGlassButtonDiameter();
-    UIEdgeInsets safeArea = self.safeAreaInsets;
     CGFloat width = CGRectGetWidth(self.bounds);
     CGFloat x = self.anchorOnLeft
-        ? safeArea.left + 16.0
-        : width - safeArea.right - diameter - 16.0;
+        ? 0.0
+        : width - diameter;
+    UIEdgeInsets safeArea = self.safeAreaInsets;
     CGFloat minimumY = safeArea.top + 16.0;
     CGFloat maximumY = MAX(minimumY,
                            [self wc_effectiveLayoutBottom] - diameter - 16.0);
@@ -3360,8 +3370,8 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         : WCLiquidGlassButtonDiameter();
     UIEdgeInsets insets = self.safeAreaInsets;
     CGFloat x = left
-        ? insets.left + 16.0
-        : CGRectGetWidth(self.bounds) - insets.right - 16.0 - diameter;
+        ? 0.0
+        : CGRectGetWidth(self.bounds) - diameter;
     CGFloat minY = insets.top + 16.0;
     CGFloat maxY = MAX(minY,
                        [self wc_effectiveLayoutBottom] - 16.0 - diameter);
@@ -3472,6 +3482,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
 - (void)wc_removeNativeMenuPanel {
     [self wc_cancelNativeHide];
     [self wc_cancelNativeToolbarInteractionSettle];
+    [self wc_cancelNativeMenuMonitor];
     [self.nativeToolbar removeFromSuperview];
     self.nativeToolbar = nil;
     self.nativeMenuItem = nil;
@@ -3532,21 +3543,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     [self wc_showNativeToolbarIfNeeded];
     [self wc_cancelNativeHide];
     [self wc_cancelNativeToolbarInteractionSettle];
-    __weak typeof(self) weakSelf = self;
-    self.nativeInteractionSettleTimer = [NSTimer scheduledTimerWithTimeInterval:0.55
-                                                                            repeats:NO
-                                                                              block:^(__unused NSTimer *timer) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) {
-            return;
-        }
-        self.nativeInteractionSettleTimer = nil;
-        if (self.nativePanGesture.state == UIGestureRecognizerStateBegan ||
-            self.nativePanGesture.state == UIGestureRecognizerStateChanged) {
-            return;
-        }
-        [self wc_scheduleNativeHide];
-    }];
+    [self wc_startNativeMenuMonitor];
 }
 
 - (void)wc_scheduleNativeHide {
@@ -3555,7 +3552,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         return;
     }
     __weak typeof(self) weakSelf = self;
-    self.nativeHideTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+    self.nativeHideTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                                repeats:NO
                                                                  block:^(__unused NSTimer *timer) {
         __strong typeof(weakSelf) self = weakSelf;
@@ -3569,27 +3566,37 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
             [self wc_scheduleNativeHide];
             return;
         }
-        self.nativeToolbarPartiallyHidden = YES;
-        ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = YES;
-        CGRect frame = self.nativeToolbar.frame;
-        frame.origin.x = self.nativeToolbarSnapLeft
-            ? -(CGRectGetWidth(frame) * 0.5)
-            : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) * 0.5;
-        [UIView animateWithDuration:0.28
-                              delay:0
-                            options:UIViewAnimationOptionBeginFromCurrentState |
-                                    UIViewAnimationOptionAllowUserInteraction
-                         animations:^{
-            self.nativeToolbar.frame = frame;
-        } completion:^(__unused BOOL finished) {
-            ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = NO;
-        }];
+        [self wc_hideNativeToolbarAnimated];
+    }];
+}
+
+- (void)wc_hideNativeToolbarAnimated {
+    [self wc_cancelNativeHide];
+    if (!self.nativeToolbar || self.nativeToolbarPartiallyHidden ||
+        self.nativePanGesture.state == UIGestureRecognizerStateBegan ||
+        self.nativePanGesture.state == UIGestureRecognizerStateChanged ||
+        self.nativeToolbarRestoring) {
+        return;
+    }
+    self.nativeToolbarPartiallyHidden = YES;
+    ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = YES;
+    CGRect frame = self.nativeToolbar.frame;
+    frame.origin.x = self.nativeToolbarSnapLeft
+        ? -(CGRectGetWidth(frame) * 0.5)
+        : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame) * 0.5;
+    [UIView animateWithDuration:0.28
+                          delay:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState |
+                                UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+        self.nativeToolbar.frame = frame;
+    } completion:^(__unused BOOL finished) {
+        ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = NO;
     }];
 }
 
 - (void)wc_showNativeToolbarIfNeeded {
     [self wc_cancelNativeToolbarInteractionSettle];
-    [self wc_scheduleNativeHide];
     if (!self.nativeToolbarPartiallyHidden) {
         self.nativeToolbar.alpha = 1.0;
         return;
@@ -3601,10 +3608,8 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     }
     [self.nativeToolbar.layer removeAllAnimations];
     self.nativeToolbar.frame = from;
-    CGRect frame = from;
-    frame.origin.x = self.nativeToolbarSnapLeft
-        ? 0.0
-        : CGRectGetWidth(self.bounds) - CGRectGetWidth(frame);
+    CGRect frame = [self wc_nativeToolbarVisibleFrameForLeft:self.nativeToolbarSnapLeft];
+    frame.origin.y = from.origin.y;
     UIEdgeInsets insets = self.safeAreaInsets;
     CGFloat minY = insets.top + 16.0;
     CGFloat maxY = CGRectGetHeight(self.bounds) - insets.bottom - 16.0 - CGRectGetHeight(frame);
@@ -3634,6 +3639,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     }
     if (gesture.state == UIGestureRecognizerStateBegan) {
         [self wc_cancelNativeToolbarInteractionSettle];
+        [self wc_cancelNativeMenuMonitor];
         [self wc_showNativeToolbarIfNeeded];
         [self wc_stopNativeToolbarAnimation];
         ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = NO;
@@ -3649,7 +3655,6 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         frame.origin.x = MIN(MAX(frame.origin.x, 0.0),
                              MAX(0.0, CGRectGetWidth(self.bounds) - CGRectGetWidth(frame)));
         self.nativeToolbar.frame = frame;
-        [self wc_scheduleNativeHide];
     } else if (gesture.state == UIGestureRecognizerStateEnded ||
                gesture.state == UIGestureRecognizerStateCancelled ||
                gesture.state == UIGestureRecognizerStateFailed) {
@@ -3664,10 +3669,10 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
         self.nativeToolbarPartiallyHidden = NO;
         ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = YES;
         [self wc_cancelNativeToolbarInteractionSettle];
-        [UIView animateWithDuration:0.32
+        [UIView animateWithDuration:0.58
                               delay:0
-             usingSpringWithDamping:0.86
-              initialSpringVelocity:0.2
+             usingSpringWithDamping:0.78
+              initialSpringVelocity:0.12
                             options:UIViewAnimationOptionBeginFromCurrentState |
                                     UIViewAnimationOptionAllowUserInteraction
                          animations:^{
@@ -3675,9 +3680,77 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
             self.nativeToolbar.alpha = 1.0;
         } completion:^(__unused BOOL finished) {
             ((WCLiquidGlassNativeToolbar *)self.nativeToolbar).acceptsPresentationHitTest = NO;
+            [self wc_scheduleNativeHide];
         }];
-        [self wc_scheduleNativeHide];
     }
+}
+
+- (void)wc_cancelNativeMenuMonitor {
+    [self.nativeMenuMonitorTimer invalidate];
+    self.nativeMenuMonitorTimer = nil;
+    self.nativeMenuWasPresented = NO;
+    self.nativeMenuClosedAt = 0.0;
+}
+
+- (BOOL)wc_menuIsPresented {
+    UIViewController *controller = self.window.rootViewController;
+    while (controller.presentedViewController) {
+        controller = controller.presentedViewController;
+        if (!controller.viewIfLoaded.hidden && controller.viewIfLoaded.alpha > 0.01) {
+            return YES;
+        }
+    }
+
+    UIWindowScene *scene = self.window.windowScene;
+    for (UIWindow *window in scene.windows) {
+        if (window == self.window || window.hidden || window.alpha <= 0.01 || !window.rootViewController) {
+            continue;
+        }
+        if (window.windowLevel > UIWindowLevelNormal) {
+            return YES;
+        }
+        NSString *windowClass = NSStringFromClass(window.class);
+        if ([windowClass localizedCaseInsensitiveContainsString:@"menu"] ||
+            [windowClass localizedCaseInsensitiveContainsString:@"popover"] ||
+            [windowClass localizedCaseInsensitiveContainsString:@"context"]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (void)wc_startNativeMenuMonitor {
+    [self wc_cancelNativeMenuMonitor];
+    __weak typeof(self) weakSelf = self;
+    self.nativeMenuMonitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.05
+                                                                    repeats:YES
+                                                                      block:^(__unused NSTimer *timer) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) {
+            return;
+        }
+        if (self.nativePanGesture.state == UIGestureRecognizerStateBegan ||
+            self.nativePanGesture.state == UIGestureRecognizerStateChanged) {
+            return;
+        }
+        if ([self wc_menuIsPresented]) {
+            self.nativeMenuWasPresented = YES;
+            self.nativeMenuClosedAt = 0.0;
+            return;
+        }
+        if (!self.nativeMenuWasPresented) {
+            return;
+        }
+        if (self.nativeMenuClosedAt <= 0.0) {
+            self.nativeMenuClosedAt = CACurrentMediaTime();
+            return;
+        }
+        if (CACurrentMediaTime() - self.nativeMenuClosedAt < 0.5) {
+            return;
+        }
+        [self wc_cancelNativeMenuMonitor];
+        [self wc_hideNativeToolbarAnimated];
+    }];
 }
 
 - (void)wc_layoutAnchorFromPreferences {
