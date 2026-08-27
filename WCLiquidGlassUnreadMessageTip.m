@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <string.h>
 
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
@@ -34,6 +35,7 @@ static NSUInteger WCLiquidGlassUnreadMessageTipInstallAttempts = 0;
 @property(nonatomic, strong) UIVisualEffectView *glassView;
 @property(nonatomic, strong) NSMutableArray<WCLiquidGlassUnreadMessageTipBackgroundState *> *backgrounds;
 @property(nonatomic, assign) NSInteger effectState;
+@property(nonatomic, assign) BOOL deferredUpdateScheduled;
 @end
 
 @implementation WCLiquidGlassUnreadMessageTipState
@@ -65,6 +67,46 @@ static id WCLiquidGlassUnreadMessageTipValueForSelector(UIView *view, SEL select
     return ((id (*)(id, SEL))objc_msgSend)(view, selector);
 }
 
+static BOOL WCLiquidGlassUnreadMessageTipViewComesFromWCGlass(UIView *view) {
+    const char *imageName = view ? class_getImageName(view.class) : NULL;
+    return imageName && strstr(imageName, "/WCGlass_") != NULL;
+}
+
+static void WCLiquidGlassUnreadMessageTipRemoveWCGlassSubviews(UIView *view,
+                                                                 UIView *excludedView,
+                                                                 NSUInteger depth) {
+    if (depth > 6) {
+        return;
+    }
+    for (UIView *subview in view.subviews.copy) {
+        if (subview == excludedView) {
+            continue;
+        }
+        if (WCLiquidGlassUnreadMessageTipViewComesFromWCGlass(subview)) {
+            [subview removeFromSuperview];
+            continue;
+        }
+        WCLiquidGlassUnreadMessageTipRemoveWCGlassSubviews(subview, excludedView, depth + 1);
+    }
+}
+
+static void WCLiquidGlassUnreadMessageTipCollectEffectViews(UIView *view,
+                                                              UIView *excludedView,
+                                                              NSUInteger depth,
+                                                              NSMutableArray<UIView *> *views) {
+    if (depth > 6) {
+        return;
+    }
+    for (UIView *subview in view.subviews) {
+        if (subview != excludedView &&
+            [subview isKindOfClass:UIVisualEffectView.class] &&
+            ![views containsObject:subview]) {
+            [views addObject:subview];
+        }
+        WCLiquidGlassUnreadMessageTipCollectEffectViews(subview, excludedView, depth + 1, views);
+    }
+}
+
 static UIView *WCLiquidGlassUnreadMessageTipSurface(UIView *view) {
     UIView *fallback = nil;
     for (NSString *name in @[@"bgButton", @"backgroundView", @"backgroundImageView", @"backgroundEffectView"]) {
@@ -81,9 +123,11 @@ static UIView *WCLiquidGlassUnreadMessageTipSurface(UIView *view) {
 }
 
 static NSArray<UIView *> *WCLiquidGlassUnreadMessageTipBackgroundViews(UIView *view,
-                                                                        UIView *surface) {
+                                                                        UIView *surface,
+                                                                        UIView *excludedView) {
     NSMutableArray<UIView *> *views = [NSMutableArray array];
-    for (NSString *name in @[@"bgButton", @"backgroundView", @"backgroundImageView", @"backgroundEffectView"]) {
+    for (NSString *name in @[@"bgButton", @"backgroundView", @"backgroundImageView", @"backgroundEffectView",
+                             @"wclgGlassView", @"_wclgGlassView"]) {
         id candidate = WCLiquidGlassUnreadMessageTipValueForSelector(view, NSSelectorFromString(name));
         if ([candidate isKindOfClass:UIView.class] && candidate != view && ![views containsObject:candidate]) {
             [views addObject:candidate];
@@ -102,6 +146,7 @@ static NSArray<UIView *> *WCLiquidGlassUnreadMessageTipBackgroundViews(UIView *v
             if (fillsSurface) [views addObject:subview];
         }
     }
+    WCLiquidGlassUnreadMessageTipCollectEffectViews(view, excludedView, 0, views);
     return views.copy;
 }
 
@@ -198,6 +243,7 @@ static void WCLiquidGlassUnreadMessageTipRestore(UIView *view,
 static void WCLiquidGlassUnreadMessageTipUpdate(UIView *view) {
     WCLiquidGlassUnreadMessageTipState *state =
         objc_getAssociatedObject(view, WCLiquidGlassUnreadMessageTipStateKey);
+    WCLiquidGlassUnreadMessageTipRemoveWCGlassSubviews(view, state.glassView, 0);
     if (!WCLiquidGlassPreferences.unreadMessageTipGlassEnabled) {
         if (state) {
             WCLiquidGlassUnreadMessageTipRestore(view, state);
@@ -214,7 +260,9 @@ static void WCLiquidGlassUnreadMessageTipUpdate(UIView *view) {
         objc_setAssociatedObject(view, WCLiquidGlassUnreadMessageTipStateKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     state.surface = surface;
-    for (UIView *backgroundView in WCLiquidGlassUnreadMessageTipBackgroundViews(view, surface)) {
+    for (UIView *backgroundView in WCLiquidGlassUnreadMessageTipBackgroundViews(view,
+                                                                                  surface,
+                                                                                  state.glassView)) {
         WCLiquidGlassUnreadMessageTipSuppressBackground(
             WCLiquidGlassUnreadMessageTipStateForBackground(state, backgroundView));
     }
@@ -264,6 +312,22 @@ static void WCLiquidGlassUnreadMessageTipLayoutSubviews(UIView *self, SEL select
         ((void (*)(UIView *, SEL))original)(self, selector);
     }
     WCLiquidGlassUnreadMessageTipUpdate(self);
+    WCLiquidGlassUnreadMessageTipState *state =
+        objc_getAssociatedObject(self, WCLiquidGlassUnreadMessageTipStateKey);
+    if (!state || state.deferredUpdateScheduled) {
+        return;
+    }
+    state.deferredUpdateScheduled = YES;
+    __weak UIView *weakView = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIView *view = weakView;
+        WCLiquidGlassUnreadMessageTipState *scheduledState =
+            objc_getAssociatedObject(view, WCLiquidGlassUnreadMessageTipStateKey);
+        scheduledState.deferredUpdateScheduled = NO;
+        if (view) {
+            WCLiquidGlassUnreadMessageTipUpdate(view);
+        }
+    });
 }
 
 static void WCLiquidGlassUnreadMessageTipRefresh(void) {
