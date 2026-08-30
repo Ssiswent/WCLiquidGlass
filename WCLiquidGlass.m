@@ -1,6 +1,7 @@
 #import "WCLiquidGlass.h"
 #import "WCLiquidGlassCrashLogger.h"
 #import "WCLiquidGlassHomeCorners.h"
+#import "WCLiquidGlassMessageNotificationSettings.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -1307,7 +1308,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return section == 0 ? 1 : 6;
+    return section == 0 ? 1 : 7;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -1317,7 +1318,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     return section == 0
         ? @"液态效果控制悬浮入口与环形菜单的材质层次。"
-        : @"这些开关分别控制微信页面中的液态适配；首页圆角可进入子页面继续调整。";
+        : @"这些开关分别控制微信页面中的液态适配；通知圆角与首页圆角可进入子页面继续调整。";
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -1357,6 +1358,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         @"通讯录索引液态",
         @"未读消息提示液态",
         @"聊天输入工具栏",
+        @"通知圆角与液态",
         @"首页圆角与液态"
     ];
     NSString *detail = nil;
@@ -1416,6 +1418,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     } else if (indexPath.row == 1) {
         [self wc_presentLongPressAppearancePickerFromView:[tableView cellForRowAtIndexPath:indexPath]];
     } else if (indexPath.row == 5) {
+        [self.navigationController pushViewController:[[WCLiquidGlassMessageNotificationSettingsController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
+    } else if (indexPath.row == 6) {
         [self.navigationController pushViewController:[[WCLiquidGlassHomeCornersController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES];
     }
 }

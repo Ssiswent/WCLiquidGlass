@@ -11,6 +11,7 @@
 #import "WCLiquidGlassHomeCorners.h"
 #import "WCLiquidGlassMaterialFileProtection.h"
 #import "WCLiquidGlassMessageSwipe.h"
+#import "WCLiquidGlassMessageNotification.h"
 #import "WCLiquidGlassUnreadMessageTip.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
@@ -506,6 +507,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             WCLiquidGlassInstallHomeCornersHooks();
             WCLiquidGlassInstallContactsIndexHooks();
             WCLiquidGlassInstallMessageSwipeHooks();
+            WCLiquidGlassInstallMessageNotificationHooks();
             WCLiquidGlassInstallUnreadMessageTipHooks();
             [WCLiquidGlassManager.sharedManager start];
             WCLiquidGlassTryRegisterPlugin();
