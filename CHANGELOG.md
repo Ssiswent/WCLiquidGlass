@@ -4,7 +4,9 @@
 
 ### 悬浮底栏
 
-- 新增 FindMyAppTabBar 风格的悬浮底栏与上滑展开九宫格动作面板。
+- 新增 FindMyAppTabBar 风格的悬浮底栏：系统 `UISheetPresentationController`（90pt 收起 / 动态展开自定义
+  detent、largestUndimmedDetent 背景可交互、禁止下滑关闭）、图标-only 原生 `UITabBar`、无标题栏的三列
+  九宫格。
 - 运行时检测到 WCGlass 悬浮底栏时自动让位，恢复微信原生底栏，避免叠加。
 - 九宫格复用“按钮与动作”中已启用的动作，并只显示在四个首页根页面。
 
