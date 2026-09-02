@@ -230,7 +230,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
             : [UIColor colorWithWhite:0.0 alpha:0.12];
     }];
     _separatorView.hidden = NSClassFromString(@"UIGlassEffect") != Nil;
-    [_backgroundView addSubview:_separatorView];
+    [_backgroundView.contentView addSubview:_separatorView];
 
     _grabberView = [UIView new];
     _grabberView.backgroundColor = UIColor.tertiaryLabelColor;
