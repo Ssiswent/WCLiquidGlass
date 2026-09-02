@@ -139,9 +139,9 @@ WCLiquidGlass 的目标不是给微信覆盖一层统一模糊，而是让每个
 
 开启后，WCLiquidGlass 会在微信四个首页根页面显示 FindMyAppTabBar 风格的悬浮底栏：底部保留原生
 `UITabBar` 的图标与切换行为，上滑可展开为快捷动作面板。使用系统
-`UISheetPresentationController`（90pt 收起 / 动态展开自定义 detent、largestUndimmedDetent 背景可交互、
-禁止下滑关闭）、图标-only 原生 `UITabBar`、无标题栏的三列九宫格；九宫格动作直接复用“按钮与动作”中已
-启用的项目。
+`UISheetPresentationController`（90pt 收起 / 根据九宫格行数自适应展开自定义 detent、largestUndimmedDetent
+背景可交互、禁止下滑关闭）、图标-only 原生 `UITabBar`、无标题栏的三列九宫格；九宫格动作直接复用“按钮与
+动作”中已启用的项目。
 
 iOS 26 及以上使用 Liquid Glass 材质；较旧系统回退到兼容的系统模糊效果。
 
