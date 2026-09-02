@@ -2088,12 +2088,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         NSString *key = self.wc_contentRowKeys[indexPath.row];
         if ([key isEqualToString:@"buttonActions"]) {
             [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
-        } else if ([key isEqualToString:@"floatingTabBar"]) {
         } else if ([key isEqualToString:@"liquidFeatures"]) {
             WCLiquidGlassPresentSettingsSheet(self,
                                               [[WCLiquidGlassLiquidFeaturesController alloc] init],
                                               YES);
-        } else {
+        } else if ([key isEqualToString:@"messageSwipe"]) {
             [self.navigationController pushViewController:[[WCLiquidGlassMessageSwipeSettingsController alloc] init] animated:YES];
         }
     } else if (indexPath.section == 3 && indexPath.row == 0) {

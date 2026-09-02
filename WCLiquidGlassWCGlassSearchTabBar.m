@@ -34,17 +34,22 @@ Class WCLiquidGlassWCGlassTabBarOverlayClass(void) {
         Class *classes = objc_copyClassList(&classCount);
         for (unsigned int index = 0; index < classCount; index++) {
             Class candidate = classes[index];
-            if (![candidate isSubclassOfClass:UIView.class] ||
+            const char *imageName = class_getImageName(candidate);
+            if (!imageName || !strstr(imageName, "WCGlass")) {
+                continue;
+            }
+            Class superclass = candidate;
+            while (superclass && superclass != UIView.class) {
+                superclass = class_getSuperclass(superclass);
+            }
+            if (!superclass ||
                 class_getInstanceMethod(candidate, @selector(initWithTabBar:)) == NULL ||
                 class_getInstanceMethod(candidate, @selector(refreshWithItems:)) == NULL ||
                 class_getInstanceMethod(candidate, @selector(setOverlayDisplayed:animated:)) == NULL) {
                 continue;
             }
-            const char *imageName = class_getImageName(candidate);
-            if (imageName && strstr(imageName, "WCGlass")) {
-                overlayClass = candidate;
-                break;
-            }
+            overlayClass = candidate;
+            break;
         }
         free(classes);
     });
