@@ -6,6 +6,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <string.h>
 
 static const NSInteger WCLiquidGlassWCGlassSearchTabBarTabCount = 4;
 static BOOL WCLiquidGlassWCGlassSearchTabBarHooksInstalled = NO;
@@ -13,12 +14,88 @@ static BOOL WCLiquidGlassWCGlassSearchTabBarHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassWCGlassSearchTabBarHookInstallAttempts = 0;
 static void (*WCLiquidGlassOriginalWCGlassSearchTabBarSelectIndex)(id, SEL, NSInteger) = NULL;
 
-static Class WCLiquidGlassWCGlassSearchTabBarOverlayClass(void) {
-    Class legacyClass = NSClassFromString(@"WCLGSearchTabBarOverlay");
-    if (legacyClass) {
-        return legacyClass;
+Class WCLiquidGlassWCGlassTabBarOverlayClass(void) {
+    static Class overlayClass;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        for (NSString *className in @[@"WCLGSearchTabBarOverlay",
+                                      @"qz64vfjsximzq3xbay5woqdm",
+                                      @"qluekvt5ijilyn6k7lacc7cq"]) {
+            overlayClass = NSClassFromString(className);
+            if (overlayClass) {
+                break;
+            }
+        }
+        if (overlayClass) {
+            return;
+        }
+
+        unsigned int classCount = 0;
+        Class *classes = objc_copyClassList(&classCount);
+        for (unsigned int index = 0; index < classCount; index++) {
+            Class candidate = classes[index];
+            const char *imageName = class_getImageName(candidate);
+            if (!imageName || !strstr(imageName, "WCGlass")) {
+                continue;
+            }
+            Class superclass = candidate;
+            while (superclass && superclass != UIView.class) {
+                superclass = class_getSuperclass(superclass);
+            }
+            if (!superclass ||
+                class_getInstanceMethod(candidate, @selector(initWithTabBar:)) == NULL ||
+                class_getInstanceMethod(candidate, @selector(refreshWithItems:)) == NULL ||
+                class_getInstanceMethod(candidate, @selector(setOverlayDisplayed:animated:)) == NULL) {
+                continue;
+            }
+            overlayClass = candidate;
+            break;
+        }
+        free(classes);
+    });
+    return overlayClass;
+}
+
+static BOOL WCLiquidGlassWCGlassFindOverlay(UIView *view,
+                                            Class overlayClass,
+                                            NSUInteger depth) {
+    if (!view || depth > 4) {
+        return NO;
     }
-    return NSClassFromString(@"qz64vfjsximzq3xbay5woqdm");
+    @try {
+        if ([view isKindOfClass:overlayClass]) {
+            return !view.hidden && view.alpha > 0.01 && view.superview != nil;
+        }
+        for (UIView *subview in view.subviews) {
+            if (WCLiquidGlassWCGlassFindOverlay(subview, overlayClass, depth + 1)) {
+                return YES;
+            }
+        }
+    } @catch (__unused NSException *exception) {
+    }
+    return NO;
+}
+
+BOOL WCLiquidGlassWCGlassFloatingOverlayIsActiveForTabBar(UIView *tabBar) {
+    if (!tabBar) {
+        return NO;
+    }
+    Class overlayClass = WCLiquidGlassWCGlassTabBarOverlayClass();
+    if (!overlayClass) {
+        return NO;
+    }
+    @try {
+        for (UIView *candidate in @[tabBar,
+                                    tabBar.superview ?: (UIView *)[NSNull null],
+                                    tabBar.window ?: (UIView *)[NSNull null]]) {
+            if ([candidate isKindOfClass:UIView.class] &&
+                WCLiquidGlassWCGlassFindOverlay(candidate, overlayClass, 0)) {
+                return YES;
+            }
+        }
+    } @catch (__unused NSException *exception) {
+    }
+    return NO;
 }
 
 static id WCLiquidGlassWCGlassSearchTabBarObjectValue(id target, SEL selector) {
@@ -173,7 +250,7 @@ void WCLiquidGlassInstallWCGlassSearchTabBarHooks(void) {
         return;
     }
 
-    Class overlayClass = WCLiquidGlassWCGlassSearchTabBarOverlayClass();
+    Class overlayClass = WCLiquidGlassWCGlassTabBarOverlayClass();
     SEL selectIndexSelector = NSSelectorFromString(@"selectIndex:");
     Method selectIndexMethod = overlayClass
         ? class_getInstanceMethod(overlayClass, selectIndexSelector)

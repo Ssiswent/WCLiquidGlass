@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -7,6 +8,8 @@ extern "C" {
 #endif
 
 void WCLiquidGlassInstallWCGlassSearchTabBarHooks(void);
+Class _Nullable WCLiquidGlassWCGlassTabBarOverlayClass(void);
+BOOL WCLiquidGlassWCGlassFloatingOverlayIsActiveForTabBar(UIView *tabBar);
 
 #ifdef __cplusplus
 }

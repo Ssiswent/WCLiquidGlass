@@ -135,6 +135,16 @@ WCLiquidGlass 的目标不是给微信覆盖一层统一模糊，而是让每个
 
 设置页的层级 UIMenu 与二级 Page Sheet 基线见[原生层级 UIMenu 与二级 Page Sheet 设置入口](docs/solutions/design-patterns/native-settings-menu-and-sheet.md)。
 
+## 悬浮底栏
+
+开启后，WCLiquidGlass 会在微信四个首页根页面显示 FindMyAppTabBar 风格的悬浮底栏：底部保留原生
+`UITabBar` 的图标与切换行为，上滑可展开为快捷动作面板。使用系统
+`UISheetPresentationController`（90pt 收起 / 根据九宫格行数自适应展开自定义 detent、largestUndimmedDetent
+背景可交互、禁止下滑关闭）、图标-only 原生 `UITabBar`、无标题栏的三列九宫格；九宫格动作直接复用“按钮与
+动作”中已启用的项目。
+
+iOS 26 及以上使用 Liquid Glass 材质；较旧系统回退到兼容的系统模糊效果。
+
 ## 素材文件保护
 
 微信会周期性扫描沙盒并清理未知文件。WCLiquidGlass 默认开启“素材文件保护”，完整沿用 ThemePro 已验证的处理方式：关闭微信磁盘扫描器的未知文件删除、删除上报与空文件夹清理，并拦截其规则覆盖的素材路径删除和移动操作。
@@ -152,6 +162,7 @@ WCLiquidGlass 可以独立使用；安装 WCGlass 后，以下能力会自动在
 | WCGlass 长按菜单液态 | 可由“长按菜单液态”选择材质或关闭接管视觉呈现，保留微信原生菜单内容与交互。 |
 | iOS 27 分组返回闪退 | 针对 WCGlass 横向胶囊 / 全屏分组，在“键盘已弹出且输入框非空”的风险窗口保护过期 section 请求，不改动可见列表数据。 |
 | 底栏搜索框模式切换黑屏 | 对普通四个微信 Tab 保留 WCGlass 的反馈与收起动画，但把真实页面选择收敛为一次原生 `setSelectedIndex:`，避免冷启动切换竞争。 |
+| WCGlass 悬浮底栏 / Morphing 底栏 | 运行时检测到 WCGlass 底栏 overlay 存在时，WCLiquidGlass 悬浮底栏自动隐藏并恢复原生底栏，不会叠加两套底栏。 |
 | WCGlass 设置入口 | 悬浮菜单从 `WCPluginsMgr` 当前公开注册的 WCGlass controller 动态解析设置控制器；无法解析或打开失败时安全回退到原生插件列表。 |
 | 语音转述图标 | 显示与隐藏由 WCGlass 作者恢复的原生设置开关管理；WCLiquidGlass 不再强行改写该开关。 |
 

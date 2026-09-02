@@ -4,6 +4,8 @@
 #import "WCLiquidGlassMessageNotificationSettings.h"
 #import "WCLiquidGlassMenu.h"
 #import "WCLiquidGlassPreferences.h"
+#import "WCLiquidGlassFloatingTabBar.h"
+#import "WCLiquidGlassWCGlassSearchTabBar.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 static const NSUInteger WCLiquidGlassMaximumButtonCount = 16;
@@ -1725,6 +1727,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 @interface WCLiquidGlass () <UIDocumentPickerDelegate>
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
+@property(nonatomic, strong) UISwitch *floatingTabBarSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 @property(nonatomic, weak) UIView *configurationActionSourceView;
 
@@ -1889,7 +1892,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSArray<NSString *> *)wc_contentRowKeys {
-    return @[@"buttonActions", @"liquidFeatures", @"messageSwipe"];
+    return @[@"buttonActions", @"floatingTabBar", @"liquidFeatures", @"messageSwipe"];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -1923,7 +1926,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；菜单样式设置支持层级 UIMenu 或二级 Sheet，面板大小、悬浮按钮轨迹与紧凑布局均在其中设置。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。");
+        return WCLiquidGlassFooterLabel(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。悬浮底栏只在微信四个首页显示，展开后的九宫格使用“按钮与动作”中已启用的动作；检测到 WCGlass 悬浮底栏时自动让位。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
@@ -1939,7 +1942,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterHeight(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；菜单样式设置支持层级 UIMenu 或二级 Sheet，面板大小、悬浮按钮轨迹与紧凑布局均在其中设置。", 80.0);
     }
     if (section == 1) {
-        return WCLiquidGlassFooterHeight(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。", 80.0);
+        return WCLiquidGlassFooterHeight(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。悬浮底栏只在微信四个首页显示，展开后的九宫格使用“按钮与动作”中已启用的动作；检测到 WCGlass 悬浮底栏时自动让位。", 80.0);
     }
     if (section == 2) {
         return WCLiquidGlassFooterHeight(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。", 88.0);
@@ -2011,6 +2014,19 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             WCLiquidGlassConfigureCell(cell, @"按钮与动作", count,
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindActions, 32.0), UIColor.labelColor);
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        } else if ([key isEqualToString:@"floatingTabBar"]) {
+            NSString *detail = WCLiquidGlassFloatingTabBarIsBlockedByWCGlass()
+                ? @"检测到 WCGlass 底栏，已自动让位"
+                : @"替换首页底栏，上滑展开九宫格动作";
+            WCLiquidGlassConfigureCell(cell, @"悬浮底栏", detail,
+                                       WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
+            self.floatingTabBarSwitch = [[UISwitch alloc] init];
+            self.floatingTabBarSwitch.on = WCLiquidGlassPreferences.floatingTabBarEnabled;
+            [self.floatingTabBarSwitch addTarget:self
+                                          action:@selector(wc_floatingTabBarChanged:)
+                                forControlEvents:UIControlEventValueChanged];
+            cell.accessoryView = self.floatingTabBarSwitch;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else if ([key isEqualToString:@"liquidFeatures"]) {
             WCLiquidGlassConfigureCell(cell, @"液态功能", @"液态效果与页面液态适配",
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
@@ -2076,7 +2092,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             WCLiquidGlassPresentSettingsSheet(self,
                                               [[WCLiquidGlassLiquidFeaturesController alloc] init],
                                               YES);
-        } else {
+        } else if ([key isEqualToString:@"messageSwipe"]) {
             [self.navigationController pushViewController:[[WCLiquidGlassMessageSwipeSettingsController alloc] init] animated:YES];
         }
     } else if (indexPath.section == 3 && indexPath.row == 0) {
@@ -2092,6 +2108,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_enabledChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setEnabled:sender.isOn];
+}
+
+- (void)wc_floatingTabBarChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setFloatingTabBarEnabled:sender.isOn];
 }
 
 - (void)wc_wcGlassCompatibilityChanged:(UISwitch *)sender {
