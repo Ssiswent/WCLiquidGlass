@@ -74,6 +74,20 @@ static UITabBar *WCLiquidGlassFloatingTabBarForController(id tabController) {
     return [tabBar isKindOfClass:UITabBar.class] ? tabBar : nil;
 }
 
+static UIViewController *WCLiquidGlassFloatingTabBarControllerForTabBar(UITabBar *tabBar) {
+    UIResponder *responder = tabBar;
+    while ((responder = responder.nextResponder)) {
+        if (![responder isKindOfClass:UIViewController.class]) {
+            continue;
+        }
+        if ([responder isKindOfClass:UITabBarController.class] ||
+            [responder respondsToSelector:@selector(tabBar)]) {
+            return (UIViewController *)responder;
+        }
+    }
+    return nil;
+}
+
 static CGFloat WCLiquidGlassFloatingTabBarClamp(CGFloat value, CGFloat minimum, CGFloat maximum) {
     return MIN(maximum, MAX(minimum, value));
 }
@@ -1159,6 +1173,12 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     BOOL enabled = WCLiquidGlassPreferences.floatingTabBarEnabled;
     id tabController = WCLiquidGlassCurrentTabController();
     UITabBar *tabBar = WCLiquidGlassFloatingTabBarForController(tabController);
+    if (!tabBar && WCLiquidGlassFloatingTabBarTrackedTabBar) {
+        tabBar = WCLiquidGlassFloatingTabBarTrackedTabBar;
+        if (!tabController) {
+            tabController = WCLiquidGlassFloatingTabBarControllerForTabBar(tabBar);
+        }
+    }
     BOOL blocked = tabBar && WCLiquidGlassWCGlassFloatingOverlayIsActiveForTabBar(tabBar);
     if (!self.hasBlockedState || blocked != self.lastBlockedState) {
         if (blocked) {
@@ -1186,6 +1206,11 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         WCLiquidGlassFloatingTabBarTrackedTabBar = nil;
         [self.sheetViewController wc_collapseAnimated:NO];
         self.window.hidden = YES;
+        return;
+    }
+    if (!tabController) {
+        WCLiquidGlassFloatingTabBarSuppressNativeContent(tabBar);
+        [self wc_startNativeSuppressionDisplayLink];
         return;
     }
     [self wc_ensureWindowForTabBar:tabBar];
