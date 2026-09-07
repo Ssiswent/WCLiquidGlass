@@ -47,6 +47,7 @@ static char WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey;
 - (void)wc_startNativeSuppressionDisplayLink;
 - (void)wc_stopNativeSuppressionDisplayLink;
 - (void)wc_tick:(CADisplayLink *)displayLink;
+- (void)wc_setSheetExpanded:(BOOL)expanded;
 @end
 
 static id WCLiquidGlassFloatingTabBarObjectValue(id target, SEL selector) {
@@ -268,19 +269,37 @@ static void WCLiquidGlassFloatingTabBarRestoreNativeContent(UITabBar *tabBar) {
     [WCLiquidGlassFloatingTabBarController.sharedController wc_restoreNativeContent:tabBar];
 }
 
+@class WCLiquidGlassFloatingTabBarWindow;
+
+@interface WCLiquidGlassFloatingTabBarWindow : UIWindow
+@property(nonatomic, weak) UIViewController *sheetViewController;
+@property(nonatomic, assign) BOOL interceptsOutsideTouches;
+@property(nonatomic, copy) void (^outsideTapHandler)(void);
+@end
+
 @interface WCLiquidGlassFloatingPassthroughView : UIView
+@property(nonatomic, copy) void (^tapHandler)(void);
 @end
 
 @implementation WCLiquidGlassFloatingPassthroughView
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    return nil;
+    WCLiquidGlassFloatingTabBarWindow *window =
+        [self.window isKindOfClass:WCLiquidGlassFloatingTabBarWindow.class] ?
+        (WCLiquidGlassFloatingTabBarWindow *)self.window : nil;
+    if (!window.interceptsOutsideTouches || !self.tapHandler) {
+        return nil;
+    }
+    return [super hitTest:point withEvent:event];
 }
 
-@end
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesEnded:touches withEvent:event];
+    if (self.tapHandler) {
+        self.tapHandler();
+    }
+}
 
-@interface WCLiquidGlassFloatingTabBarWindow : UIWindow
-@property(nonatomic, weak) UIViewController *sheetViewController;
 @end
 
 @implementation WCLiquidGlassFloatingTabBarWindow
@@ -296,9 +315,13 @@ static void WCLiquidGlassFloatingTabBarRestoreNativeContent(UITabBar *tabBar) {
     }
     CGPoint local = [self convertPoint:point toView:sheetView];
     if (![sheetView pointInside:local withEvent:event]) {
-        return nil;
+        return self.interceptsOutsideTouches ? self.rootViewController.view : nil;
     }
-    return [sheetView hitTest:local withEvent:event];
+    UIView *hitView = [sheetView hitTest:local withEvent:event];
+    if (!hitView && self.interceptsOutsideTouches) {
+        return self.rootViewController.view;
+    }
+    return hitView;
 }
 
 @end
@@ -496,13 +519,22 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     _tabBar.backgroundImage = [UIImage new];
     _tabBar.shadowImage = [UIImage new];
     _tabBar.backgroundColor = UIColor.clearColor;
-    _tabBar.tintColor = [UIColor colorWithRed:0.027 green:0.757 blue:0.376 alpha:1.0];
+    UIColor *tabSelectionColor =
+        [UIColor colorWithRed:0.027 green:0.757 blue:0.376 alpha:1.0];
+    _tabBar.tintColor = tabSelectionColor;
+    _tabBar.unselectedItemTintColor = UIColor.labelColor;
     _tabBar.sheetView = self;
     UITabBarAppearance *appearance = [UITabBarAppearance new];
     [appearance configureWithTransparentBackground];
     appearance.backgroundEffect = nil;
     appearance.backgroundColor = UIColor.clearColor;
     appearance.shadowColor = UIColor.clearColor;
+    appearance.stackedLayoutAppearance.normal.iconColor = UIColor.labelColor;
+    appearance.stackedLayoutAppearance.selected.iconColor = tabSelectionColor;
+    appearance.inlineLayoutAppearance.normal.iconColor = UIColor.labelColor;
+    appearance.inlineLayoutAppearance.selected.iconColor = tabSelectionColor;
+    appearance.compactInlineLayoutAppearance.normal.iconColor = UIColor.labelColor;
+    appearance.compactInlineLayoutAppearance.selected.iconColor = tabSelectionColor;
     _tabBar.standardAppearance = appearance;
     _tabBar.scrollEdgeAppearance = appearance;
     [self addSubview:_tabBar];
@@ -709,6 +741,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         if (!image) {
             image = [UIImage systemImageNamed:symbols[index]];
         }
+        image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
         UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:nil image:image selectedImage:image];
         item.tag = index;
         NSString *badgeText = nil;
@@ -741,6 +774,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 - (void)wc_collapseAnimated:(BOOL)animated {
     self.expanded = NO;
     self.sheetView.expanded = NO;
+    [self.controller wc_setSheetExpanded:NO];
     UISheetPresentationController *sheet = self.sheetPresentationController;
     if (!sheet) {
         [self.sheetView setNeedsLayout];
@@ -773,6 +807,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         [generator prepare];
         [generator impactOccurred];
     }
+    [self.controller wc_setSheetExpanded:expanded];
     [self.sheetView setNeedsLayout];
 }
 
@@ -912,6 +947,10 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     [self wc_startNativeSuppressionDisplayLink];
 }
 
+- (void)wc_setSheetExpanded:(BOOL)expanded {
+    self.window.interceptsOutsideTouches = expanded;
+}
+
 - (void)wc_suppressNativeContent:(UITabBar *)tabBar {
     if (!tabBar) {
         return;
@@ -919,6 +958,19 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     for (UIView *subview in tabBar.subviews.copy) {
         WCLiquidGlassFloatingTabBarSuppressView(subview, YES);
         [self.suppressedNativeViews addObject:subview];
+    }
+    UIView *container = tabBar.superview;
+    for (NSUInteger level = 0; container && level < 2; level++) {
+        if ([NSStringFromClass(container.class) rangeOfString:@"TabBarContainer"].location != NSNotFound) {
+            for (UIView *view in container.subviews.copy) {
+                if (view == tabBar || [tabBar isDescendantOfView:view]) {
+                    continue;
+                }
+                WCLiquidGlassFloatingTabBarSuppressView(view, YES);
+                [self.suppressedNativeViews addObject:view];
+            }
+        }
+        container = container.superview;
     }
 }
 
@@ -1063,7 +1115,15 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         self.window.windowLevel = UIWindowLevelNormal + 1.0;
         self.window.backgroundColor = UIColor.clearColor;
         UIViewController *rootViewController = [UIViewController new];
-        rootViewController.view = [WCLiquidGlassFloatingPassthroughView new];
+        WCLiquidGlassFloatingPassthroughView *passthrough =
+            [WCLiquidGlassFloatingPassthroughView new];
+        __weak typeof(self) weakSelf = self;
+        void (^tapHandler)(void) = ^{
+            [weakSelf.sheetViewController wc_collapseAnimated:YES];
+        };
+        passthrough.tapHandler = tapHandler;
+        self.window.outsideTapHandler = tapHandler;
+        rootViewController.view = passthrough;
         rootViewController.view.backgroundColor = UIColor.clearColor;
         self.window.rootViewController = rootViewController;
     }
