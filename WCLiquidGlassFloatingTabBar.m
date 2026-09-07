@@ -16,6 +16,7 @@ static NSString * const WCLiquidGlassFloatingTabBarCollapsedDetent = @"collapsed
 static NSString * const WCLiquidGlassFloatingTabBarExpandedDetent = @"expanded";
 
 static __weak UITabBar *WCLiquidGlassFloatingTabBarTrackedTabBar;
+static BOOL WCLiquidGlassFloatingTabBarHidesNativeTabBar;
 static BOOL WCLiquidGlassFloatingTabBarHooksInstalled;
 static BOOL WCLiquidGlassFloatingTabBarRetryScheduled;
 static NSUInteger WCLiquidGlassFloatingTabBarInstallAttempts;
@@ -33,6 +34,7 @@ static void (*WCLiquidGlassFloatingTabBarOriginalWillMoveToWindow)(UITabBar *, S
 static void (*WCLiquidGlassFloatingTabBarOriginalSetBadgeValue)(UITabBarItem *, SEL, NSString *);
 
 static char WCLiquidGlassFloatingTabBarSavedOpacityKey;
+static char WCLiquidGlassFloatingTabBarSavedHiddenKey;
 static char WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey;
 
 @class WCLiquidGlassFloatingNativeTabBar;
@@ -239,6 +241,10 @@ static void WCLiquidGlassFloatingTabBarSuppressView(UIView *view, BOOL suppress)
             objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedOpacityKey,
                                      @(view.layer.opacity), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
+        if (!objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedHiddenKey)) {
+            objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedHiddenKey,
+                                     @(view.hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         if (!objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey)) {
             objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey,
                                      @(view.userInteractionEnabled), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -252,6 +258,9 @@ static void WCLiquidGlassFloatingTabBarSuppressView(UIView *view, BOOL suppress)
         if (view.userInteractionEnabled) {
             view.userInteractionEnabled = NO;
         }
+        if (!view.hidden) {
+            view.hidden = YES;
+        }
         return;
     }
     NSNumber *savedOpacity =
@@ -262,6 +271,13 @@ static void WCLiquidGlassFloatingTabBarSuppressView(UIView *view, BOOL suppress)
         view.layer.opacity = savedOpacity.floatValue;
         [CATransaction commit];
         objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedOpacityKey,
+                                 nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    NSNumber *savedHidden =
+        objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedHiddenKey);
+    if (savedHidden) {
+        view.hidden = savedHidden.boolValue;
+        objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedHiddenKey,
                                  nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSNumber *savedUserInteractionEnabled =
@@ -281,6 +297,19 @@ static void WCLiquidGlassFloatingTabBarSuppressNativeContent(UITabBar *tabBar) {
 
 static void WCLiquidGlassFloatingTabBarRestoreNativeContent(UITabBar *tabBar) {
     [WCLiquidGlassFloatingTabBarController.sharedController wc_restoreNativeContent:tabBar];
+}
+
+static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, BOOL hidden) {
+    if (!tabBar) {
+        WCLiquidGlassFloatingTabBarHidesNativeTabBar = NO;
+        return;
+    }
+    WCLiquidGlassFloatingTabBarHidesNativeTabBar = hidden;
+    if (WCLiquidGlassFloatingTabBarOriginalSetHidden) {
+        WCLiquidGlassFloatingTabBarOriginalSetHidden(tabBar, @selector(setHidden:), hidden);
+    } else {
+        tabBar.hidden = hidden;
+    }
 }
 
 @class WCLiquidGlassFloatingTabBarWindow;
@@ -970,6 +999,14 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         return;
     }
     for (UIView *subview in tabBar.subviews.copy) {
+        NSString *className = NSStringFromClass(subview.class);
+        BOOL shouldSuppress = [className rangeOfString:@"TabBarItem"].location != NSNotFound ||
+            [className rangeOfString:@"TabBarButton"].location != NSNotFound ||
+            [className rangeOfString:@"Platter"].location != NSNotFound ||
+            [subview isKindOfClass:UIControl.class];
+        if (!shouldSuppress) {
+            continue;
+        }
         WCLiquidGlassFloatingTabBarSuppressView(subview, YES);
         [self.suppressedNativeViews addObject:subview];
     }
@@ -989,7 +1026,9 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 }
 
 - (void)wc_restoreNativeContent:(UITabBar *)tabBar {
-    (void)tabBar;
+    if (WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
+        WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, NO);
+    }
     for (UIView *subview in self.suppressedNativeViews.allObjects) {
         WCLiquidGlassFloatingTabBarSuppressView(subview, NO);
     }
@@ -1235,12 +1274,21 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         } @catch (__unused NSException *exception) {
         }
     }
+    BOOL nativeHidden = tabBar.hidden && !WCLiquidGlassFloatingTabBarHidesNativeTabBar;
     BOOL visible = tabBar.window != nil &&
-        !tabBar.hidden &&
+        !nativeHidden &&
         tabBar.alpha > 0.01 &&
         CGRectGetMinY(tabBar.frame) < CGRectGetMaxY(tabBar.superview.bounds) - 1.0 &&
         WCLiquidGlassIsAtCurrentTabRoot(tabController) &&
         !hasPresentedController;
+    BOOL shouldHideNative = tabBar.window != nil &&
+        !nativeHidden &&
+        !WCLiquidGlassIsAtCurrentTabRoot(tabController);
+    if (shouldHideNative && !WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
+        WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, YES);
+    } else if (!shouldHideNative && WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
+        WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, NO);
+    }
     self.window.hidden = !visible;
     [self wc_startNativeSuppressionDisplayLink];
     if (!visible) {
@@ -1299,6 +1347,10 @@ static void WCLiquidGlassFloatingTabBarLayoutSubviews(UITabBar *self, SEL select
 }
 
 static void WCLiquidGlassFloatingTabBarSetHidden(UITabBar *self, SEL selector, BOOL hidden) {
+    if (!hidden && self == WCLiquidGlassFloatingTabBarTrackedTabBar &&
+        WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
+        WCLiquidGlassFloatingTabBarHidesNativeTabBar = NO;
+    }
     if (WCLiquidGlassFloatingTabBarShouldObserve(self)) {
         [WCLiquidGlassFloatingTabBarController.sharedController setNeedsUpdate];
     }

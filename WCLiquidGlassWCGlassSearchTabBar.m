@@ -64,7 +64,7 @@ static BOOL WCLiquidGlassWCGlassFindOverlay(UIView *view,
     }
     @try {
         if ([view isKindOfClass:overlayClass]) {
-            return !view.hidden && view.alpha > 0.01 && view.superview != nil;
+            return view.superview != nil;
         }
         for (UIView *subview in view.subviews) {
             if (WCLiquidGlassWCGlassFindOverlay(subview, overlayClass, depth + 1)) {
