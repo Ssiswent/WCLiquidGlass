@@ -1212,8 +1212,10 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     BOOL enabled = WCLiquidGlassPreferences.floatingTabBarEnabled;
     id tabController = WCLiquidGlassCurrentTabController();
     UITabBar *tabBar = WCLiquidGlassFloatingTabBarForController(tabController);
+    BOOL sceneInactive = NO;
     if (!tabBar && WCLiquidGlassFloatingTabBarTrackedTabBar) {
         tabBar = WCLiquidGlassFloatingTabBarTrackedTabBar;
+        sceneInactive = YES;
         if (!tabController) {
             tabController = WCLiquidGlassFloatingTabBarControllerForTabBar(tabBar);
         }
@@ -1247,7 +1249,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         self.window.hidden = YES;
         return;
     }
-    if (!tabController) {
+    if (!tabController || sceneInactive) {
         WCLiquidGlassFloatingTabBarSuppressNativeContent(tabBar);
         [self wc_startNativeSuppressionDisplayLink];
         return;
