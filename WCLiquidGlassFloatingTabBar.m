@@ -21,7 +21,6 @@ static BOOL WCLiquidGlassFloatingTabBarRetryScheduled;
 static NSUInteger WCLiquidGlassFloatingTabBarInstallAttempts;
 
 static void (*WCLiquidGlassFloatingTabBarOriginalViewDidAppear)(UIViewController *, SEL, BOOL);
-static void (*WCLiquidGlassFloatingTabBarOriginalViewWillAppear)(UIViewController *, SEL, BOOL);
 static void (*WCLiquidGlassFloatingTabBarOriginalViewDidDisappear)(UIViewController *, SEL, BOOL);
 static void (*WCLiquidGlassFloatingTabBarOriginalSetSelectedIndex)(UITabBarController *, SEL, NSInteger);
 static void (*WCLiquidGlassFloatingTabBarOriginalSetSelectedViewController)(UITabBarController *, SEL, UIViewController *);
@@ -30,14 +29,21 @@ static void (*WCLiquidGlassFloatingTabBarOriginalSetHidden)(UITabBar *, SEL, BOO
 static void (*WCLiquidGlassFloatingTabBarOriginalSetFrame)(UITabBar *, SEL, CGRect);
 static void (*WCLiquidGlassFloatingTabBarOriginalDidMoveToWindow)(UITabBar *, SEL);
 static void (*WCLiquidGlassFloatingTabBarOriginalAddSubview)(UITabBar *, SEL, UIView *);
+static void (*WCLiquidGlassFloatingTabBarOriginalSetBadgeValue)(UITabBarItem *, SEL, NSString *);
+
+static char WCLiquidGlassFloatingTabBarSavedOpacityKey;
+static char WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey;
 
 @class WCLiquidGlassFloatingNativeTabBar;
 @class WCLiquidGlassFloatingTabBarSheetViewController;
 
 @interface WCLiquidGlassFloatingTabBarController ()
-- (void)wc_hideNativeSubviews:(UITabBar *)tabBar;
-- (void)wc_restoreNativeSubviews:(UITabBar *)tabBar;
+- (void)wc_suppressNativeContent:(UITabBar *)tabBar;
+- (void)wc_restoreNativeContent:(UITabBar *)tabBar;
 - (void)wc_reassertNativeTabBarHiding;
+- (void)wc_startNativeSuppressionDisplayLink;
+- (void)wc_stopNativeSuppressionDisplayLink;
+- (void)wc_tick:(CADisplayLink *)displayLink;
 @end
 
 static id WCLiquidGlassFloatingTabBarObjectValue(id target, SEL selector) {
@@ -68,14 +74,152 @@ static CGFloat WCLiquidGlassFloatingTabBarClamp(CGFloat value, CGFloat minimum, 
     return MIN(maximum, MAX(minimum, value));
 }
 
-static void WCLiquidGlassFloatingTabBarHideNativeSubviews(UITabBar *tabBar) {
-    if (tabBar) {
-        [WCLiquidGlassFloatingTabBarController.sharedController wc_hideNativeSubviews:tabBar];
+static NSString *WCLiquidGlassFloatingTabBarBadgeText(UIView *view, NSUInteger depth) {
+    if (!view || depth > 6U) {
+        return nil;
+    }
+    if ([view isKindOfClass:UILabel.class]) {
+        NSString *text = ((UILabel *)view).text;
+        if (text.length > 0) {
+            return text;
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        NSString *text = WCLiquidGlassFloatingTabBarBadgeText(subview, depth + 1U);
+        if (text.length > 0) {
+            return text;
+        }
+    }
+    return nil;
+}
+
+static UIView *WCLiquidGlassFloatingTabBarFindBadgeView(UIView *view, NSUInteger depth,
+                                                         NSString **text) {
+    if (!view || depth > 6U) {
+        return nil;
+    }
+    NSString *className = NSStringFromClass(view.class);
+    if ([className rangeOfString:@"Badge"].location != NSNotFound &&
+        !view.hidden && view.alpha > 0.01) {
+        NSString *badgeText = WCLiquidGlassFloatingTabBarBadgeText(view, depth);
+        if (badgeText.length > 0 && text) {
+            *text = badgeText;
+        }
+        return view;
+    }
+    for (UIView *subview in view.subviews) {
+        UIView *badge = WCLiquidGlassFloatingTabBarFindBadgeView(subview, depth + 1U, text);
+        if (badge) {
+            return badge;
+        }
+    }
+    return nil;
+}
+
+static void WCLiquidGlassFloatingTabBarNativeBadge(UITabBar *tabBar, NSInteger index,
+                                                    NSString **text, BOOL *dot) {
+    if (text) {
+        *text = nil;
+    }
+    if (dot) {
+        *dot = NO;
+    }
+    if (!tabBar || index < 0 || index >= (NSInteger)tabBar.items.count) {
+        return;
+    }
+    UITabBarItem *item = tabBar.items[(NSUInteger)index];
+    if (item.badgeValue.length > 0) {
+        if (text) {
+            *text = item.badgeValue;
+        }
+        if (dot) {
+            *dot = YES;
+        }
+        return;
+    }
+    NSMutableArray<UIView *> *itemViews = [NSMutableArray array];
+    for (UIView *subview in tabBar.subviews) {
+        if ([NSStringFromClass(subview.class) rangeOfString:@"TabBarButton"].location != NSNotFound) {
+            [itemViews addObject:subview];
+        }
+    }
+    [itemViews sortUsingComparator:^NSComparisonResult(UIView *first, UIView *second) {
+        CGFloat firstX = CGRectGetMinX(first.frame);
+        CGFloat secondX = CGRectGetMinX(second.frame);
+        if (firstX < secondX) {
+            return NSOrderedAscending;
+        }
+        if (firstX > secondX) {
+            return NSOrderedDescending;
+        }
+        return NSOrderedSame;
+    }];
+    if (index >= (NSInteger)itemViews.count) {
+        return;
+    }
+    NSString *badgeText = nil;
+    UIView *badge = WCLiquidGlassFloatingTabBarFindBadgeView(itemViews[(NSUInteger)index], 0U, &badgeText);
+    if (badge) {
+        if (dot) {
+            *dot = YES;
+        }
+        if (text && badgeText.length > 0) {
+            *text = badgeText;
+        }
     }
 }
 
-static void WCLiquidGlassFloatingTabBarRestoreNativeSubviews(UITabBar *tabBar) {
-    [WCLiquidGlassFloatingTabBarController.sharedController wc_restoreNativeSubviews:tabBar];
+static void WCLiquidGlassFloatingTabBarSuppressView(UIView *view, BOOL suppress) {
+    if (!view) {
+        return;
+    }
+    if (suppress) {
+        if (!objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedOpacityKey)) {
+            objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedOpacityKey,
+                                     @(view.layer.opacity), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (!objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey)) {
+            objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey,
+                                     @(view.userInteractionEnabled), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (view.layer.opacity != 0.0) {
+            [CATransaction begin];
+            [CATransaction setDisableActions:YES];
+            view.layer.opacity = 0.0;
+            [CATransaction commit];
+        }
+        if (view.userInteractionEnabled) {
+            view.userInteractionEnabled = NO;
+        }
+        return;
+    }
+    NSNumber *savedOpacity =
+        objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedOpacityKey);
+    if (savedOpacity) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        view.layer.opacity = savedOpacity.floatValue;
+        [CATransaction commit];
+        objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedOpacityKey,
+                                 nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    NSNumber *savedUserInteractionEnabled =
+        objc_getAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey);
+    if (savedUserInteractionEnabled) {
+        view.userInteractionEnabled = savedUserInteractionEnabled.boolValue;
+        objc_setAssociatedObject(view, &WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey,
+                                 nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
+static void WCLiquidGlassFloatingTabBarSuppressNativeContent(UITabBar *tabBar) {
+    if (tabBar) {
+        [WCLiquidGlassFloatingTabBarController.sharedController wc_suppressNativeContent:tabBar];
+    }
+}
+
+static void WCLiquidGlassFloatingTabBarRestoreNativeContent(UITabBar *tabBar) {
+    [WCLiquidGlassFloatingTabBarController.sharedController wc_restoreNativeContent:tabBar];
 }
 
 @interface WCLiquidGlassFloatingPassthroughView : UIView
@@ -228,10 +372,12 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, strong) WCLiquidGlassFloatingTabBarSheetView *sheetView;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *actionItems;
 @property(nonatomic, copy) NSArray<NSString *> *actionIdentifiers;
+@property(nonatomic, copy) NSArray *appliedBadgeValues;
 @property(nonatomic, assign) CGFloat measuredGridHeight;
 @property(nonatomic, assign) BOOL expanded;
 - (instancetype)initWithController:(WCLiquidGlassFloatingTabBarController *)controller;
 - (void)wc_updateForTabController:(id)tabController tabBar:(UITabBar *)tabBar;
+- (void)wc_refreshBadges;
 - (void)wc_collapseAnimated:(BOOL)animated;
 @end
 
@@ -401,6 +547,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         _controller = controller;
         _actionItems = @[];
         _actionIdentifiers = @[];
+        _appliedBadgeValues = @[];
         _measuredGridHeight = 0.0;
     }
     return self;
@@ -479,6 +626,30 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     [self.sheetView setNeedsLayout];
 }
 
+- (void)wc_refreshBadges {
+    UITabBar *nativeTabBar = WCLiquidGlassFloatingTabBarTrackedTabBar;
+    NSMutableArray *badgeValues =
+        [NSMutableArray arrayWithCapacity:self.sheetView.tabBar.items.count];
+    for (NSUInteger index = 0; index < self.sheetView.tabBar.items.count; index++) {
+        NSString *text = nil;
+        BOOL dot = NO;
+        WCLiquidGlassFloatingTabBarNativeBadge(nativeTabBar, (NSInteger)index, &text, &dot);
+        [badgeValues addObject:text ?: (dot ? @"" : [NSNull null])];
+    }
+    if ([badgeValues isEqualToArray:self.appliedBadgeValues]) {
+        return;
+    }
+    for (NSUInteger index = 0; index < badgeValues.count; index++) {
+        id value = badgeValues[index];
+        NSString *badgeValue = [value isKindOfClass:NSNull.class] ? nil : value;
+        UITabBarItem *item = self.sheetView.tabBar.items[index];
+        if (![item.badgeValue isEqualToString:badgeValue]) {
+            item.badgeValue = badgeValue;
+        }
+    }
+    self.appliedBadgeValues = badgeValues;
+}
+
 - (void)wc_updateForTabController:(id)tabController tabBar:(UITabBar *)tabBar {
     if (!tabBar) {
         return;
@@ -488,18 +659,16 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     NSMutableArray<UITabBarItem *> *items = [NSMutableArray arrayWithCapacity:count];
     NSArray<NSString *> *symbols = @[@"message.fill", @"person.2.fill", @"safari.fill", @"person.fill"];
     for (NSUInteger index = 0; index < count; index++) {
-        UIViewController *viewController =
-            [viewControllers[index] isKindOfClass:UIViewController.class] ? viewControllers[index] : nil;
         UIImage *image = WCLiquidGlassNativeTabImage(tabController, index);
         if (!image) {
             image = [UIImage systemImageNamed:symbols[index]];
         }
         UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:nil image:image selectedImage:image];
         item.tag = index;
-        @try {
-            item.badgeValue = viewController.tabBarItem.badgeValue;
-        } @catch (__unused NSException *exception) {
-        }
+        NSString *badgeText = nil;
+        BOOL badgeDot = NO;
+        WCLiquidGlassFloatingTabBarNativeBadge(tabBar, (NSInteger)index, &badgeText, &badgeDot);
+        item.badgeValue = badgeText ?: (badgeDot ? @"" : nil);
         [items addObject:item];
     }
     BOOL itemsChanged = self.sheetView.tabBar.items.count != items.count;
@@ -507,8 +676,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         UITabBarItem *oldItem = self.sheetView.tabBar.items[index];
         UITabBarItem *newItem = items[index];
         itemsChanged = ![oldItem.image isEqual:newItem.image] ||
-            ![oldItem.selectedImage isEqual:newItem.selectedImage] ||
-            ![oldItem.badgeValue isEqualToString:newItem.badgeValue];
+            ![oldItem.selectedImage isEqual:newItem.selectedImage];
     }
     if (itemsChanged) {
         self.sheetView.tabBar.items = items;
@@ -521,6 +689,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         }];
     }
     [self wc_rebuildActionItemsIfNeeded];
+    [self wc_refreshBadges];
 }
 
 - (void)wc_collapseAnimated:(BOOL)animated {
@@ -590,7 +759,10 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @interface WCLiquidGlassFloatingTabBarController ()
 @property(nonatomic, strong) WCLiquidGlassFloatingTabBarWindow *window;
 @property(nonatomic, strong) WCLiquidGlassFloatingTabBarSheetViewController *sheetViewController;
-@property(nonatomic, strong) NSMapTable<UIView *, NSNumber *> *hiddenNativeSubviews;
+@property(nonatomic, strong) NSHashTable<UIView *> *suppressedNativeViews;
+@property(nonatomic, strong) CADisplayLink *nativeSuppressionDisplayLink;
+@property(nonatomic, assign) CFTimeInterval nativeSuppressionLastBadgeRefresh;
+@property(nonatomic, assign) BOOL nativeSuppressionTicking;
 @property(nonatomic, assign) BOOL started;
 @property(nonatomic, assign) BOOL updateScheduled;
 @property(nonatomic, assign) BOOL appInactive;
@@ -612,7 +784,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _hiddenNativeSubviews = [NSMapTable weakToStrongObjectsMapTable];
+        _suppressedNativeViews = [NSHashTable weakObjectsHashTable];
     }
     return self;
 }
@@ -685,44 +857,66 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 - (void)wc_reassertNativeTabBarHiding {
     UITabBar *tracked = WCLiquidGlassFloatingTabBarTrackedTabBar;
     if (!tracked) {
+        [self wc_stopNativeSuppressionDisplayLink];
         return;
     }
-    WCLiquidGlassFloatingTabBarHideNativeSubviews(tracked);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        WCLiquidGlassFloatingTabBarHideNativeSubviews(WCLiquidGlassFloatingTabBarTrackedTabBar);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        WCLiquidGlassFloatingTabBarHideNativeSubviews(WCLiquidGlassFloatingTabBarTrackedTabBar);
-    });
+    WCLiquidGlassFloatingTabBarSuppressNativeContent(tracked);
+    [self wc_startNativeSuppressionDisplayLink];
 }
 
-- (void)wc_hideNativeSubviews:(UITabBar *)tabBar {
+- (void)wc_suppressNativeContent:(UITabBar *)tabBar {
     if (!tabBar) {
         return;
     }
     for (UIView *subview in tabBar.subviews.copy) {
-        if (!subview.hidden || subview.alpha > 0.01) {
-            if (![self.hiddenNativeSubviews objectForKey:subview]) {
-                [self.hiddenNativeSubviews setObject:@(subview.alpha) forKey:subview];
-            }
-            subview.hidden = YES;
-            subview.alpha = 0.0;
-        }
+        WCLiquidGlassFloatingTabBarSuppressView(subview, YES);
+        [self.suppressedNativeViews addObject:subview];
     }
 }
 
-- (void)wc_restoreNativeSubviews:(UITabBar *)tabBar {
-    NSArray<UIView *> *subviews = [[self.hiddenNativeSubviews keyEnumerator] allObjects];
-    for (UIView *subview in subviews) {
-        if (subview.superview == tabBar) {
-            subview.hidden = NO;
-            NSNumber *alpha = [self.hiddenNativeSubviews objectForKey:subview];
-            subview.alpha = alpha ? alpha.doubleValue : 1.0;
-            [self.hiddenNativeSubviews removeObjectForKey:subview];
-        }
+- (void)wc_restoreNativeContent:(UITabBar *)tabBar {
+    (void)tabBar;
+    for (UIView *subview in self.suppressedNativeViews.allObjects) {
+        WCLiquidGlassFloatingTabBarSuppressView(subview, NO);
     }
+    [self.suppressedNativeViews removeAllObjects];
+}
+
+- (void)wc_startNativeSuppressionDisplayLink {
+    if (self.nativeSuppressionDisplayLink || !WCLiquidGlassFloatingTabBarTrackedTabBar) {
+        return;
+    }
+    self.nativeSuppressionLastBadgeRefresh = 0.0;
+    self.nativeSuppressionDisplayLink =
+        [CADisplayLink displayLinkWithTarget:self selector:@selector(wc_tick:)];
+    self.nativeSuppressionDisplayLink.preferredFramesPerSecond = 30;
+    [self.nativeSuppressionDisplayLink addToRunLoop:NSRunLoop.mainRunLoop
+                                             forMode:NSRunLoopCommonModes];
+}
+
+- (void)wc_stopNativeSuppressionDisplayLink {
+    [self.nativeSuppressionDisplayLink invalidate];
+    self.nativeSuppressionDisplayLink = nil;
+    self.nativeSuppressionLastBadgeRefresh = 0.0;
+}
+
+- (void)wc_tick:(CADisplayLink *)displayLink {
+    UITabBar *tracked = WCLiquidGlassFloatingTabBarTrackedTabBar;
+    if (!tracked) {
+        [self wc_stopNativeSuppressionDisplayLink];
+        return;
+    }
+    if (self.nativeSuppressionTicking) {
+        return;
+    }
+    self.nativeSuppressionTicking = YES;
+    WCLiquidGlassFloatingTabBarSuppressNativeContent(tracked);
+    if (self.nativeSuppressionLastBadgeRefresh <= 0.0 ||
+        displayLink.timestamp - self.nativeSuppressionLastBadgeRefresh >= 0.25) {
+        self.nativeSuppressionLastBadgeRefresh = displayLink.timestamp;
+        [self.sheetViewController wc_refreshBadges];
+    }
+    self.nativeSuppressionTicking = NO;
 }
 
 - (void)wc_configureSheet:(WCLiquidGlassFloatingTabBarSheetViewController *)sheetViewController {
@@ -845,7 +1039,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         self.hasBlockedState = YES;
     }
     if (!enabled) {
-        WCLiquidGlassFloatingTabBarRestoreNativeSubviews(WCLiquidGlassFloatingTabBarTrackedTabBar);
+        WCLiquidGlassFloatingTabBarRestoreNativeContent(WCLiquidGlassFloatingTabBarTrackedTabBar);
+        [self wc_stopNativeSuppressionDisplayLink];
         WCLiquidGlassFloatingTabBarTrackedTabBar = nil;
         [self.sheetViewController wc_collapseAnimated:NO];
         self.window.hidden = YES;
@@ -855,7 +1050,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         return;
     }
     if (!tabBar || blocked) {
-        WCLiquidGlassFloatingTabBarRestoreNativeSubviews(WCLiquidGlassFloatingTabBarTrackedTabBar);
+        WCLiquidGlassFloatingTabBarRestoreNativeContent(WCLiquidGlassFloatingTabBarTrackedTabBar);
+        [self wc_stopNativeSuppressionDisplayLink];
         WCLiquidGlassFloatingTabBarTrackedTabBar = nil;
         [self.sheetViewController wc_collapseAnimated:NO];
         self.window.hidden = YES;
@@ -866,13 +1062,15 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         return;
     }
     if (WCLiquidGlassFloatingTabBarTrackedTabBar != tabBar) {
-        WCLiquidGlassFloatingTabBarRestoreNativeSubviews(WCLiquidGlassFloatingTabBarTrackedTabBar);
+        WCLiquidGlassFloatingTabBarRestoreNativeContent(WCLiquidGlassFloatingTabBarTrackedTabBar);
+        [self wc_stopNativeSuppressionDisplayLink];
         WCLiquidGlassFloatingTabBarTrackedTabBar = tabBar;
         [WCLiquidGlassCrashLogger.sharedLogger recordEvent:@"FloatingTabBar attached to native tab bar"];
     }
     self.sheetViewController.sheetView.appInactive = self.appInactive;
-    WCLiquidGlassFloatingTabBarHideNativeSubviews(tabBar);
+    WCLiquidGlassFloatingTabBarSuppressNativeContent(tabBar);
     [self.sheetViewController wc_updateForTabController:tabController tabBar:tabBar];
+    [self.sheetViewController wc_refreshBadges];
     BOOL hasPresentedController = NO;
     if ([tabController respondsToSelector:@selector(presentedViewController)]) {
         @try {
@@ -880,19 +1078,18 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         } @catch (__unused NSException *exception) {
         }
     }
-    id selected = WCLiquidGlassFloatingTabBarObjectValue(tabController, @selector(selectedViewController));
-    BOOL selectedNavigationTransitioning = [selected isKindOfClass:UINavigationController.class] &&
-        ((UINavigationController *)selected).transitionCoordinator != nil;
     BOOL visible = tabBar.window != nil &&
         !tabBar.hidden &&
         tabBar.alpha > 0.01 &&
         CGRectGetMinY(tabBar.frame) < CGRectGetMaxY(tabBar.superview.bounds) - 1.0 &&
         WCLiquidGlassIsAtCurrentTabRoot(tabController) &&
-        !selectedNavigationTransitioning &&
         !hasPresentedController;
     self.window.hidden = !visible;
     if (!visible) {
         [self.sheetViewController wc_collapseAnimated:NO];
+        [self wc_stopNativeSuppressionDisplayLink];
+    } else {
+        [self wc_startNativeSuppressionDisplayLink];
     }
 }
 
@@ -904,15 +1101,6 @@ static void WCLiquidGlassFloatingTabBarViewDidAppear(UIViewController *self,
     [WCLiquidGlassFloatingTabBarController.sharedController setNeedsUpdate];
     if (WCLiquidGlassFloatingTabBarOriginalViewDidAppear) {
         WCLiquidGlassFloatingTabBarOriginalViewDidAppear(self, selector, animated);
-    }
-}
-
-static void WCLiquidGlassFloatingTabBarViewWillAppear(UIViewController *self,
-                                                       SEL selector,
-                                                       BOOL animated) {
-    [WCLiquidGlassFloatingTabBarController.sharedController setNeedsUpdate];
-    if (WCLiquidGlassFloatingTabBarOriginalViewWillAppear) {
-        WCLiquidGlassFloatingTabBarOriginalViewWillAppear(self, selector, animated);
     }
 }
 
@@ -951,7 +1139,7 @@ static void WCLiquidGlassFloatingTabBarLayoutSubviews(UITabBar *self, SEL select
         WCLiquidGlassFloatingTabBarOriginalLayoutSubviews(self, selector);
     }
     if (self == WCLiquidGlassFloatingTabBarTrackedTabBar) {
-        WCLiquidGlassFloatingTabBarHideNativeSubviews(self);
+        WCLiquidGlassFloatingTabBarSuppressNativeContent(self);
     }
 }
 
@@ -981,7 +1169,7 @@ static void WCLiquidGlassFloatingTabBarDidMoveToWindow(UITabBar *self, SEL selec
         WCLiquidGlassFloatingTabBarOriginalDidMoveToWindow(self, selector);
     }
     if (self == WCLiquidGlassFloatingTabBarTrackedTabBar) {
-        WCLiquidGlassFloatingTabBarHideNativeSubviews(self);
+        WCLiquidGlassFloatingTabBarSuppressNativeContent(self);
     }
 }
 
@@ -990,7 +1178,19 @@ static void WCLiquidGlassFloatingTabBarAddSubview(UITabBar *self, SEL selector, 
         WCLiquidGlassFloatingTabBarOriginalAddSubview(self, selector, subview);
     }
     if (self == WCLiquidGlassFloatingTabBarTrackedTabBar) {
-        WCLiquidGlassFloatingTabBarHideNativeSubviews(self);
+        WCLiquidGlassFloatingTabBarSuppressNativeContent(self);
+    }
+}
+
+static void WCLiquidGlassFloatingTabBarSetBadgeValue(UITabBarItem *self,
+                                                      SEL selector,
+                                                      NSString *badgeValue) {
+    if (WCLiquidGlassFloatingTabBarOriginalSetBadgeValue) {
+        WCLiquidGlassFloatingTabBarOriginalSetBadgeValue(self, selector, badgeValue);
+    }
+    UITabBar *tracked = WCLiquidGlassFloatingTabBarTrackedTabBar;
+    if (tracked && [tracked.items containsObject:self]) {
+        [WCLiquidGlassFloatingTabBarController.sharedController setNeedsUpdate];
     }
 }
 
@@ -999,7 +1199,6 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
         [WCLiquidGlassFloatingTabBarController.sharedController start];
         return;
     }
-    Method viewWillAppearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewWillAppear:));
     Method viewDidAppearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewDidAppear:));
     Method viewDidDisappearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewDidDisappear:));
     Method selectedIndexMethod = class_getInstanceMethod(UITabBarController.class, @selector(setSelectedIndex:));
@@ -1010,9 +1209,10 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     Method frameMethod = class_getInstanceMethod(UITabBar.class, @selector(setFrame:));
     Method movedMethod = class_getInstanceMethod(UITabBar.class, @selector(didMoveToWindow));
     Method addSubviewMethod = class_getInstanceMethod(UITabBar.class, @selector(addSubview:));
-    if (!viewWillAppearMethod || !viewDidAppearMethod || !viewDidDisappearMethod ||
+    Method badgeValueMethod = class_getInstanceMethod(UITabBarItem.class, @selector(setBadgeValue:));
+    if (!viewDidAppearMethod || !viewDidDisappearMethod ||
         !selectedIndexMethod || !selectedControllerMethod || !layoutMethod || !hiddenMethod ||
-        !frameMethod || !movedMethod || !addSubviewMethod) {
+        !frameMethod || !movedMethod || !addSubviewMethod || !badgeValueMethod) {
         if (!WCLiquidGlassFloatingTabBarRetryScheduled &&
             WCLiquidGlassFloatingTabBarInstallAttempts < 20) {
             WCLiquidGlassFloatingTabBarRetryScheduled = YES;
@@ -1025,9 +1225,6 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
         }
         return;
     }
-    MSHookMessageEx(UIViewController.class, @selector(viewWillAppear:),
-                    (IMP)&WCLiquidGlassFloatingTabBarViewWillAppear,
-                    (IMP *)&WCLiquidGlassFloatingTabBarOriginalViewWillAppear);
     MSHookMessageEx(UIViewController.class, @selector(viewDidAppear:),
                     (IMP)&WCLiquidGlassFloatingTabBarViewDidAppear,
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalViewDidAppear);
@@ -1055,8 +1252,10 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     MSHookMessageEx(UITabBar.class, @selector(addSubview:),
                     (IMP)&WCLiquidGlassFloatingTabBarAddSubview,
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalAddSubview);
+    MSHookMessageEx(UITabBarItem.class, @selector(setBadgeValue:),
+                    (IMP)&WCLiquidGlassFloatingTabBarSetBadgeValue,
+                    (IMP *)&WCLiquidGlassFloatingTabBarOriginalSetBadgeValue);
     WCLiquidGlassFloatingTabBarHooksInstalled =
-        WCLiquidGlassFloatingTabBarOriginalViewWillAppear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalViewDidAppear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalViewDidDisappear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalSetSelectedIndex != NULL &&
@@ -1065,7 +1264,8 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
         WCLiquidGlassFloatingTabBarOriginalSetHidden != NULL &&
         WCLiquidGlassFloatingTabBarOriginalSetFrame != NULL &&
         WCLiquidGlassFloatingTabBarOriginalDidMoveToWindow != NULL &&
-        WCLiquidGlassFloatingTabBarOriginalAddSubview != NULL;
+        WCLiquidGlassFloatingTabBarOriginalAddSubview != NULL &&
+        WCLiquidGlassFloatingTabBarOriginalSetBadgeValue != NULL;
     if (WCLiquidGlassFloatingTabBarHooksInstalled) {
         [WCLiquidGlassFloatingTabBarController.sharedController start];
     }
