@@ -48,6 +48,8 @@ static NSString *const WCLiquidGlassWCGlassLongPressMenuAppearanceKey = @"WCLiqu
 static NSString *const WCLiquidGlassMessageNotificationGlassEnabledKey = @"WCLiquidGlass.MessageNotificationGlassEnabled";
 static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquidGlass.UnreadMessageTipGlassEnabled";
 static NSString *const WCLiquidGlassMessageSwipeActionsEnabledKey = @"WCLiquidGlass.MessageSwipeActionsEnabled";
+static NSString *const WCLiquidGlassFloatingTabBarEnabledKey = @"WCLiquidGlass.FloatingTabBar.Enabled";
+static NSString *const WCLiquidGlassFloatingTabBarSearchEnabledKey = @"WCLiquidGlass.FloatingTabBar.SearchEnabled";
 static NSString *const WCLiquidGlassMessageSwipeMenuElementSizeKey = @"WCLiquidGlass.MessageSwipe.MenuElementSize";
 static NSString *const WCLiquidGlassMessageNotificationCornerRadiusKey = @"WCLiquidGlass.MessageNotification.CornerRadius";
 static NSString *const WCLiquidGlassMessageNotificationPaddingKey = @"WCLiquidGlass.MessageNotification.Padding";
@@ -105,6 +107,8 @@ static NSArray<NSString *> *WCLiquidGlassConfigurationKeys(void) {
             WCLiquidGlassMessageNotificationGlassEnabledKey,
             WCLiquidGlassUnreadMessageTipGlassEnabledKey,
             WCLiquidGlassMessageSwipeActionsEnabledKey,
+            WCLiquidGlassFloatingTabBarEnabledKey,
+            WCLiquidGlassFloatingTabBarSearchEnabledKey,
             WCLiquidGlassMessageSwipeMenuElementSizeKey,
             WCLiquidGlassMessageNotificationCornerRadiusKey,
             WCLiquidGlassMessageNotificationPaddingKey,
@@ -407,6 +411,8 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassMessageNotificationGlassEnabledKey: @YES,
         WCLiquidGlassUnreadMessageTipGlassEnabledKey: @NO,
         WCLiquidGlassMessageSwipeActionsEnabledKey: @NO,
+        WCLiquidGlassFloatingTabBarEnabledKey: @NO,
+        WCLiquidGlassFloatingTabBarSearchEnabledKey: @YES,
         WCLiquidGlassMessageSwipeMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
         WCLiquidGlassMessageNotificationCornerRadiusKey: @36.0,
         WCLiquidGlassMessageNotificationPaddingKey: @8.0,
@@ -614,6 +620,24 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setMessageSwipeActionsEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassMessageSwipeActionsEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)floatingTabBarEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassFloatingTabBarEnabledKey];
+}
+
++ (void)setFloatingTabBarEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassFloatingTabBarEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)floatingTabBarSearchEnabled {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassFloatingTabBarSearchEnabledKey];
+}
+
++ (void)setFloatingTabBarSearchEnabled:(BOOL)enabled {
+    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassFloatingTabBarSearchEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
