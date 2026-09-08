@@ -1288,6 +1288,126 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 @end
 
 
+@interface WCLiquidGlassFloatingTabBarSettingsController : UITableViewController
+@end
+
+@implementation WCLiquidGlassFloatingTabBarSettingsController
+
+- (instancetype)init {
+    return [super initWithStyle:UITableViewStyleInsetGrouped];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"悬浮底栏";
+    [WCLiquidGlassPreferences registerDefaults];
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 66.0;
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(wc_preferencesChanged:)
+                                               name:WCLiquidGlassPreferencesDidChangeNotification
+                                             object:nil];
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return 2;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return @"悬浮底栏";
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    return @"悬浮底栏只在微信四个首页显示，展开后的九宫格使用“按钮与动作”中已启用的动作；检测到 WCGlass 悬浮底栏时自动让位。底栏内搜索框显示在展开区域底部，点击进入微信搜索。";
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    return WCLiquidGlassSectionLabel([self tableView:tableView titleForHeaderInSection:section],
+                                     UIColor.secondaryLabelColor);
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    return WCLiquidGlassSectionHeaderHeight();
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
+    return WCLiquidGlassFooterLabel([self tableView:tableView titleForFooterInSection:section]);
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+    return WCLiquidGlassFooterHeight([self tableView:tableView titleForFooterInSection:section], 72.0);
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                                    reuseIdentifier:nil];
+    if (indexPath.row == 0) {
+        NSString *detail = WCLiquidGlassFloatingTabBarIsBlockedByWCGlass()
+            ? @"检测到 WCGlass 底栏，已自动让位"
+            : @"替换首页底栏，上滑展开九宫格动作";
+        WCLiquidGlassConfigureCell(cell,
+                                   @"启用悬浮底栏",
+                                   detail,
+                                   WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0),
+                                   UIColor.labelColor);
+        UISwitch *toggle = [[UISwitch alloc] init];
+        toggle.on = WCLiquidGlassPreferences.floatingTabBarEnabled;
+        [toggle addTarget:self
+                   action:@selector(wc_floatingTabBarChanged:)
+         forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+    } else {
+        WCLiquidGlassConfigureCell(cell,
+                                   @"底栏内搜索框",
+                                   @"展开后底部显示搜索入口",
+                                   [UIImage systemImageNamed:@"magnifyingglass"],
+                                   UIColor.labelColor);
+        UISwitch *toggle = [[UISwitch alloc] init];
+        toggle.on = WCLiquidGlassPreferences.floatingTabBarSearchEnabled;
+        [toggle addTarget:self
+                   action:@selector(wc_floatingTabBarSearchChanged:)
+         forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+    }
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView
+  willDisplayCell:(UITableViewCell *)cell
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    for (UITableViewCell *cell in self.tableView.visibleCells) {
+        WCLiquidGlassRestoreNativeGroupedCellBackground(cell);
+    }
+}
+
+- (void)wc_preferencesChanged:(NSNotification *)notification {
+    [self.tableView reloadData];
+}
+
+- (void)wc_floatingTabBarChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setFloatingTabBarEnabled:sender.isOn];
+}
+
+- (void)wc_floatingTabBarSearchChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setFloatingTabBarSearchEnabled:sender.isOn];
+}
+
+@end
+
 @interface WCLiquidGlassLiquidFeaturesController : UITableViewController
 @end
 
@@ -1727,7 +1847,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 @interface WCLiquidGlass () <UIDocumentPickerDelegate>
 
 @property(nonatomic, strong) UISwitch *enabledSwitch;
-@property(nonatomic, strong) UISwitch *floatingTabBarSwitch;
 @property(nonatomic, strong) UISwitch *materialFileProtectionSwitch;
 @property(nonatomic, weak) UIView *configurationActionSourceView;
 
@@ -1926,7 +2045,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return WCLiquidGlassFooterLabel(@"入口可在微信任意页面呼出，可选择环形菜单或系统液态面板；菜单样式设置支持层级 UIMenu 或二级 Sheet，面板大小、悬浮按钮轨迹与紧凑布局均在其中设置。");
     }
     if (section == 1) {
-        return WCLiquidGlassFooterLabel(@"按钮与动作、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。悬浮底栏只在微信四个首页显示，展开后的九宫格使用“按钮与动作”中已启用的动作；检测到 WCGlass 悬浮底栏时自动让位。");
+        return WCLiquidGlassFooterLabel(@"按钮与动作、悬浮底栏、液态适配进入结构化设置页；左滑引用/复读保留独立二级页，左滑菜单大小只影响左滑菜单。悬浮底栏只在微信四个首页显示，展开后的九宫格使用“按钮与动作”中已启用的动作；检测到 WCGlass 悬浮底栏时自动让位。");
     }
     if (section == 2) {
         return WCLiquidGlassFooterLabel(@"WCGlass iOS 27 兼容修复用于处理带键盘返回时的闪退；素材文件保护会阻止微信磁盘扫描删除未知素材，并保持 ThemePro 的删除与移动拦截规则。开关切换后立即生效。");
@@ -2020,13 +2139,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 : @"替换首页底栏，上滑展开九宫格动作";
             WCLiquidGlassConfigureCell(cell, @"悬浮底栏", detail,
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindMenu, 32.0), UIColor.labelColor);
-            self.floatingTabBarSwitch = [[UISwitch alloc] init];
-            self.floatingTabBarSwitch.on = WCLiquidGlassPreferences.floatingTabBarEnabled;
-            [self.floatingTabBarSwitch addTarget:self
-                                          action:@selector(wc_floatingTabBarChanged:)
-                                forControlEvents:UIControlEventValueChanged];
-            cell.accessoryView = self.floatingTabBarSwitch;
-            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         } else if ([key isEqualToString:@"liquidFeatures"]) {
             WCLiquidGlassConfigureCell(cell, @"液态功能", @"液态效果与页面液态适配",
                                        WCLiquidGlassSettingsIconImage(WCLiquidGlassSettingsIconKindGlassAppearance, 32.0), UIColor.labelColor);
@@ -2088,6 +2201,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         NSString *key = self.wc_contentRowKeys[indexPath.row];
         if ([key isEqualToString:@"buttonActions"]) {
             [self.navigationController pushViewController:[[WCLiquidGlassButtonEditorController alloc] init] animated:YES];
+        } else if ([key isEqualToString:@"floatingTabBar"]) {
+            WCLiquidGlassPresentSettingsSheet(self,
+                                              [[WCLiquidGlassFloatingTabBarSettingsController alloc] init],
+                                              YES);
         } else if ([key isEqualToString:@"liquidFeatures"]) {
             WCLiquidGlassPresentSettingsSheet(self,
                                               [[WCLiquidGlassLiquidFeaturesController alloc] init],
@@ -2108,10 +2225,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_enabledChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setEnabled:sender.isOn];
-}
-
-- (void)wc_floatingTabBarChanged:(UISwitch *)sender {
-    [WCLiquidGlassPreferences setFloatingTabBarEnabled:sender.isOn];
 }
 
 - (void)wc_wcGlassCompatibilityChanged:(UISwitch *)sender {

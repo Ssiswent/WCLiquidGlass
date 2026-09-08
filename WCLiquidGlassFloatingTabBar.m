@@ -12,6 +12,8 @@
 
 static const CGFloat WCLiquidGlassFloatingTabBarCollapsedHeight = 90.0;
 static const CGFloat WCLiquidGlassFloatingTabBarMinimumExpandedHeight = 240.0;
+static const CGFloat WCLiquidGlassFloatingTabBarSearchHeight = 50.0;
+static const CGFloat WCLiquidGlassFloatingTabBarSearchSpacing = 12.0;
 static NSString * const WCLiquidGlassFloatingTabBarCollapsedDetent = @"collapsed";
 static NSString * const WCLiquidGlassFloatingTabBarExpandedDetent = @"expanded";
 
@@ -403,6 +405,7 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     _imageView = [[UIImageView alloc] initWithFrame:CGRectZero];
     _imageView.contentMode = UIViewContentModeScaleAspectFit;
+    _imageView.tintColor = UIColor.labelColor;
     _imageView.translatesAutoresizingMaskIntoConstraints = NO;
     [_imageView.widthAnchor constraintEqualToConstant:28.0].active = YES;
     [_imageView.heightAnchor constraintEqualToConstant:28.0].active = YES;
@@ -436,9 +439,6 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
 - (void)configureWithItem:(NSDictionary<NSString *, id> *)item {
     self.actionIdentifier = item[@"action"];
     _imageView.image = WCLiquidGlassImageForAction(self.actionIdentifier, 56.0);
-    if (_imageView.image.renderingMode == UIImageRenderingModeAlwaysTemplate) {
-        _imageView.tintColor = [UIColor colorWithRed:0.027 green:0.757 blue:0.376 alpha:1.0];
-    }
     _label.text = WCLiquidGlassActionTitle(self.actionIdentifier);
 }
 
@@ -454,6 +454,107 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
 @end
 
 @class WCLiquidGlassFloatingTabBarSheetView;
+
+@interface WCLiquidGlassFloatingTabBarSearchButton : UIControl
+- (void)refreshEffect;
+@end
+
+@implementation WCLiquidGlassFloatingTabBarSearchButton {
+    UIVisualEffectView *_effectView;
+    UIImageView *_iconView;
+    UILabel *_label;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) {
+        return nil;
+    }
+    self.backgroundColor = UIColor.clearColor;
+    _effectView = [[UIVisualEffectView alloc]
+        initWithEffect:WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearanceTinted)];
+    _effectView.userInteractionEnabled = NO;
+    _effectView.clipsToBounds = YES;
+    _effectView.layer.cornerCurve = kCACornerCurveContinuous;
+    [self addSubview:_effectView];
+    _iconView = [[UIImageView alloc] initWithFrame:CGRectZero];
+    _iconView.contentMode = UIViewContentModeScaleAspectFit;
+    _iconView.tintColor = UIColor.labelColor;
+    [_effectView.contentView addSubview:_iconView];
+    _label = [UILabel new];
+    _label.text = @"搜索";
+    _label.font = [UIFont systemFontOfSize:17.0 weight:UIFontWeightSemibold];
+    _label.textColor = UIColor.labelColor;
+    _label.textAlignment = NSTextAlignmentLeft;
+    [_effectView.contentView addSubview:_label];
+    [self wc_refreshIcon];
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    _effectView.frame = self.bounds;
+    _effectView.layer.cornerRadius = CGRectGetHeight(self.bounds) * 0.5;
+    CGRect contentBounds = _effectView.contentView.bounds;
+    _iconView.frame = CGRectMake(16.0,
+                                 CGRectGetMidY(contentBounds) - 11.0,
+                                 22.0,
+                                 22.0);
+    CGFloat labelX = CGRectGetMaxX(_iconView.frame) + 8.0;
+    CGFloat labelWidth = MAX(0.0, CGRectGetWidth(contentBounds) - labelX - 16.0);
+    CGFloat labelHeight = MAX(22.0, ceil(_label.font.lineHeight));
+    _label.frame = CGRectMake(labelX,
+                               CGRectGetMidY(contentBounds) - labelHeight * 0.5,
+                               labelWidth,
+                               labelHeight);
+}
+
+- (void)wc_refreshIcon {
+    UIImage *image = WCLiquidGlassImageNamedFromCandidates(@[@"icons_outlined_search",
+                                                               @"icons_filled_search"]);
+    if (!image) {
+        UIImageSymbolConfiguration *configuration =
+            [UIImageSymbolConfiguration configurationWithPointSize:22.0
+                                                             weight:UIImageSymbolWeightRegular];
+        image = [[UIImage systemImageNamed:@"magnifyingglass"]
+            imageByApplyingSymbolConfiguration:configuration];
+        image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    }
+    _iconView.image = image;
+}
+
+- (void)refreshEffect {
+    _effectView.effect = WCLiquidGlassGlassEffectForAppearance(WCLiquidGlassGlassAppearanceTinted);
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
+        [self wc_refreshIcon];
+        [self refreshEffect];
+    }
+}
+
+- (void)setHighlighted:(BOOL)highlighted {
+    self.alpha = highlighted ? 0.6 : 1.0;
+}
+
+- (BOOL)beginTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    [self setHighlighted:YES];
+    return [super beginTrackingWithTouch:touch withEvent:event];
+}
+
+- (void)endTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    [self setHighlighted:NO];
+    [super endTrackingWithTouch:touch withEvent:event];
+}
+
+- (void)cancelTrackingWithEvent:(UIEvent *)event {
+    [self setHighlighted:NO];
+    [super cancelTrackingWithEvent:event];
+}
+
+@end
 
 @interface WCLiquidGlassFloatingNativeTabBar : UITabBar
 @property(nonatomic, weak) WCLiquidGlassFloatingTabBarSheetView *sheetView;
@@ -476,9 +577,11 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, strong) UICollectionView *collectionView;
 @property(nonatomic, strong) UILabel *emptyLabel;
 @property(nonatomic, strong) WCLiquidGlassFloatingNativeTabBar *tabBar;
+@property(nonatomic, strong) WCLiquidGlassFloatingTabBarSearchButton *searchButton;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *actionItems;
 @property(nonatomic, assign) BOOL appInactive;
 @property(nonatomic, assign) BOOL expanded;
+@property(nonatomic, assign) BOOL searchEnabled;
 @property(nonatomic, assign) CGFloat visibilityProgress;
 @property(nonatomic, assign) CGFloat detentProgress;
 @property(nonatomic, assign) CGFloat positionProgress;
@@ -497,6 +600,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, assign) BOOL expanded;
 - (instancetype)initWithController:(WCLiquidGlassFloatingTabBarController *)controller;
 - (void)wc_updateForTabController:(id)tabController tabBar:(UITabBar *)tabBar;
+- (void)wc_updateSearchEnabled;
 - (void)wc_refreshBadges;
 - (void)wc_collapseAnimated:(BOOL)animated;
 @end
@@ -557,6 +661,9 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     [_collectionView registerClass:WCLiquidGlassFloatingTabBarTileCell.class
         forCellWithReuseIdentifier:@"WCLiquidGlassFloatingTabBarTileCell"];
     [self addSubview:_collectionView];
+    _searchButton = [[WCLiquidGlassFloatingTabBarSearchButton alloc] initWithFrame:CGRectZero];
+    _searchButton.hidden = YES;
+    [self addSubview:_searchButton];
     _emptyLabel = [UILabel new];
     _emptyLabel.text = @"请先在“按钮与动作”中启用动作";
     _emptyLabel.textColor = UIColor.secondaryLabelColor;
@@ -565,6 +672,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     _emptyLabel.numberOfLines = 0;
     _emptyLabel.hidden = YES;
     [self addSubview:_emptyLabel];
+    [self insertSubview:_searchButton aboveSubview:_emptyLabel];
     _tabBar = [WCLiquidGlassFloatingNativeTabBar new];
     _tabBar.translucent = YES;
     _tabBar.backgroundImage = [UIImage new];
@@ -603,12 +711,28 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     self.positionProgress =
         WCLiquidGlassFloatingTabBarClamp((height - 384.0) / 428.0, 0.0, 1.0);
     self.collectionView.frame = CGRectMake(0.0, 36.0, width, MAX(0.0, height - 36.0));
+    CGFloat contentInsetBottom = self.searchEnabled
+        ? WCLiquidGlassFloatingTabBarSearchHeight + WCLiquidGlassFloatingTabBarSearchSpacing
+        : 0.0;
+    if (fabs(self.collectionView.contentInset.bottom - contentInsetBottom) > 0.01) {
+        UIEdgeInsets contentInset = self.collectionView.contentInset;
+        contentInset.bottom = contentInsetBottom;
+        self.collectionView.contentInset = contentInset;
+    }
     self.collectionView.alpha = self.visibilityProgress;
     self.emptyLabel.frame = self.bounds;
     self.emptyLabel.alpha = self.visibilityProgress;
     self.emptyLabel.hidden = self.actionItems.count > 0;
     CGFloat offset = 3.0 + 9.0 * self.detentProgress - 11.0 * self.positionProgress;
-    self.tabBar.frame = CGRectMake(0.0, height - 90.0 + offset, width, 90.0);
+    CGFloat tabBarY = height - 90.0 + offset;
+    self.tabBar.frame = CGRectMake(0.0, tabBarY, width, 90.0);
+    self.searchButton.hidden = !self.searchEnabled;
+    self.searchButton.frame = CGRectMake(20.0,
+                                         tabBarY - WCLiquidGlassFloatingTabBarSearchSpacing -
+                                             WCLiquidGlassFloatingTabBarSearchHeight,
+                                         MAX(0.0, width - 40.0),
+                                         WCLiquidGlassFloatingTabBarSearchHeight);
+    self.searchButton.alpha = self.visibilityProgress;
     [self wc_applyTabBarBackgroundOpacity];
 }
 
@@ -618,6 +742,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
             [(WCLiquidGlassFloatingTabBarTileCell *)cell refreshEffect];
         }
     }
+    [self.searchButton refreshEffect];
 }
 
 - (void)wc_applyTabBarBackgroundOpacity {
@@ -687,6 +812,9 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     self.sheetView.collectionView.dataSource = self;
     self.sheetView.collectionView.delegate = self;
     self.sheetView.tabBar.delegate = self;
+    [self.sheetView.searchButton addTarget:self
+                                    action:@selector(wc_searchTapped:)
+                          forControlEvents:UIControlEventTouchUpInside];
     self.view = self.sheetView;
 }
 
@@ -728,6 +856,35 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
                    dispatch_get_main_queue(), ^{
         WCLiquidGlassPerformActionIdentifier(identifier);
     });
+}
+
+- (void)wc_searchTapped:(id)sender {
+    (void)sender;
+    UIImpactFeedbackGenerator *generator =
+        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [generator impactOccurred];
+    [self wc_collapseAnimated:YES];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        WCLiquidGlassPerformActionIdentifier(WCLiquidGlassActionSearchRecords);
+    });
+}
+
+- (void)wc_updateSearchEnabled {
+    BOOL enabled = WCLiquidGlassPreferences.floatingTabBarSearchEnabled;
+    if (self.sheetView.searchEnabled == enabled) {
+        return;
+    }
+    self.sheetView.searchEnabled = enabled;
+    [self.sheetView setNeedsLayout];
+    if (@available(iOS 16.0, *)) {
+        UISheetPresentationController *sheet = self.sheetPresentationController;
+        if (sheet) {
+            [sheet animateChanges:^{
+                [sheet invalidateDetents];
+            }];
+        }
+    }
 }
 
 - (void)wc_rebuildActionItemsIfNeeded {
@@ -818,6 +975,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
             self.sheetView.tabBar.selectedItem = self.sheetView.tabBar.items[selectedIndex];
         }];
     }
+    [self wc_updateSearchEnabled];
     [self wc_rebuildActionItemsIfNeeded];
     [self wc_refreshBadges];
 }
@@ -1160,7 +1318,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
                 }
             }
             CGFloat wanted = 44.0 + weakSheetViewController.measuredGridHeight + 12.0 +
-                (90.0 - safeBottom) + 12.0;
+                (90.0 - safeBottom) + 12.0 +
+                (weakSheetViewController.sheetView.searchEnabled ? 62.0 : 0.0);
             return MIN(MAX(wanted, WCLiquidGlassFloatingTabBarMinimumExpandedHeight), maximum);
         }];
         sheet.detents = @[collapsed, expanded];
