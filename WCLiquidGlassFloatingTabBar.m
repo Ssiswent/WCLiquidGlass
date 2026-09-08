@@ -25,6 +25,7 @@ static BOOL WCLiquidGlassFloatingTabBarRetryScheduled;
 static NSUInteger WCLiquidGlassFloatingTabBarInstallAttempts;
 
 static void (*WCLiquidGlassFloatingTabBarOriginalViewDidAppear)(UIViewController *, SEL, BOOL);
+static void (*WCLiquidGlassFloatingTabBarOriginalViewWillAppear)(UIViewController *, SEL, BOOL);
 static void (*WCLiquidGlassFloatingTabBarOriginalViewDidDisappear)(UIViewController *, SEL, BOOL);
 static void (*WCLiquidGlassFloatingTabBarOriginalSetSelectedIndex)(UITabBarController *, SEL, NSInteger);
 static void (*WCLiquidGlassFloatingTabBarOriginalSetSelectedViewController)(UITabBarController *, SEL, UIViewController *);
@@ -592,37 +593,6 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
 
 @end
 
-@interface WCLiquidGlassFloatingTabBarSearchFooterView : UICollectionReusableView
-@property(nonatomic, strong, readonly) WCLiquidGlassFloatingTabBarSearchButton *searchButton;
-@end
-
-@implementation WCLiquidGlassFloatingTabBarSearchFooterView {
-    WCLiquidGlassFloatingTabBarSearchButton *_searchButton;
-}
-
-@synthesize searchButton = _searchButton;
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (!self) {
-        return nil;
-    }
-    _searchButton = [[WCLiquidGlassFloatingTabBarSearchButton alloc] initWithFrame:CGRectZero];
-    [self addSubview:_searchButton];
-    return self;
-}
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    CGFloat width = CGRectGetWidth(self.bounds);
-    _searchButton.frame = CGRectMake(20.0,
-                                     WCLiquidGlassFloatingTabBarSearchSpacing,
-                                     MAX(0.0, width - 40.0),
-                                     WCLiquidGlassFloatingTabBarSearchHeight);
-}
-
-@end
-
 @interface WCLiquidGlassFloatingNativeTabBar : UITabBar
 @property(nonatomic, weak) WCLiquidGlassFloatingTabBarSheetView *sheetView;
 @end
@@ -644,6 +614,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, strong) UICollectionView *collectionView;
 @property(nonatomic, strong) UILabel *emptyLabel;
 @property(nonatomic, strong) WCLiquidGlassFloatingNativeTabBar *tabBar;
+@property(nonatomic, strong) WCLiquidGlassFloatingTabBarSearchButton *searchButton;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *actionItems;
 @property(nonatomic, assign) BOOL appInactive;
 @property(nonatomic, assign) BOOL expanded;
@@ -696,7 +667,6 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         return nil;
     }
     self.backgroundColor = UIColor.clearColor;
-    __weak WCLiquidGlassFloatingTabBarSheetView *weakSelf = self;
     UICollectionViewCompositionalLayout *layout =
         [[UICollectionViewCompositionalLayout alloc] initWithSectionProvider:^NSCollectionLayoutSection *(NSInteger sectionIndex,
                                                                                                             id<NSCollectionLayoutEnvironment> environment) {
@@ -716,24 +686,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         group.interItemSpacing = [NSCollectionLayoutSpacing fixedSpacing:12.0];
         NSCollectionLayoutSection *section = [NSCollectionLayoutSection sectionWithGroup:group];
         section.interGroupSpacing = 12.0;
-        if (weakSelf.searchEnabled) {
-            section.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 20.0, 0.0, 20.0);
-            NSCollectionLayoutSize *footerSize =
-                [NSCollectionLayoutSize sizeWithWidthDimension:
-                    [NSCollectionLayoutDimension fractionalWidthDimension:1.0]
-                                               heightDimension:
-                    [NSCollectionLayoutDimension absoluteDimension:
-                        WCLiquidGlassFloatingTabBarSearchSpacing +
-                        WCLiquidGlassFloatingTabBarSearchHeight + 102.0]];
-            NSCollectionLayoutBoundarySupplementaryItem *footer =
-                [NSCollectionLayoutBoundarySupplementaryItem boundarySupplementaryItemWithLayoutSize:footerSize
-                                                                                               elementKind:UICollectionElementKindSectionFooter
-                                                                                                  alignment:NSRectAlignmentBottom];
-            section.boundarySupplementaryItems = @[footer];
-        } else {
-            section.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 20.0, 102.0, 20.0);
-            section.boundarySupplementaryItems = @[];
-        }
+        section.contentInsets = NSDirectionalEdgeInsetsMake(8.0, 20.0, 102.0, 20.0);
         return section;
     }];
     _collectionView = [[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
@@ -744,10 +697,10 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     _collectionView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     [_collectionView registerClass:WCLiquidGlassFloatingTabBarTileCell.class
         forCellWithReuseIdentifier:@"WCLiquidGlassFloatingTabBarTileCell"];
-    [_collectionView registerClass:WCLiquidGlassFloatingTabBarSearchFooterView.class
-        forSupplementaryViewOfKind:UICollectionElementKindSectionFooter
-               withReuseIdentifier:@"WCLiquidGlassFloatingTabBarSearchFooterView"];
     [self addSubview:_collectionView];
+    _searchButton = [[WCLiquidGlassFloatingTabBarSearchButton alloc] initWithFrame:CGRectZero];
+    _searchButton.hidden = YES;
+    [self addSubview:_searchButton];
     _emptyLabel = [UILabel new];
     _emptyLabel.text = @"请先在“按钮与动作”中启用动作";
     _emptyLabel.textColor = UIColor.secondaryLabelColor;
@@ -756,7 +709,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     _emptyLabel.numberOfLines = 0;
     _emptyLabel.userInteractionEnabled = NO;
     _emptyLabel.hidden = YES;
-    [self insertSubview:_emptyLabel belowSubview:_collectionView];
+    [self addSubview:_emptyLabel];
+    [self insertSubview:_searchButton aboveSubview:_emptyLabel];
     _tabBar = [WCLiquidGlassFloatingNativeTabBar new];
     _tabBar.translucent = YES;
     _tabBar.backgroundImage = [UIImage new];
@@ -795,6 +749,14 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     self.positionProgress =
         WCLiquidGlassFloatingTabBarClamp((height - 384.0) / 428.0, 0.0, 1.0);
     self.collectionView.frame = CGRectMake(0.0, 36.0, width, MAX(0.0, height - 36.0));
+    CGFloat contentInsetBottom = self.searchEnabled
+        ? WCLiquidGlassFloatingTabBarSearchHeight + WCLiquidGlassFloatingTabBarSearchSpacing
+        : 0.0;
+    if (fabs(self.collectionView.contentInset.bottom - contentInsetBottom) > 0.01) {
+        UIEdgeInsets contentInset = self.collectionView.contentInset;
+        contentInset.bottom = contentInsetBottom;
+        self.collectionView.contentInset = contentInset;
+    }
     self.collectionView.alpha = self.visibilityProgress;
     self.emptyLabel.frame = self.bounds;
     self.emptyLabel.alpha = self.visibilityProgress;
@@ -802,6 +764,13 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     CGFloat offset = 3.0 + 9.0 * self.detentProgress - 11.0 * self.positionProgress;
     CGFloat tabBarY = height - 90.0 + offset;
     self.tabBar.frame = CGRectMake(0.0, tabBarY, width, 90.0);
+    self.searchButton.hidden = !self.searchEnabled;
+    self.searchButton.frame = CGRectMake(20.0,
+                                         tabBarY - WCLiquidGlassFloatingTabBarSearchSpacing -
+                                             WCLiquidGlassFloatingTabBarSearchHeight,
+                                         MAX(0.0, width - 40.0),
+                                         WCLiquidGlassFloatingTabBarSearchHeight);
+    self.searchButton.alpha = self.visibilityProgress;
     [self wc_applyTabBarBackgroundOpacity];
 }
 
@@ -811,12 +780,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
             [(WCLiquidGlassFloatingTabBarTileCell *)cell refreshEffect];
         }
     }
-    for (UICollectionReusableView *view in
-         [self.collectionView visibleSupplementaryViewsOfKind:UICollectionElementKindSectionFooter]) {
-        if ([view isKindOfClass:WCLiquidGlassFloatingTabBarSearchFooterView.class]) {
-            [((WCLiquidGlassFloatingTabBarSearchFooterView *)view).searchButton refreshEffect];
-        }
-    }
+    [self.searchButton refreshEffect];
 }
 
 - (void)wc_applyTabBarBackgroundOpacity {
@@ -886,6 +850,9 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     self.sheetView.collectionView.dataSource = self;
     self.sheetView.collectionView.delegate = self;
     self.sheetView.tabBar.delegate = self;
+    [self.sheetView.searchButton addTarget:self
+                                    action:@selector(wc_searchTapped:)
+                          forControlEvents:UIControlEventTouchUpInside];
     self.view = self.sheetView;
 }
 
@@ -914,22 +881,6 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
                                                   forIndexPath:indexPath];
     [cell configureWithItem:self.actionItems[indexPath.item]];
     return cell;
-}
-
-- (UICollectionReusableView *)collectionView:(UICollectionView *)collectionView
-           viewForSupplementaryElementOfKind:(NSString *)kind
-                                 atIndexPath:(NSIndexPath *)indexPath {
-    WCLiquidGlassFloatingTabBarSearchFooterView *footer =
-        [collectionView dequeueReusableSupplementaryViewOfKind:kind
-                                           withReuseIdentifier:@"WCLiquidGlassFloatingTabBarSearchFooterView"
-                                                  forIndexPath:indexPath];
-    [footer.searchButton removeTarget:nil
-                               action:NULL
-                     forControlEvents:UIControlEventAllEvents];
-    [footer.searchButton addTarget:self
-                            action:@selector(wc_searchTapped:)
-                  forControlEvents:UIControlEventTouchUpInside];
-    return footer;
 }
 
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
@@ -966,8 +917,6 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     }
     self.sheetView.searchEnabled = enabled;
     [self.sheetView setNeedsLayout];
-    [self.sheetView.collectionView.collectionViewLayout invalidateLayout];
-    [self.sheetView.collectionView reloadData];
     if (@available(iOS 16.0, *)) {
         UISheetPresentationController *sheet = self.sheetPresentationController;
         if (sheet) {
@@ -1541,7 +1490,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     BOOL hasPresentedController = NO;
     if ([tabController respondsToSelector:@selector(presentedViewController)]) {
         @try {
-            hasPresentedController = ((UIViewController *)tabController).presentedViewController != nil;
+            UIViewController *presented = ((UIViewController *)tabController).presentedViewController;
+            hasPresentedController = presented != nil && !presented.isBeingDismissed;
         } @catch (__unused NSException *exception) {
         }
     }
@@ -1577,6 +1527,17 @@ static void WCLiquidGlassFloatingTabBarViewDidAppear(UIViewController *self,
     }
     if (WCLiquidGlassFloatingTabBarOriginalViewDidAppear) {
         WCLiquidGlassFloatingTabBarOriginalViewDidAppear(self, selector, animated);
+    }
+}
+
+static void WCLiquidGlassFloatingTabBarViewWillAppear(UIViewController *self,
+                                                       SEL selector,
+                                                       BOOL animated) {
+    if (!WCLiquidGlassFloatingTabBarIsIdle()) {
+        [WCLiquidGlassFloatingTabBarController.sharedController setNeedsUpdate];
+    }
+    if (WCLiquidGlassFloatingTabBarOriginalViewWillAppear) {
+        WCLiquidGlassFloatingTabBarOriginalViewWillAppear(self, selector, animated);
     }
 }
 
@@ -1700,6 +1661,7 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
         return;
     }
     Method viewDidAppearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewDidAppear:));
+    Method viewWillAppearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewWillAppear:));
     Method viewDidDisappearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewDidDisappear:));
     Method selectedIndexMethod = class_getInstanceMethod(UITabBarController.class, @selector(setSelectedIndex:));
     Method selectedControllerMethod =
@@ -1711,7 +1673,7 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     Method didAddSubviewMethod = class_getInstanceMethod(UITabBar.class, @selector(didAddSubview:));
     Method willMoveToWindowMethod = class_getInstanceMethod(UITabBar.class, @selector(willMoveToWindow:));
     Method badgeValueMethod = class_getInstanceMethod(UITabBarItem.class, @selector(setBadgeValue:));
-    if (!viewDidAppearMethod || !viewDidDisappearMethod ||
+    if (!viewDidAppearMethod || !viewWillAppearMethod || !viewDidDisappearMethod ||
         !selectedIndexMethod || !selectedControllerMethod || !layoutMethod || !hiddenMethod ||
         !frameMethod || !movedMethod || !didAddSubviewMethod || !willMoveToWindowMethod ||
         !badgeValueMethod) {
@@ -1730,6 +1692,9 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     MSHookMessageEx(UIViewController.class, @selector(viewDidAppear:),
                     (IMP)&WCLiquidGlassFloatingTabBarViewDidAppear,
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalViewDidAppear);
+    MSHookMessageEx(UIViewController.class, @selector(viewWillAppear:),
+                    (IMP)&WCLiquidGlassFloatingTabBarViewWillAppear,
+                    (IMP *)&WCLiquidGlassFloatingTabBarOriginalViewWillAppear);
     MSHookMessageEx(UIViewController.class, @selector(viewDidDisappear:),
                     (IMP)&WCLiquidGlassFloatingTabBarViewDidDisappear,
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalViewDidDisappear);
@@ -1762,6 +1727,7 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalSetBadgeValue);
     WCLiquidGlassFloatingTabBarHooksInstalled =
         WCLiquidGlassFloatingTabBarOriginalViewDidAppear != NULL &&
+        WCLiquidGlassFloatingTabBarOriginalViewWillAppear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalViewDidDisappear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalSetSelectedIndex != NULL &&
         WCLiquidGlassFloatingTabBarOriginalSetSelectedViewController != NULL &&
