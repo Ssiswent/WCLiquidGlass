@@ -94,6 +94,72 @@ static UIViewController *WCLiquidGlassFloatingTabBarControllerForTabBar(UITabBar
     return nil;
 }
 
+// Same traversal as WCLiquidGlassVisibleControllerFrom, but a presented
+// controller that is currently being dismissed is skipped: during a dismiss
+// transition the presenter becomes the visible controller immediately.
+static UIViewController *WCLiquidGlassFloatingTabBarVisibleController(UIViewController *controller) {
+    if (!controller) {
+        return nil;
+    }
+    UIViewController *presented = controller.presentedViewController;
+    if (presented && !presented.isBeingDismissed) {
+        return WCLiquidGlassFloatingTabBarVisibleController(presented);
+    }
+    if ([controller isKindOfClass:UINavigationController.class]) {
+        return WCLiquidGlassFloatingTabBarVisibleController(
+            ((UINavigationController *)controller).visibleViewController);
+    }
+    if ([controller isKindOfClass:UITabBarController.class]) {
+        return WCLiquidGlassFloatingTabBarVisibleController(
+            ((UITabBarController *)controller).selectedViewController);
+    }
+    for (UIViewController *child in controller.childViewControllers) {
+        UIViewController *visibleChild = WCLiquidGlassFloatingTabBarVisibleController(child);
+        if (visibleChild.viewIfLoaded.window) {
+            return visibleChild;
+        }
+    }
+    return controller;
+}
+
+// Like WCLiquidGlassIsAtCurrentTabRoot, but considers a controller that is
+// being dismissed as already gone so the bar reappears as the transition starts.
+static BOOL WCLiquidGlassFloatingTabBarIsAtTabRoot(id tabController) {
+    UIViewController *visibleController =
+        WCLiquidGlassFloatingTabBarVisibleController(
+            WCLiquidGlassApplicationWindow().rootViewController);
+    id selected = WCLiquidGlassFloatingTabBarObjectValue(
+        tabController, @selector(selectedViewController));
+    UIViewController *tabRootController = nil;
+    if ([selected isKindOfClass:UINavigationController.class]) {
+        UINavigationController *navigation = (UINavigationController *)selected;
+        tabRootController = navigation.viewControllers.firstObject;
+        if (!tabRootController || navigation.topViewController != tabRootController) {
+            return NO;
+        }
+    } else if ([selected isKindOfClass:UIViewController.class]) {
+        tabRootController = selected;
+    }
+    if (!visibleController || !tabRootController) {
+        return NO;
+    }
+    UIViewController *presented = tabRootController.presentedViewController;
+    if (presented && !presented.isBeingDismissed) {
+        return NO;
+    }
+    for (UIViewController *candidate = visibleController;
+         candidate;
+         candidate = candidate.parentViewController) {
+        if (candidate == tabRootController) {
+            return YES;
+        }
+        if (candidate == selected || candidate == tabController) {
+            break;
+        }
+    }
+    return NO;
+}
+
 static BOOL WCLiquidGlassFloatingTabBarOpenGlobalSearch(void) {
     UITabBar *tabBar = WCLiquidGlassFloatingTabBarTrackedTabBar;
     UIViewController *tabController =
@@ -901,13 +967,11 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     UIImpactFeedbackGenerator *generator =
         [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
     [generator impactOccurred];
-    [self wc_collapseAnimated:YES];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        if (!WCLiquidGlassFloatingTabBarOpenGlobalSearch()) {
-            WCLiquidGlassPerformActionIdentifier(WCLiquidGlassActionSearchRecords);
-        }
-    });
+    [self wc_collapseAnimated:NO];
+    self.sheetView.window.hidden = YES;
+    if (!WCLiquidGlassFloatingTabBarOpenGlobalSearch()) {
+        WCLiquidGlassPerformActionIdentifier(WCLiquidGlassActionSearchRecords);
+    }
 }
 
 - (void)wc_updateSearchEnabled {
@@ -1500,11 +1564,11 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         !nativeHidden &&
         tabBar.alpha > 0.01 &&
         CGRectGetMinY(tabBar.frame) < CGRectGetMaxY(tabBar.superview.bounds) - 1.0 &&
-        WCLiquidGlassIsAtCurrentTabRoot(tabController) &&
+        WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController) &&
         !hasPresentedController;
     BOOL shouldHideNative = tabBar.window != nil &&
         !nativeHidden &&
-        !WCLiquidGlassIsAtCurrentTabRoot(tabController);
+        !WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController);
     if (shouldHideNative && !WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
         WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, YES);
     } else if (!shouldHideNative && WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
