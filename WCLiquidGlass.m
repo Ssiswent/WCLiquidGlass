@@ -1318,7 +1318,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return 2;
+    return 3;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -1364,7 +1364,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
                    action:@selector(wc_floatingTabBarChanged:)
          forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = toggle;
-    } else {
+    } else if (indexPath.row == 1) {
         WCLiquidGlassConfigureCell(cell,
                                    @"底栏内搜索框",
                                    @"展开后底部显示搜索入口",
@@ -1374,6 +1374,18 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
         toggle.on = WCLiquidGlassPreferences.floatingTabBarSearchEnabled;
         [toggle addTarget:self
                    action:@selector(wc_floatingTabBarSearchChanged:)
+         forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+    } else {
+        WCLiquidGlassConfigureCell(cell,
+                                   @"隐藏 Tab 标题",
+                                   @"隐藏四个 Tab 标题，图标自动下移 6 pt",
+                                   [UIImage systemImageNamed:@"textformat"],
+                                   UIColor.labelColor);
+        UISwitch *toggle = [[UISwitch alloc] init];
+        toggle.on = WCLiquidGlassPreferences.floatingTabBarHideTabTitles;
+        [toggle addTarget:self
+                   action:@selector(wc_floatingTabBarHideTabTitlesChanged:)
          forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = toggle;
     }
@@ -1404,6 +1416,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)wc_floatingTabBarSearchChanged:(UISwitch *)sender {
     [WCLiquidGlassPreferences setFloatingTabBarSearchEnabled:sender.isOn];
+}
+
+- (void)wc_floatingTabBarHideTabTitlesChanged:(UISwitch *)sender {
+    [WCLiquidGlassPreferences setFloatingTabBarHideTabTitles:sender.isOn];
 }
 
 @end

@@ -57,6 +57,7 @@ static char WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey;
 @class WCLiquidGlassFloatingTabBarSheetViewController;
 
 @interface WCLiquidGlassFloatingTabBarController ()
+@property(nonatomic, strong) WCLiquidGlassFloatingTabBarSheetViewController *sheetViewController;
 - (void)wc_suppressNativeContent:(UITabBar *)tabBar;
 - (void)wc_restoreNativeContent:(UITabBar *)tabBar;
 - (void)wc_trackSuppressedNativeView:(UIView *)view;
@@ -114,6 +115,18 @@ static UIViewController *WCLiquidGlassFloatingTabBarVisibleController(UIViewCont
         return nil;
     }
     UIViewController *presented = controller.presentedViewController;
+    UIViewController *sheetViewController =
+        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
+    if (presented == sheetViewController) {
+        // Our sheet is chrome, not content: look through it to whatever is
+        // presented above it, then fall through to the presenter's own
+        // hierarchy (the tab root sits below the sheet).
+        UIViewController *above = presented.presentedViewController;
+        if (above && !above.isBeingDismissed) {
+            return WCLiquidGlassFloatingTabBarVisibleController(above);
+        }
+        presented = nil;
+    }
     if (presented && !presented.isBeingDismissed &&
         !WCLiquidGlassFloatingTabBarDismissalInProgress()) {
         return WCLiquidGlassFloatingTabBarVisibleController(presented);
@@ -432,61 +445,10 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
     }
 }
 
-@class WCLiquidGlassFloatingTabBarWindow;
-
-@interface WCLiquidGlassFloatingTabBarWindow : UIWindow
-@property(nonatomic, weak) UIViewController *sheetViewController;
-@property(nonatomic, assign) BOOL interceptsOutsideTouches;
-@property(nonatomic, copy) void (^outsideTapHandler)(void);
-@end
-
-@interface WCLiquidGlassFloatingPassthroughView : UIView
-@property(nonatomic, copy) void (^tapHandler)(void);
-@end
-
-@implementation WCLiquidGlassFloatingPassthroughView
-
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    WCLiquidGlassFloatingTabBarWindow *window =
-        [self.window isKindOfClass:WCLiquidGlassFloatingTabBarWindow.class] ?
-        (WCLiquidGlassFloatingTabBarWindow *)self.window : nil;
-    if (!window.interceptsOutsideTouches || !self.tapHandler) {
-        return nil;
-    }
-    return [super hitTest:point withEvent:event];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesEnded:touches withEvent:event];
-    if (self.tapHandler) {
-        self.tapHandler();
-    }
-}
-
-@end
-
-@implementation WCLiquidGlassFloatingTabBarWindow
-
-- (BOOL)canBecomeKeyWindow {
-    return NO;
-}
-
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *sheetView = self.sheetViewController.viewIfLoaded;
-    if (!sheetView || sheetView.window != self || sheetView.hidden) {
-        return nil;
-    }
-    // Native hit-testing first: the sheet's chrome (grabber etc.) lives in
-    // UIKit's container, not in sheetView's subtree, so forwarding touches
-    // only into sheetView starves the grabber of its gestures.
-    UIView *hit = [super hitTest:point withEvent:event];
-    if (!hit || hit == self.rootViewController.view) {
-        return self.interceptsOutsideTouches ? self.rootViewController.view : nil;
-    }
-    return hit;
-}
-
-@end
+// The sheet is presented on WeChat's own tab controller inside the app
+// window — same hosting model as WCGlass/FindMyAppTabBar — so modals (global
+// search) cover it and reveal it natively, grabber gestures are fully
+// system-provided, and no window-level juggling is needed.
 
 @interface WCLiquidGlassFloatingTabBarTileCell : UICollectionViewCell
 @property(nonatomic, copy) NSString *actionIdentifier;
@@ -805,12 +767,20 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     appearance.backgroundEffect = nil;
     appearance.backgroundColor = UIColor.clearColor;
     appearance.shadowColor = UIColor.clearColor;
-    appearance.stackedLayoutAppearance.normal.iconColor = UIColor.labelColor;
-    appearance.stackedLayoutAppearance.selected.iconColor = tabSelectionColor;
-    appearance.inlineLayoutAppearance.normal.iconColor = UIColor.labelColor;
-    appearance.inlineLayoutAppearance.selected.iconColor = tabSelectionColor;
-    appearance.compactInlineLayoutAppearance.normal.iconColor = UIColor.labelColor;
-    appearance.compactInlineLayoutAppearance.selected.iconColor = tabSelectionColor;
+    for (UITabBarItemAppearance *itemAppearance in @[appearance.stackedLayoutAppearance,
+                                                     appearance.inlineLayoutAppearance,
+                                                     appearance.compactInlineLayoutAppearance]) {
+        itemAppearance.normal.iconColor = UIColor.labelColor;
+        itemAppearance.selected.iconColor = tabSelectionColor;
+        itemAppearance.normal.titleTextAttributes = @{
+            NSForegroundColorAttributeName: UIColor.labelColor,
+            NSFontAttributeName: [UIFont systemFontOfSize:10.0]
+        };
+        itemAppearance.selected.titleTextAttributes = @{
+            NSForegroundColorAttributeName: tabSelectionColor,
+            NSFontAttributeName: [UIFont systemFontOfSize:10.0]
+        };
+    }
     _tabBar.standardAppearance = appearance;
     _tabBar.scrollEdgeAppearance = appearance;
     [self addSubview:_tabBar];
@@ -980,13 +950,10 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     UIImpactFeedbackGenerator *generator =
         [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
     [generator impactOccurred];
-    [self wc_collapseAnimated:NO];
-    // Keep the sheet mounted: hiding the window while a sheet is presented
-    // breaks the sheet's internal gestures. Drop the window below WeChat's so
-    // the search page covers it; wc_update raises the level on dismissal.
-    self.sheetView.window.windowLevel = UIWindowLevelNormal - 5.0;
+    // The sheet stays mounted — the search page presents above it inside the
+    // same app window and simply covers it; returning reveals it natively.
     if (!WCLiquidGlassFloatingTabBarOpenGlobalSearch()) {
-        self.sheetView.window.windowLevel = UIWindowLevelNormal + 1.0;
+        [self wc_collapseAnimated:YES];
         WCLiquidGlassPerformActionIdentifier(WCLiquidGlassActionSearchRecords);
     }
 }
@@ -1065,13 +1032,19 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     NSUInteger count = MIN(4U, viewControllers.count);
     NSMutableArray<UITabBarItem *> *items = [NSMutableArray arrayWithCapacity:count];
     NSArray<NSString *> *symbols = @[@"message.fill", @"person.2.fill", @"safari.fill", @"person.fill"];
+    NSArray<NSString *> *titles = @[@"微信", @"通讯录", @"发现", @"我"];
+    BOOL hideTitles = WCLiquidGlassPreferences.floatingTabBarHideTabTitles;
     for (NSUInteger index = 0; index < count; index++) {
         UIImage *image = WCLiquidGlassNativeTabImage(tabController, index);
         if (!image) {
             image = [UIImage systemImageNamed:symbols[index]];
         }
         image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-        UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:nil image:image selectedImage:image];
+        UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:hideTitles ? nil : titles[index]
+                                                            image:image
+                                                    selectedImage:image];
+        // WCGlass nudges icons down by 6pt when titles are hidden.
+        item.imageInsets = hideTitles ? UIEdgeInsetsMake(6.0, 0.0, -6.0, 0.0) : UIEdgeInsetsZero;
         item.tag = index;
         NSString *badgeText = nil;
         BOOL badgeDot = NO;
@@ -1084,7 +1057,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         UITabBarItem *oldItem = self.sheetView.tabBar.items[index];
         UITabBarItem *newItem = items[index];
         itemsChanged = ![oldItem.image isEqual:newItem.image] ||
-            ![oldItem.selectedImage isEqual:newItem.selectedImage];
+            ![oldItem.selectedImage isEqual:newItem.selectedImage] ||
+            (oldItem.title != newItem.title && ![oldItem.title isEqualToString:newItem.title]);
     }
     if (itemsChanged) {
         self.sheetView.tabBar.items = items;
@@ -1167,9 +1141,9 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 
 @end
 
-@interface WCLiquidGlassFloatingTabBarController ()
-@property(nonatomic, strong) WCLiquidGlassFloatingTabBarWindow *window;
-@property(nonatomic, strong) WCLiquidGlassFloatingTabBarSheetViewController *sheetViewController;
+@interface WCLiquidGlassFloatingTabBarController () <UIGestureRecognizerDelegate>
+@property(nonatomic, strong) UITapGestureRecognizer *outsideTapRecognizer;
+@property(nonatomic, assign) BOOL sheetExpanded;
 @property(nonatomic, strong) NSHashTable<UIView *> *suppressedNativeViews;
 @property(nonatomic, strong) NSHashTable<UIScrollView *> *edgeEffectScrollViews;
 @property(nonatomic, strong) CADisplayLink *nativeSuppressionDisplayLink;
@@ -1229,7 +1203,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 }
 
 - (void)setNeedsUpdate {
-    if (self.updateScheduled || (WCLiquidGlassFloatingTabBarIsIdle() && !self.window)) {
+    if (self.updateScheduled || (WCLiquidGlassFloatingTabBarIsIdle() && !self.sheetViewController)) {
         return;
     }
     self.updateScheduled = YES;
@@ -1281,7 +1255,68 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 }
 
 - (void)wc_setSheetExpanded:(BOOL)expanded {
-    self.window.interceptsOutsideTouches = expanded;
+    self.sheetExpanded = expanded;
+    self.outsideTapRecognizer.enabled = expanded;
+}
+
+- (void)wc_outsideTap:(UITapGestureRecognizer *)recognizer {
+    (void)recognizer;
+    [self.sheetViewController wc_collapseAnimated:YES];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+       shouldReceiveTouch:(UITouch *)touch {
+    if (gestureRecognizer != self.outsideTapRecognizer || !self.sheetExpanded) {
+        return NO;
+    }
+    UIView *sheetView = self.sheetViewController.viewIfLoaded;
+    UIWindow *window = sheetView.window;
+    if (!window) {
+        return NO;
+    }
+    CGPoint point = [touch locationInView:window];
+    CGRect sheetFrame = [window convertRect:sheetView.bounds fromView:sheetView];
+    // The grabber sits just above the presented view's bounds.
+    sheetFrame.origin.y -= 24.0;
+    sheetFrame.size.height += 24.0;
+    return !CGRectContainsPoint(sheetFrame, point);
+}
+
+- (void)wc_installOutsideTapRecognizerIfNeeded {
+    UIWindow *window = self.sheetViewController.viewIfLoaded.window;
+    if (!window) {
+        return;
+    }
+    if (self.outsideTapRecognizer.view == window) {
+        self.outsideTapRecognizer.enabled = self.sheetExpanded;
+        return;
+    }
+    if (self.outsideTapRecognizer.view) {
+        [self.outsideTapRecognizer.view removeGestureRecognizer:self.outsideTapRecognizer];
+    }
+    self.outsideTapRecognizer =
+        [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(wc_outsideTap:)];
+    self.outsideTapRecognizer.delegate = self;
+    self.outsideTapRecognizer.cancelsTouchesInView = YES;
+    self.outsideTapRecognizer.enabled = self.sheetExpanded;
+    [window addGestureRecognizer:self.outsideTapRecognizer];
+}
+
+- (void)wc_teardownSheet {
+    WCLiquidGlassFloatingTabBarSheetViewController *sheetViewController = self.sheetViewController;
+    if (!sheetViewController) {
+        return;
+    }
+    sheetViewController.presentationController.containerView.hidden = YES;
+    if (!sheetViewController.presentedViewController) {
+        [sheetViewController.presentingViewController dismissViewControllerAnimated:NO completion:nil];
+        if (self.outsideTapRecognizer.view) {
+            [self.outsideTapRecognizer.view removeGestureRecognizer:self.outsideTapRecognizer];
+        }
+        self.outsideTapRecognizer = nil;
+        self.sheetViewController = nil;
+        self.sheetExpanded = NO;
+    }
 }
 
 - (void)wc_suppressNativeContent:(UITabBar *)tabBar {
@@ -1383,7 +1418,8 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         self.nativeSuppressionLastBadgeRefresh = displayLink.timestamp;
         [self.sheetViewController wc_refreshBadges];
     }
-    if (!self.window.hidden &&
+    UIView *sheetContainer = self.sheetViewController.presentationController.containerView;
+    if (sheetContainer && !sheetContainer.hidden &&
         (self.nativeSuppressionLastEdgeEffectScan <= 0.0 ||
          displayLink.timestamp - self.nativeSuppressionLastEdgeEffectScan >= 1.0)) {
         self.nativeSuppressionLastEdgeEffectScan = displayLink.timestamp;
@@ -1451,44 +1487,29 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     }
 }
 
-- (void)wc_ensureWindowForTabBar:(UITabBar *)tabBar {
-    UIWindowScene *scene = tabBar.window.windowScene;
-    if (!scene) {
+- (void)wc_ensureSheetForTabController:(id)tabController {
+    if (self.sheetViewController) {
+        [self wc_installOutsideTapRecognizerIfNeeded];
         return;
     }
-    if (self.window.windowScene != scene) {
-        self.window.hidden = YES;
-        self.window = nil;
-        self.sheetViewController = nil;
+    if (![tabController isKindOfClass:UIViewController.class]) {
+        return;
     }
-    if (!self.window) {
-        self.window = [[WCLiquidGlassFloatingTabBarWindow alloc] initWithWindowScene:scene];
-        self.window.windowLevel = UIWindowLevelNormal + 1.0;
-        self.window.backgroundColor = UIColor.clearColor;
-        UIViewController *rootViewController = [UIViewController new];
-        WCLiquidGlassFloatingPassthroughView *passthrough =
-            [WCLiquidGlassFloatingPassthroughView new];
-        __weak typeof(self) weakSelf = self;
-        void (^tapHandler)(void) = ^{
-            [weakSelf.sheetViewController wc_collapseAnimated:YES];
-        };
-        passthrough.tapHandler = tapHandler;
-        self.window.outsideTapHandler = tapHandler;
-        rootViewController.view = passthrough;
-        rootViewController.view.backgroundColor = UIColor.clearColor;
-        self.window.rootViewController = rootViewController;
+    UIViewController *presenter = (UIViewController *)tabController;
+    if (presenter.presentedViewController) {
+        // The sheet must sit at the bottom of the presentation chain so that
+        // WeChat's modals cover it; wait for the current one to go away.
+        return;
     }
-    self.window.frame = scene.coordinateSpace.bounds;
-    self.window.hidden = NO;
-    UIViewController *rootViewController = self.window.rootViewController;
-    if (!rootViewController.presentedViewController) {
-        self.sheetViewController = [[WCLiquidGlassFloatingTabBarSheetViewController alloc]
-            initWithController:self];
-        [self wc_configureSheet:self.sheetViewController];
-        self.window.sheetViewController = self.sheetViewController;
-        [rootViewController presentViewController:self.sheetViewController animated:NO completion:nil];
-        __weak WCLiquidGlassFloatingTabBarSheetViewController *weakSheetViewController =
-            self.sheetViewController;
+    self.sheetViewController = [[WCLiquidGlassFloatingTabBarSheetViewController alloc]
+        initWithController:self];
+    [self wc_configureSheet:self.sheetViewController];
+    self.sheetExpanded = NO;
+    __weak typeof(self) weakSelf = self;
+    __weak WCLiquidGlassFloatingTabBarSheetViewController *weakSheetViewController =
+        self.sheetViewController;
+    [presenter presentViewController:self.sheetViewController animated:NO completion:^{
+        [weakSelf wc_installOutsideTapRecognizerIfNeeded];
         dispatch_async(dispatch_get_main_queue(), ^{
             UISheetPresentationController *sheet = weakSheetViewController.sheetPresentationController;
             if (@available(iOS 16.0, *)) {
@@ -1497,9 +1518,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
                 }];
             }
         });
-    } else if (!self.window.sheetViewController) {
-        self.window.sheetViewController = rootViewController.presentedViewController;
-    }
+    }];
 }
 
 - (void)wc_update {
@@ -1512,11 +1531,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         WCLiquidGlassFloatingTabBarRestoreNativeContent(WCLiquidGlassFloatingTabBarTrackedTabBar);
         [self wc_stopNativeSuppressionDisplayLink];
         WCLiquidGlassFloatingTabBarTrackedTabBar = nil;
-        [self.sheetViewController wc_collapseAnimated:NO];
-        self.window.hidden = YES;
-        [self.window.rootViewController dismissViewControllerAnimated:NO completion:nil];
-        self.sheetViewController = nil;
-        self.window = nil;
+        [self wc_teardownSheet];
         self.hasBlockedState = NO;
         return;
     }
@@ -1544,23 +1559,15 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         WCLiquidGlassFloatingTabBarRestoreNativeContent(WCLiquidGlassFloatingTabBarTrackedTabBar);
         [self wc_stopNativeSuppressionDisplayLink];
         WCLiquidGlassFloatingTabBarTrackedTabBar = nil;
-        [self.sheetViewController wc_collapseAnimated:NO];
-        self.window.hidden = YES;
+        [self wc_teardownSheet];
         return;
     }
     if (!tabController || sceneInactive) {
-        if (WCLiquidGlassFloatingTabBarDismissalInProgress() && self.window) {
-            // A modal presented on the tracked tab controller is dismissing;
-            // the tab root is being revealed even though the app window
-            // cannot be resolved right now (e.g. it is not the key window).
-            self.window.windowLevel = UIWindowLevelNormal + 1.0;
-            self.window.hidden = NO;
-        }
         WCLiquidGlassFloatingTabBarSuppressNativeContent(tabBar);
         [self wc_startNativeSuppressionDisplayLink];
         return;
     }
-    [self wc_ensureWindowForTabBar:tabBar];
+    [self wc_ensureSheetForTabController:tabController];
     if (!self.sheetViewController) {
         return;
     }
@@ -1582,38 +1589,30 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         } @catch (__unused NSException *exception) {
         }
     }
+    if (presented == (UIViewController *)self.sheetViewController) {
+        presented = self.sheetViewController.presentedViewController;
+    }
+    BOOL covering = presented != nil;
     BOOL dismissalInProgress = WCLiquidGlassFloatingTabBarDismissalInProgress();
     if (!presented || (!dismissalInProgress && !presented.isBeingDismissed)) {
         WCLiquidGlassFloatingTabBarDismissalStart = 0.0;
         dismissalInProgress = NO;
     }
-    BOOL hasPresentedController = presented != nil && !presented.isBeingDismissed &&
-        !dismissalInProgress;
     BOOL nativeHidden = tabBar.hidden && !WCLiquidGlassFloatingTabBarHidesNativeTabBar;
-    BOOL tabBarOnScreen = tabBar.window != nil &&
-        tabBar.alpha > 0.01 &&
-        CGRectGetMinY(tabBar.frame) < CGRectGetMaxY(tabBar.superview.bounds) - 1.0;
-    BOOL visible = (tabBarOnScreen || dismissalInProgress) &&
-        !nativeHidden &&
-        (dismissalInProgress || WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController)) &&
-        !hasPresentedController;
-    BOOL shouldHideNative = tabBar.window != nil &&
-        !nativeHidden &&
-        !WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController);
+    BOOL atRoot = WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController);
+    BOOL shouldHideNative = tabBar.window != nil && !nativeHidden && !atRoot;
     if (shouldHideNative && !WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
         WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, YES);
     } else if (!shouldHideNative && WCLiquidGlassFloatingTabBarHidesNativeTabBar) {
         WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, NO);
     }
-    // While a presented controller covers WeChat keep our window mounted but
-    // below the app window so the sheet's gestures stay alive and dismissal
-    // restores the bar instantly; the sheet stays presented the whole time.
-    self.window.windowLevel = hasPresentedController
-        ? UIWindowLevelNormal - 5.0
-        : UIWindowLevelNormal + 1.0;
-    self.window.hidden = !visible && !hasPresentedController;
+    // The sheet lives inside WeChat's window below any presented modal
+    // (global search), which covers and reveals it natively — no timing
+    // needed. Only secondary pages hide the sheet's presentation container.
+    UIView *container = self.sheetViewController.presentationController.containerView;
+    container.hidden = (!atRoot || nativeHidden) && !covering;
     [self wc_startNativeSuppressionDisplayLink];
-    if (!visible) {
+    if (container.hidden) {
         [self.sheetViewController wc_collapseAnimated:NO];
     }
 }
@@ -1679,6 +1678,10 @@ static void WCLiquidGlassFloatingTabBarDismissViewController(UIViewController *s
     UIViewController *dismissed = self.presentedViewController;
     if (!dismissed && self.presentingViewController) {
         dismissed = self;
+    }
+    if (dismissed ==
+        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController) {
+        dismissed = nil;
     }
     UITabBar *tracked = WCLiquidGlassFloatingTabBarTrackedTabBar;
     if (dismissed && tracked) {

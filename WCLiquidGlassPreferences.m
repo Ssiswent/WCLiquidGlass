@@ -50,6 +50,7 @@ static NSString *const WCLiquidGlassUnreadMessageTipGlassEnabledKey = @"WCLiquid
 static NSString *const WCLiquidGlassMessageSwipeActionsEnabledKey = @"WCLiquidGlass.MessageSwipeActionsEnabled";
 static NSString *const WCLiquidGlassFloatingTabBarEnabledKey = @"WCLiquidGlass.FloatingTabBar.Enabled";
 static NSString *const WCLiquidGlassFloatingTabBarSearchEnabledKey = @"WCLiquidGlass.FloatingTabBar.SearchEnabled";
+static NSString *const WCLiquidGlassFloatingTabBarHideTabTitlesKey = @"WCLiquidGlass.FloatingTabBar.HideTabTitles";
 static NSString *const WCLiquidGlassMessageSwipeMenuElementSizeKey = @"WCLiquidGlass.MessageSwipe.MenuElementSize";
 static NSString *const WCLiquidGlassMessageNotificationCornerRadiusKey = @"WCLiquidGlass.MessageNotification.CornerRadius";
 static NSString *const WCLiquidGlassMessageNotificationPaddingKey = @"WCLiquidGlass.MessageNotification.Padding";
@@ -109,6 +110,7 @@ static NSArray<NSString *> *WCLiquidGlassConfigurationKeys(void) {
             WCLiquidGlassMessageSwipeActionsEnabledKey,
             WCLiquidGlassFloatingTabBarEnabledKey,
             WCLiquidGlassFloatingTabBarSearchEnabledKey,
+            WCLiquidGlassFloatingTabBarHideTabTitlesKey,
             WCLiquidGlassMessageSwipeMenuElementSizeKey,
             WCLiquidGlassMessageNotificationCornerRadiusKey,
             WCLiquidGlassMessageNotificationPaddingKey,
@@ -413,6 +415,7 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassMessageSwipeActionsEnabledKey: @NO,
         WCLiquidGlassFloatingTabBarEnabledKey: @NO,
         WCLiquidGlassFloatingTabBarSearchEnabledKey: @YES,
+        WCLiquidGlassFloatingTabBarHideTabTitlesKey: @YES,
         WCLiquidGlassMessageSwipeMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
         WCLiquidGlassMessageNotificationCornerRadiusKey: @36.0,
         WCLiquidGlassMessageNotificationPaddingKey: @8.0,
@@ -638,6 +641,15 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setFloatingTabBarSearchEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassFloatingTabBarSearchEnabledKey];
+    WCLiquidGlassNotifyPreferencesChanged();
+}
+
++ (BOOL)floatingTabBarHideTabTitles {
+    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassFloatingTabBarHideTabTitlesKey];
+}
+
++ (void)setFloatingTabBarHideTabTitles:(BOOL)hidden {
+    [NSUserDefaults.standardUserDefaults setBool:hidden forKey:WCLiquidGlassFloatingTabBarHideTabTitlesKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 

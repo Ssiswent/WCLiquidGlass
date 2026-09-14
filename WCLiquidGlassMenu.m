@@ -299,8 +299,19 @@ static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *co
     if (!controller) {
         return nil;
     }
-    if (controller.presentedViewController) {
-        return WCLiquidGlassVisibleControllerFrom(controller.presentedViewController);
+    UIViewController *presentedController = controller.presentedViewController;
+    if (presentedController &&
+        [NSStringFromClass(presentedController.class)
+            containsString:@"WCLiquidGlassFloatingTabBar"]) {
+        // Our floating tab bar sheet is chrome, not content: look through it.
+        UIViewController *above = presentedController.presentedViewController;
+        if (above) {
+            return WCLiquidGlassVisibleControllerFrom(above);
+        }
+        presentedController = nil;
+    }
+    if (presentedController) {
+        return WCLiquidGlassVisibleControllerFrom(presentedController);
     }
     if ([controller isKindOfClass:UINavigationController.class]) {
         return WCLiquidGlassVisibleControllerFrom(((UINavigationController *)controller).visibleViewController);
