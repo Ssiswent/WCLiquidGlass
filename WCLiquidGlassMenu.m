@@ -301,7 +301,7 @@ static UIViewController *WCLiquidGlassEffectivePresentedController(UIViewControl
     UIViewController *presented = controller.presentedViewController;
     for (NSUInteger depth = 0; presented && depth < 8; depth++) {
         if (![NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
-            break;
+            return presented;
         }
         UIViewController *next = presented.presentedViewController;
         if (next == presented) {
@@ -309,15 +309,16 @@ static UIViewController *WCLiquidGlassEffectivePresentedController(UIViewControl
         }
         presented = next;
     }
-    if (presented &&
-        [NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
-        return nil;
-    }
-    return presented;
+    return nil;
+}
+
+static BOOL WCLiquidGlassIsFloatingTabBarChrome(UIViewController *controller) {
+    return controller &&
+        [NSStringFromClass(controller.class) containsString:@"WCLiquidGlassFloatingTabBar"];
 }
 
 static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *controller) {
-    if (!controller) {
+    if (!controller || WCLiquidGlassIsFloatingTabBarChrome(controller)) {
         return nil;
     }
     UIViewController *presentedController = WCLiquidGlassEffectivePresentedController(controller);
@@ -340,7 +341,7 @@ static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *co
 }
 
 static UITabBarController *WCLiquidGlassFindTabController(UIViewController *controller) {
-    if (!controller) {
+    if (!controller || WCLiquidGlassIsFloatingTabBarChrome(controller)) {
         return nil;
     }
     if ([controller isKindOfClass:UITabBarController.class]) {
@@ -361,7 +362,7 @@ static UITabBarController *WCLiquidGlassFindTabController(UIViewController *cont
 }
 
 static id WCLiquidGlassFindMMTabController(UIViewController *controller) {
-    if (!controller) {
+    if (!controller || WCLiquidGlassIsFloatingTabBarChrome(controller)) {
         return nil;
     }
     if ([NSStringFromClass(controller.class) containsString:@"MMTabBarController"]) {

@@ -110,14 +110,17 @@ static UIViewController *WCLiquidGlassFloatingTabBarControllerForTabBar(UITabBar
 // Same traversal as WCLiquidGlassVisibleControllerFrom, but a presented
 // controller that is currently being dismissed is skipped: during a dismiss
 // transition the presenter becomes the visible controller immediately.
+static BOOL WCLiquidGlassFloatingTabBarIsChrome(UIViewController *controller) {
+    return controller &&
+        [NSStringFromClass(controller.class) containsString:@"WCLiquidGlassFloatingTabBar"];
+}
+
 static UIViewController *WCLiquidGlassFloatingTabBarVisibleController(UIViewController *controller) {
-    if (!controller) {
+    if (!controller || WCLiquidGlassFloatingTabBarIsChrome(controller)) {
         return nil;
     }
     UIViewController *presented = controller.presentedViewController;
-    UIViewController *sheetViewController =
-        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
-    if (presented == sheetViewController) {
+    if (WCLiquidGlassFloatingTabBarIsChrome(presented)) {
         // Our sheet is chrome, not content: look through it to whatever is
         // presented above it, then fall through to the presenter's own
         // hierarchy (the tab root sits below the sheet).
@@ -172,14 +175,13 @@ static BOOL WCLiquidGlassFloatingTabBarIsAtTabRoot(id tabController) {
     // Every descendant of the presenter reports our sheet as its
     // presentedViewController; look past it to the real content.
     UIViewController *presented = tabRootController.presentedViewController;
-    UIViewController *sheet =
-        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
-    for (NSUInteger depth = 0; presented == sheet && depth < 8; depth++) {
+    for (NSUInteger depth = 0;
+         WCLiquidGlassFloatingTabBarIsChrome(presented) && depth < 8;
+         depth++) {
         presented = presented.presentedViewController;
-        if (presented == sheet) {
-            presented = nil;
-            break;
-        }
+    }
+    if (WCLiquidGlassFloatingTabBarIsChrome(presented)) {
+        presented = nil;
     }
     if (presented && !presented.isBeingDismissed &&
         !WCLiquidGlassFloatingTabBarDismissalInProgress()) {
@@ -1625,9 +1627,13 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     // and WCGlass may keep the native bar hidden on the root page.
     UIView *container = self.sheetViewController.presentationController.containerView;
     container.hidden = !atRoot && !covering;
+    UIViewController *visibleController = WCLiquidGlassFloatingTabBarVisibleController(
+        WCLiquidGlassApplicationWindow().rootViewController);
     NSString *visibilityState = [NSString stringWithFormat:
-        @"FloatingTabBar vis: atRoot=%d cover=%d nativeHidden=%d containerHidden=%d tabHidden=%d",
-        atRoot, covering, nativeHidden, container.hidden, tabBar.hidden];
+        @"FloatingTabBar vis: atRoot=%d cover=%d nativeHidden=%d containerHidden=%d "
+        @"tabHidden=%d visible=%@",
+        atRoot, covering, nativeHidden, container.hidden, tabBar.hidden,
+        visibleController ? NSStringFromClass(visibleController.class) : @"nil"];
     if (![visibilityState isEqualToString:self.lastVisibilityState]) {
         self.lastVisibilityState = visibilityState;
         [WCLiquidGlassCrashLogger.sharedLogger recordEvent:visibilityState];
