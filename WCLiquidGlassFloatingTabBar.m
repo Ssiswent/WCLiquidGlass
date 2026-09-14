@@ -476,15 +476,14 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
     if (!sheetView || sheetView.window != self || sheetView.hidden) {
         return nil;
     }
-    CGPoint local = [self convertPoint:point toView:sheetView];
-    if (![sheetView pointInside:local withEvent:event]) {
+    // Native hit-testing first: the sheet's chrome (grabber etc.) lives in
+    // UIKit's container, not in sheetView's subtree, so forwarding touches
+    // only into sheetView starves the grabber of its gestures.
+    UIView *hit = [super hitTest:point withEvent:event];
+    if (!hit || hit == self.rootViewController.view) {
         return self.interceptsOutsideTouches ? self.rootViewController.view : nil;
     }
-    UIView *hitView = [sheetView hitTest:local withEvent:event];
-    if (!hitView && self.interceptsOutsideTouches) {
-        return self.rootViewController.view;
-    }
-    return hitView;
+    return hit;
 }
 
 @end
@@ -1550,6 +1549,13 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         return;
     }
     if (!tabController || sceneInactive) {
+        if (WCLiquidGlassFloatingTabBarDismissalInProgress() && self.window) {
+            // A modal presented on the tracked tab controller is dismissing;
+            // the tab root is being revealed even though the app window
+            // cannot be resolved right now (e.g. it is not the key window).
+            self.window.windowLevel = UIWindowLevelNormal + 1.0;
+            self.window.hidden = NO;
+        }
         WCLiquidGlassFloatingTabBarSuppressNativeContent(tabBar);
         [self wc_startNativeSuppressionDisplayLink];
         return;
@@ -1589,7 +1595,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         CGRectGetMinY(tabBar.frame) < CGRectGetMaxY(tabBar.superview.bounds) - 1.0;
     BOOL visible = (tabBarOnScreen || dismissalInProgress) &&
         !nativeHidden &&
-        WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController) &&
+        (dismissalInProgress || WCLiquidGlassFloatingTabBarIsAtTabRoot(tabController)) &&
         !hasPresentedController;
     BOOL shouldHideNative = tabBar.window != nil &&
         !nativeHidden &&
