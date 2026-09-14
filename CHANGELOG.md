@@ -1,5 +1,10 @@
 # 更新日志
 
+## [2.2.11] - 2026-09-14
+
+- 打开搜索页时不再隐藏悬浮底栏窗口，改为把窗口层级压到微信窗口之下让搜索页直接盖在上面：sheet 保持完整挂载，修复小横条手势失效；同时消除 dismiss/unhide 时序问题。
+- 新增 `viewWillDisappear:` hook 作为退出信号补充：边缘返回手势开始时 presented 控制器必收 viewWillDisappear，命中即抬升窗口层级、立刻显示底栏；标志窗口放宽到 2.5 秒以覆盖慢速拖动。
+
 ## [2.2.10] - 2026-09-08
 
 - 新增 `dismissViewControllerAnimated:` hook：微信全局搜索等 modal 页面开始退出（含边缘手势/自定义转场，isBeingDismissed 可能不被设置）的瞬间即恢复悬浮底栏；判定可见控制器与"是否有弹出页"时把正在退出的 presented 控制器视为已消失。
