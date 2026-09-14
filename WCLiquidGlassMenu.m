@@ -323,13 +323,27 @@ static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *co
     }
     UIViewController *presentedController = WCLiquidGlassEffectivePresentedController(controller);
     if (presentedController) {
-        return WCLiquidGlassVisibleControllerFrom(presentedController);
+        UIViewController *presentedVisible =
+            WCLiquidGlassVisibleControllerFrom(presentedController);
+        if (presentedVisible) {
+            return presentedVisible;
+        }
     }
+    // A nil result means the branch led to our own chrome; fall through to the
+    // remaining traversal instead of reporting "no visible controller".
     if ([controller isKindOfClass:UINavigationController.class]) {
-        return WCLiquidGlassVisibleControllerFrom(((UINavigationController *)controller).visibleViewController);
+        UIViewController *navVisible = WCLiquidGlassVisibleControllerFrom(
+            ((UINavigationController *)controller).visibleViewController);
+        if (navVisible) {
+            return navVisible;
+        }
     }
     if ([controller isKindOfClass:UITabBarController.class]) {
-        return WCLiquidGlassVisibleControllerFrom(((UITabBarController *)controller).selectedViewController);
+        UIViewController *tabVisible = WCLiquidGlassVisibleControllerFrom(
+            ((UITabBarController *)controller).selectedViewController);
+        if (tabVisible) {
+            return tabVisible;
+        }
     }
     for (UIViewController *child in controller.childViewControllers) {
         UIViewController *visibleChild = WCLiquidGlassVisibleControllerFrom(child);

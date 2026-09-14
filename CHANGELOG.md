@@ -1,5 +1,10 @@
 # 更新日志
 
+## [2.2.17] - 2026-09-14
+
+- 修复"当前可见控制器"解析为 nil：2.2.16 的入口守卫会让 nav/tab/presented 分支在撞到 sheet 时直接返回 nil，遍历提前结束。现在分支为空时继续回退到子控制器遍历，保证解析到真实页面。
+- 可见性日志追加 root 与 selectedViewController 类名。
+
 ## [2.2.16] - 2026-09-14
 
 - 修复底栏不显示与悬浮菜单只剩诊断项：2.2.15 的日志显示"当前可见控制器"仍解析为 sheet 本身——iOS 26/27 下 sheet 会出现在 presenter 的子控制器遍历里，只跳过 presentedViewController 链不够。现在所有控制器遍历（VisibleControllerFrom / FindTabController / FindMMTabController / 悬浮底栏自己的遍历）在入口直接把 sheet 当装饰层返回 nil。

@@ -132,15 +132,27 @@ static UIViewController *WCLiquidGlassFloatingTabBarVisibleController(UIViewCont
     }
     if (presented && !presented.isBeingDismissed &&
         !WCLiquidGlassFloatingTabBarDismissalInProgress()) {
-        return WCLiquidGlassFloatingTabBarVisibleController(presented);
+        UIViewController *presentedVisible =
+            WCLiquidGlassFloatingTabBarVisibleController(presented);
+        if (presentedVisible) {
+            return presentedVisible;
+        }
     }
+    // A nil result means the branch led to our own chrome; fall through to the
+    // remaining traversal instead of reporting "no visible controller".
     if ([controller isKindOfClass:UINavigationController.class]) {
-        return WCLiquidGlassFloatingTabBarVisibleController(
+        UIViewController *navVisible = WCLiquidGlassFloatingTabBarVisibleController(
             ((UINavigationController *)controller).visibleViewController);
+        if (navVisible) {
+            return navVisible;
+        }
     }
     if ([controller isKindOfClass:UITabBarController.class]) {
-        return WCLiquidGlassFloatingTabBarVisibleController(
+        UIViewController *tabVisible = WCLiquidGlassFloatingTabBarVisibleController(
             ((UITabBarController *)controller).selectedViewController);
+        if (tabVisible) {
+            return tabVisible;
+        }
     }
     for (UIViewController *child in controller.childViewControllers) {
         UIViewController *visibleChild = WCLiquidGlassFloatingTabBarVisibleController(child);
@@ -1627,13 +1639,18 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     // and WCGlass may keep the native bar hidden on the root page.
     UIView *container = self.sheetViewController.presentationController.containerView;
     container.hidden = !atRoot && !covering;
-    UIViewController *visibleController = WCLiquidGlassFloatingTabBarVisibleController(
-        WCLiquidGlassApplicationWindow().rootViewController);
+    UIViewController *rootController = WCLiquidGlassApplicationWindow().rootViewController;
+    UIViewController *visibleController =
+        WCLiquidGlassFloatingTabBarVisibleController(rootController);
+    id selectedController = WCLiquidGlassFloatingTabBarObjectValue(
+        tabController, @selector(selectedViewController));
     NSString *visibilityState = [NSString stringWithFormat:
         @"FloatingTabBar vis: atRoot=%d cover=%d nativeHidden=%d containerHidden=%d "
-        @"tabHidden=%d visible=%@",
+        @"tabHidden=%d root=%@ visible=%@ selected=%@",
         atRoot, covering, nativeHidden, container.hidden, tabBar.hidden,
-        visibleController ? NSStringFromClass(visibleController.class) : @"nil"];
+        rootController ? NSStringFromClass(rootController.class) : @"nil",
+        visibleController ? NSStringFromClass(visibleController.class) : @"nil",
+        selectedController ? NSStringFromClass([selectedController class]) : @"nil"];
     if (![visibilityState isEqualToString:self.lastVisibilityState]) {
         self.lastVisibilityState = visibilityState;
         [WCLiquidGlassCrashLogger.sharedLogger recordEvent:visibilityState];
