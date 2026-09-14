@@ -299,9 +299,19 @@ UIWindow *WCLiquidGlassApplicationWindow(void) {
 // presentation chain past it to the real content controller.
 static UIViewController *WCLiquidGlassEffectivePresentedController(UIViewController *controller) {
     UIViewController *presented = controller.presentedViewController;
-    while (presented &&
-           [NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
-        presented = presented.presentedViewController;
+    for (NSUInteger depth = 0; presented && depth < 8; depth++) {
+        if (![NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
+            break;
+        }
+        UIViewController *next = presented.presentedViewController;
+        if (next == presented) {
+            break;
+        }
+        presented = next;
+    }
+    if (presented &&
+        [NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
+        return nil;
     }
     return presented;
 }
@@ -3118,6 +3128,17 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
             canPerform) {
             [visibleItems addObject:item];
         }
+    }
+    if (visibleItems.count <= 1) {
+        UIViewController *visibleController = WCLiquidGlassVisibleController();
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:
+            [NSString stringWithFormat:
+                @"Menu items filtered: count=%lu showsTab=%d visible=%@ tabCtl=%@ nav=%@",
+                (unsigned long)visibleItems.count, showsTabActions,
+                visibleController ? NSStringFromClass(visibleController.class) : @"nil",
+                tabController ? NSStringFromClass([tabController class]) : @"nil",
+                visibleController.navigationController
+                    ? NSStringFromClass(visibleController.navigationController.class) : @"nil"]];
     }
     return visibleItems.copy;
 }

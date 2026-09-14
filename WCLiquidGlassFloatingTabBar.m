@@ -174,8 +174,12 @@ static BOOL WCLiquidGlassFloatingTabBarIsAtTabRoot(id tabController) {
     UIViewController *presented = tabRootController.presentedViewController;
     UIViewController *sheet =
         (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
-    while (presented && presented == sheet) {
+    for (NSUInteger depth = 0; presented == sheet && depth < 8; depth++) {
         presented = presented.presentedViewController;
+        if (presented == sheet) {
+            presented = nil;
+            break;
+        }
     }
     if (presented && !presented.isBeingDismissed &&
         !WCLiquidGlassFloatingTabBarDismissalInProgress()) {
@@ -1162,6 +1166,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, assign) BOOL appInactive;
 @property(nonatomic, assign) BOOL lastBlockedState;
 @property(nonatomic, assign) BOOL hasBlockedState;
+@property(nonatomic, copy) NSString *lastVisibilityState;
 @end
 
 @implementation WCLiquidGlassFloatingTabBarController
@@ -1616,8 +1621,17 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     // The sheet lives inside WeChat's window below any presented modal
     // (global search), which covers and reveals it natively — no timing
     // needed. Only secondary pages hide the sheet's presentation container.
+    // nativeHidden is intentionally NOT consulted: we replace the native bar,
+    // and WCGlass may keep the native bar hidden on the root page.
     UIView *container = self.sheetViewController.presentationController.containerView;
-    container.hidden = (!atRoot || nativeHidden) && !covering;
+    container.hidden = !atRoot && !covering;
+    NSString *visibilityState = [NSString stringWithFormat:
+        @"FloatingTabBar vis: atRoot=%d cover=%d nativeHidden=%d containerHidden=%d tabHidden=%d",
+        atRoot, covering, nativeHidden, container.hidden, tabBar.hidden];
+    if (![visibilityState isEqualToString:self.lastVisibilityState]) {
+        self.lastVisibilityState = visibilityState;
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:visibilityState];
+    }
     [self wc_startNativeSuppressionDisplayLink];
     if (container.hidden) {
         [self.sheetViewController wc_collapseAnimated:NO];

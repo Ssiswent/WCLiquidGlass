@@ -1,5 +1,11 @@
 # 更新日志
 
+## [2.2.15] - 2026-09-14
+
+- 修复底栏完全不显示：可见性判定中移除 nativeHidden 一票否决——WCGlass 会长期保持原生 MMTabBar hidden，不应据此隐藏我们的 sheet；一级页面判断、覆盖判断不变。
+- 菜单只剩诊断项的诊断支持：新增状态日志（FloatingTabBar vis / Menu items filtered）记录 atRoot/cover/hidden 与过滤输入，下一次层级诊断可直接定位剩余问题。
+- presentedViewController 穿透循环加防环保护。
+
 ## [2.2.14] - 2026-09-14
 
 - 修复 2.2.13 底栏完全不显示、悬浮菜单只剩诊断项：UIKit 会让 present 链上所有祖先/兄弟控制器的 presentedViewController 都返回我们的 sheet，导致"是否在一级页面/是否有内容弹出"的判定全部误判为有弹出页。新增统一的"有效 presented 控制器"解析（跳过 sheet 装饰层），应用于可见控制器遍历、IsAtCurrentTabRoot、tabRoot presented 检查、FindTabController/FindMMTabController。
