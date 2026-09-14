@@ -43,6 +43,7 @@ static void (*WCLiquidGlassFloatingTabBarOriginalDidAddSubview)(UITabBar *, SEL,
 static void (*WCLiquidGlassFloatingTabBarOriginalWillMoveToWindow)(UITabBar *, SEL, UIWindow *);
 static void (*WCLiquidGlassFloatingTabBarOriginalSetBadgeValue)(UITabBarItem *, SEL, NSString *);
 static void (*WCLiquidGlassFloatingTabBarOriginalDismissViewController)(UIViewController *, SEL, BOOL, void (^)(void));
+static void (*WCLiquidGlassFloatingTabBarOriginalPresentViewController)(UIViewController *, SEL, UIViewController *, BOOL, void (^)(void));
 
 static BOOL WCLiquidGlassFloatingTabBarDismissalInProgress(void) {
     return WCLiquidGlassFloatingTabBarDismissalStart > 0.0 &&
@@ -1443,6 +1444,10 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         displayLink.timestamp - self.nativeSuppressionLastBadgeRefresh >= 0.25) {
         self.nativeSuppressionLastBadgeRefresh = displayLink.timestamp;
         [self.sheetViewController wc_refreshBadges];
+        // Self-heal: navigation paths that emit none of the hooked events
+        // (custom transitions, restored controllers) used to leave the bar
+        // hidden until the next unrelated event.
+        [self setNeedsUpdate];
     }
     UIView *sheetContainer = self.sheetViewController.presentationController.containerView;
     if (sheetContainer && !sheetContainer.hidden &&
@@ -1719,12 +1724,24 @@ static void WCLiquidGlassFloatingTabBarDismissViewController(UIViewController *s
                                                              SEL selector,
                                                              BOOL flag,
                                                              void (^completion)(void)) {
+    UIViewController *sheet =
+        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
+    if (sheet && self.presentedViewController == sheet && sheet.presentedViewController) {
+        // WeChat asks its own controller to dismiss what it believes it
+        // presented; only the modals stacked above our sheet should go.
+        if (WCLiquidGlassFloatingTabBarOriginalDismissViewController) {
+            WCLiquidGlassFloatingTabBarDismissalStart = CACurrentMediaTime();
+            [WCLiquidGlassFloatingTabBarController.sharedController setNeedsUpdate];
+            WCLiquidGlassFloatingTabBarOriginalDismissViewController(sheet, selector, flag,
+                                                                      completion);
+            return;
+        }
+    }
     UIViewController *dismissed = self.presentedViewController;
     if (!dismissed && self.presentingViewController) {
         dismissed = self;
     }
-    if (dismissed ==
-        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController) {
+    if (dismissed == sheet) {
         dismissed = nil;
     }
     UITabBar *tracked = WCLiquidGlassFloatingTabBarTrackedTabBar;
@@ -1844,6 +1861,46 @@ static void WCLiquidGlassFloatingTabBarWillMoveToWindow(UITabBar *self,
     }
 }
 
+// Our sheet occupies the presentation slot of WeChat's controllers, so UIKit
+// would refuse any modal WeChat presents from them (the global search page
+// never appeared). Forward such presentations to the top of the sheet's own
+// chain — the modal then covers the bar, which is the desired layering — and
+// route the matching dismissals back to the same controller.
+static UIViewController *WCLiquidGlassFloatingTabBarPresentationRedirect(UIViewController *presenter,
+                                                                          UIViewController *presented) {
+    UIViewController *sheet =
+        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
+    if (!sheet || presenter == sheet || WCLiquidGlassFloatingTabBarIsChrome(presented)) {
+        return nil;
+    }
+    if (presenter.presentedViewController != sheet) {
+        return nil;
+    }
+    UIViewController *target = sheet;
+    for (NSUInteger depth = 0; target.presentedViewController && depth < 8; depth++) {
+        target = target.presentedViewController;
+    }
+    return target == presenter ? nil : target;
+}
+
+static void WCLiquidGlassFloatingTabBarPresentViewController(UIViewController *self,
+                                                               SEL selector,
+                                                               UIViewController *controller,
+                                                               BOOL animated,
+                                                               void (^completion)(void)) {
+    UIViewController *target =
+        WCLiquidGlassFloatingTabBarPresentationRedirect(self, controller);
+    if (target && WCLiquidGlassFloatingTabBarOriginalPresentViewController) {
+        WCLiquidGlassFloatingTabBarOriginalPresentViewController(target, selector, controller,
+                                                                  animated, completion);
+        return;
+    }
+    if (WCLiquidGlassFloatingTabBarOriginalPresentViewController) {
+        WCLiquidGlassFloatingTabBarOriginalPresentViewController(self, selector, controller,
+                                                                  animated, completion);
+    }
+}
+
 static void WCLiquidGlassFloatingTabBarSetBadgeValue(UITabBarItem *self,
                                                       SEL selector,
                                                       NSString *badgeValue) {
@@ -1866,6 +1923,8 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     Method viewDidDisappearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewDidDisappear:));
     Method viewWillDisappearMethod = class_getInstanceMethod(UIViewController.class, @selector(viewWillDisappear:));
     Method dismissMethod = class_getInstanceMethod(UIViewController.class, @selector(dismissViewControllerAnimated:completion:));
+    Method presentMethod = class_getInstanceMethod(
+        UIViewController.class, @selector(presentViewController:animated:completion:));
     Method selectedIndexMethod = class_getInstanceMethod(UITabBarController.class, @selector(setSelectedIndex:));
     Method selectedControllerMethod =
         class_getInstanceMethod(UITabBarController.class, @selector(setSelectedViewController:));
@@ -1877,7 +1936,7 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     Method willMoveToWindowMethod = class_getInstanceMethod(UITabBar.class, @selector(willMoveToWindow:));
     Method badgeValueMethod = class_getInstanceMethod(UITabBarItem.class, @selector(setBadgeValue:));
     if (!viewDidAppearMethod || !viewWillAppearMethod || !viewDidDisappearMethod ||
-        !viewWillDisappearMethod || !dismissMethod ||
+        !viewWillDisappearMethod || !dismissMethod || !presentMethod ||
         !selectedIndexMethod || !selectedControllerMethod || !layoutMethod || !hiddenMethod ||
         !frameMethod || !movedMethod || !didAddSubviewMethod || !willMoveToWindowMethod ||
         !badgeValueMethod) {
@@ -1908,6 +1967,9 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
     MSHookMessageEx(UIViewController.class, @selector(dismissViewControllerAnimated:completion:),
                     (IMP)&WCLiquidGlassFloatingTabBarDismissViewController,
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalDismissViewController);
+    MSHookMessageEx(UIViewController.class, @selector(presentViewController:animated:completion:),
+                    (IMP)&WCLiquidGlassFloatingTabBarPresentViewController,
+                    (IMP *)&WCLiquidGlassFloatingTabBarOriginalPresentViewController);
     MSHookMessageEx(UITabBarController.class, @selector(setSelectedIndex:),
                     (IMP)&WCLiquidGlassFloatingTabBarSetSelectedIndex,
                     (IMP *)&WCLiquidGlassFloatingTabBarOriginalSetSelectedIndex);
@@ -1941,6 +2003,7 @@ void WCLiquidGlassInstallFloatingTabBarHooks(void) {
         WCLiquidGlassFloatingTabBarOriginalViewDidDisappear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalViewWillDisappear != NULL &&
         WCLiquidGlassFloatingTabBarOriginalDismissViewController != NULL &&
+        WCLiquidGlassFloatingTabBarOriginalPresentViewController != NULL &&
         WCLiquidGlassFloatingTabBarOriginalSetSelectedIndex != NULL &&
         WCLiquidGlassFloatingTabBarOriginalSetSelectedViewController != NULL &&
         WCLiquidGlassFloatingTabBarOriginalLayoutSubviews != NULL &&
