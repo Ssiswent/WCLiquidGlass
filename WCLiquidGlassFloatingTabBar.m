@@ -696,6 +696,13 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
 
 @interface WCLiquidGlassFloatingNativeTabBar : UITabBar
 @property(nonatomic, weak) WCLiquidGlassFloatingTabBarSheetView *sheetView;
+// Titles and badges are drawn by the tweak: a stand-alone UITabBar using the
+// floating visual provider renders neither, which is also why WCGlass draws
+// both itself.
+@property(nonatomic, copy) NSArray<NSString *> *itemTitles;
+@property(nonatomic, copy) NSArray *badgeValues;
+@property(nonatomic, assign) BOOL showsTitles;
+- (UIView *)wc_platterView;
 @end
 
 static BOOL WCLiquidGlassFloatingTabBarIsIdle(void) {
@@ -743,34 +750,165 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 - (void)wc_collapseAnimated:(BOOL)animated;
 @end
 
-@implementation WCLiquidGlassFloatingNativeTabBar
+@implementation WCLiquidGlassFloatingNativeTabBar {
+    UIView *_overlay;
+    NSMutableArray<UILabel *> *_titleLabels;
+    NSMutableArray<UILabel *> *_badgeLabels;
+    NSMutableArray<UIView *> *_badgeDots;
+}
 
-static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
-    if ([view isKindOfClass:UILabel.class] &&
-        [NSStringFromClass(view.class) rangeOfString:@"Label"].location != NSNotFound) {
-        UILabel *label = (UILabel *)view;
-        if (label.hidden) {
-            label.hidden = NO;
+static const CGFloat WCLiquidGlassFloatingTabBarIconSize = 27.0;
+static const CGFloat WCLiquidGlassFloatingTabBarTitleIconLift = 8.0;
+
+static UIColor *WCLiquidGlassFloatingTabBarBadgeColor(void) {
+    return [UIColor colorWithRed:0.980 green:0.318 blue:0.318 alpha:1.0];
+}
+
+- (UIView *)wc_platterView {
+    if (CGRectGetWidth(self.bounds) <= 0.0) {
+        return nil;
+    }
+    for (UIView *subview in self.subviews) {
+        if (subview == _overlay) {
+            continue;
         }
-        if (CGRectGetHeight(label.bounds) == 0.0) {
-            CGRect frame = label.frame;
-            frame.origin.y = 37.0;
-            frame.size.height = 16.0;
-            label.frame = frame;
+        if (CGRectGetWidth(subview.bounds) > CGRectGetWidth(self.bounds) * 0.8 &&
+            CGRectGetHeight(subview.bounds) > 50.0 &&
+            CGRectGetHeight(subview.bounds) < CGRectGetHeight(self.bounds)) {
+            return subview;
         }
     }
-    for (UIView *subview in view.subviews) {
-        WCLiquidGlassFloatingTabBarRestoreItemLabels(subview);
+    return nil;
+}
+
+- (void)setBadgeValues:(NSArray *)badgeValues {
+    if (_badgeValues == badgeValues || [_badgeValues isEqualToArray:badgeValues]) {
+        return;
     }
+    _badgeValues = [badgeValues copy];
+    [self setNeedsLayout];
+}
+
+- (void)setItemTitles:(NSArray<NSString *> *)itemTitles {
+    if (_itemTitles == itemTitles || [_itemTitles isEqualToArray:itemTitles]) {
+        return;
+    }
+    _itemTitles = [itemTitles copy];
+    [self setNeedsLayout];
+}
+
+- (void)setShowsTitles:(BOOL)showsTitles {
+    if (_showsTitles == showsTitles) {
+        return;
+    }
+    _showsTitles = showsTitles;
+    [self setNeedsLayout];
+}
+
+- (void)wc_prepareOverlayForCount:(NSUInteger)count {
+    if (!_overlay) {
+        _overlay = [[UIView alloc] initWithFrame:self.bounds];
+        _overlay.userInteractionEnabled = NO;
+        _titleLabels = [NSMutableArray array];
+        _badgeLabels = [NSMutableArray array];
+        _badgeDots = [NSMutableArray array];
+    }
+    if (_overlay.superview != self) {
+        [self addSubview:_overlay];
+    } else {
+        [self bringSubviewToFront:_overlay];
+    }
+    _overlay.frame = self.bounds;
+    while (_titleLabels.count < count) {
+        UILabel *title = [UILabel new];
+        title.font = [UIFont systemFontOfSize:10.0];
+        title.textAlignment = NSTextAlignmentCenter;
+        [_overlay addSubview:title];
+        [_titleLabels addObject:title];
+
+        UIView *dot = [UIView new];
+        dot.backgroundColor = WCLiquidGlassFloatingTabBarBadgeColor();
+        dot.layer.cornerRadius = 4.0;
+        dot.layer.masksToBounds = YES;
+        [_overlay addSubview:dot];
+        [_badgeDots addObject:dot];
+
+        UILabel *badge = [UILabel new];
+        badge.font = [UIFont systemFontOfSize:11.0 weight:UIFontWeightMedium];
+        badge.textAlignment = NSTextAlignmentCenter;
+        badge.textColor = UIColor.whiteColor;
+        badge.backgroundColor = WCLiquidGlassFloatingTabBarBadgeColor();
+        badge.layer.cornerRadius = 8.0;
+        badge.layer.masksToBounds = YES;
+        [_overlay addSubview:badge];
+        [_badgeLabels addObject:badge];
+    }
+}
+
+- (void)wc_layoutOverlay {
+    NSUInteger count = self.items.count;
+    if (count == 0) {
+        _overlay.hidden = YES;
+        return;
+    }
+    UIView *platter = [self wc_platterView];
+    CGRect area = platter ? [platter convertRect:platter.bounds toView:self] : self.bounds;
+    [self wc_prepareOverlayForCount:count];
+    _overlay.hidden = NO;
+    CGFloat slotWidth = CGRectGetWidth(area) / (CGFloat)count;
+    CGFloat iconCenterY = CGRectGetMidY(area) -
+        (self.showsTitles ? WCLiquidGlassFloatingTabBarTitleIconLift : 0.0);
+    CGFloat iconMinY = iconCenterY - WCLiquidGlassFloatingTabBarIconSize / 2.0;
+    CGFloat iconMaxY = iconCenterY + WCLiquidGlassFloatingTabBarIconSize / 2.0;
+    NSInteger selectedTag = self.selectedItem ? self.selectedItem.tag : -1;
+    for (NSUInteger index = 0; index < _titleLabels.count; index++) {
+        UILabel *title = _titleLabels[index];
+        UILabel *badge = _badgeLabels[index];
+        UIView *dot = _badgeDots[index];
+        if (index >= count) {
+            title.hidden = YES;
+            badge.hidden = YES;
+            dot.hidden = YES;
+            continue;
+        }
+        CGFloat slotMinX = CGRectGetMinX(area) + slotWidth * (CGFloat)index;
+        CGFloat iconMidX = slotMinX + slotWidth / 2.0;
+        NSString *titleText = index < self.itemTitles.count ? self.itemTitles[index] : nil;
+        title.hidden = !self.showsTitles || titleText.length == 0;
+        if (!title.hidden) {
+            title.text = titleText;
+            title.textColor = (NSInteger)index == selectedTag ? self.tintColor
+                                                             : self.unselectedItemTintColor;
+            title.frame = CGRectMake(slotMinX, iconMaxY + 2.0, slotWidth, 14.0);
+        }
+        id value = index < self.badgeValues.count ? self.badgeValues[index] : nil;
+        NSString *badgeText = [value isKindOfClass:NSString.class] ? value : nil;
+        BOOL hasBadge = badgeText != nil;
+        BOOL hasText = [badgeText stringByTrimmingCharactersInSet:
+                        NSCharacterSet.whitespaceAndNewlineCharacterSet].length > 0;
+        dot.hidden = !hasBadge || hasText;
+        badge.hidden = !hasText;
+        if (!dot.hidden) {
+            dot.frame = CGRectMake(iconMidX + WCLiquidGlassFloatingTabBarIconSize / 2.0 - 2.0,
+                                   MAX(iconMinY - 2.0, 0.0), 8.0, 8.0);
+        }
+        if (!badge.hidden) {
+            badge.text = badgeText;
+            CGSize textSize = [badgeText sizeWithAttributes:@{NSFontAttributeName: badge.font}];
+            CGFloat badgeWidth = MAX(ceil(textSize.width) + 8.0, 16.0);
+            badge.frame = CGRectMake(iconMidX + 4.0, MAX(iconMinY - 6.0, 0.0), badgeWidth, 16.0);
+        }
+    }
+}
+
+- (void)setSelectedItem:(UITabBarItem *)selectedItem {
+    [super setSelectedItem:selectedItem];
+    [self setNeedsLayout];
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    // A stand-alone UITabBar leaves its item titles hidden with zero height, so
-    // restore them the way FindMyAppTabBar does.
-    if (!WCLiquidGlassPreferences.floatingTabBarHideTabTitles) {
-        WCLiquidGlassFloatingTabBarRestoreItemLabels(self);
-    }
+    [self wc_layoutOverlay];
     [self.sheetView wc_applyTabBarBackgroundOpacity];
 }
 
@@ -856,14 +994,6 @@ static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
                                                      appearance.compactInlineLayoutAppearance]) {
         itemAppearance.normal.iconColor = UIColor.labelColor;
         itemAppearance.selected.iconColor = tabSelectionColor;
-        itemAppearance.normal.titleTextAttributes = @{
-            NSForegroundColorAttributeName: UIColor.labelColor,
-            NSFontAttributeName: [UIFont systemFontOfSize:10.0]
-        };
-        itemAppearance.selected.titleTextAttributes = @{
-            NSForegroundColorAttributeName: tabSelectionColor,
-            NSFontAttributeName: [UIFont systemFontOfSize:10.0]
-        };
     }
     _tabBar.standardAppearance = appearance;
     _tabBar.scrollEdgeAppearance = appearance;
@@ -896,6 +1026,12 @@ static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
     self.emptyLabel.hidden = self.actionItems.count > 0;
     CGFloat offset = 3.0 + 9.0 * self.detentProgress - 11.0 * self.positionProgress;
     CGFloat tabBarY = height - 90.0 + offset;
+    // UIKit lays the item platter out off-centre inside the 90 pt bar, so align
+    // its centre with the centre of the collapsed card instead.
+    UIView *platter = [self.tabBar wc_platterView];
+    if (platter) {
+        tabBarY += (height - 45.0) - (tabBarY + CGRectGetMidY(platter.frame));
+    }
     self.tabBar.frame = CGRectMake(0.0, tabBarY, width, 90.0);
     self.searchButton.hidden = !self.searchEnabled;
     self.searchButton.frame = CGRectMake(20.0,
@@ -1100,14 +1236,7 @@ static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
     if ([badgeValues isEqualToArray:self.appliedBadgeValues]) {
         return;
     }
-    for (NSUInteger index = 0; index < badgeValues.count; index++) {
-        id value = badgeValues[index];
-        NSString *badgeValue = [value isKindOfClass:NSNull.class] ? nil : value;
-        UITabBarItem *item = self.sheetView.tabBar.items[index];
-        if (![item.badgeValue isEqualToString:badgeValue]) {
-            item.badgeValue = badgeValue;
-        }
-    }
+    self.sheetView.tabBar.badgeValues = badgeValues;
     self.appliedBadgeValues = badgeValues;
 }
 
@@ -1127,14 +1256,12 @@ static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
             image = [UIImage systemImageNamed:symbols[index]];
         }
         image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-        UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:hideTitles ? nil : titles[index]
-                                                            image:image
-                                                    selectedImage:image];
+        UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:nil image:image selectedImage:image];
         item.tag = index;
-        NSString *badgeText = nil;
-        BOOL badgeDot = NO;
-        WCLiquidGlassFloatingTabBarNativeBadge(tabBar, (NSInteger)index, &badgeText, &badgeDot);
-        item.badgeValue = badgeText ?: (badgeDot ? @" " : nil);
+        item.imageInsets = hideTitles
+            ? UIEdgeInsetsZero
+            : UIEdgeInsetsMake(-WCLiquidGlassFloatingTabBarTitleIconLift, 0.0,
+                               WCLiquidGlassFloatingTabBarTitleIconLift, 0.0);
         [items addObject:item];
     }
     BOOL itemsChanged = self.sheetView.tabBar.items.count != items.count;
@@ -1143,11 +1270,13 @@ static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
         UITabBarItem *newItem = items[index];
         itemsChanged = ![oldItem.image isEqual:newItem.image] ||
             ![oldItem.selectedImage isEqual:newItem.selectedImage] ||
-            (oldItem.title != newItem.title && ![oldItem.title isEqualToString:newItem.title]);
+            !UIEdgeInsetsEqualToEdgeInsets(oldItem.imageInsets, newItem.imageInsets);
     }
     if (itemsChanged) {
         self.sheetView.tabBar.items = items;
     }
+    self.sheetView.tabBar.showsTitles = !hideTitles;
+    self.sheetView.tabBar.itemTitles = [titles subarrayWithRange:NSMakeRange(0, count)];
     NSInteger selectedIndex = WCLiquidGlassCurrentTabIndex(tabController);
     if (selectedIndex >= 0 && selectedIndex < (NSInteger)self.sheetView.tabBar.items.count &&
         self.sheetView.tabBar.selectedItem != self.sheetView.tabBar.items[selectedIndex]) {

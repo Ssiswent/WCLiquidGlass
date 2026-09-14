@@ -1379,7 +1379,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
     } else {
         WCLiquidGlassConfigureCell(cell,
                                    @"隐藏 Tab 标题",
-                                   @"隐藏四个 Tab 标题，图标自动下移 6 pt",
+                                   @"隐藏四个 Tab 标题，图标在底栏内居中",
                                    [UIImage systemImageNamed:@"textformat"],
                                    UIColor.labelColor);
         UISwitch *toggle = [[UISwitch alloc] init];
