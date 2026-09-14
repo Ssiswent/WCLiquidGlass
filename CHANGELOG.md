@@ -1,5 +1,9 @@
 # 更新日志
 
+## [2.2.14] - 2026-09-14
+
+- 修复 2.2.13 底栏完全不显示、悬浮菜单只剩诊断项：UIKit 会让 present 链上所有祖先/兄弟控制器的 presentedViewController 都返回我们的 sheet，导致"是否在一级页面/是否有内容弹出"的判定全部误判为有弹出页。新增统一的"有效 presented 控制器"解析（跳过 sheet 装饰层），应用于可见控制器遍历、IsAtCurrentTabRoot、tabRoot presented 检查、FindTabController/FindMMTabController。
+
 ## [2.2.13] - 2026-09-14
 
 - 悬浮底栏改为与 WCGlass/FindMyAppTabBar 相同的宿主方式：sheet 直接 present 在微信自己的 tab 控制器上（不再使用独立 UIWindow）。微信全局搜索页作为更上层的 modal 自然覆盖底栏、返回时自然露出，彻底移除层级/时序判断；小横条与拖拽手势恢复为系统原生行为。

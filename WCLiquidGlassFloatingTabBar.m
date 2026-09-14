@@ -169,7 +169,14 @@ static BOOL WCLiquidGlassFloatingTabBarIsAtTabRoot(id tabController) {
     if (!visibleController || !tabRootController) {
         return NO;
     }
+    // Every descendant of the presenter reports our sheet as its
+    // presentedViewController; look past it to the real content.
     UIViewController *presented = tabRootController.presentedViewController;
+    UIViewController *sheet =
+        (UIViewController *)WCLiquidGlassFloatingTabBarController.sharedController.sheetViewController;
+    while (presented && presented == sheet) {
+        presented = presented.presentedViewController;
+    }
     if (presented && !presented.isBeingDismissed &&
         !WCLiquidGlassFloatingTabBarDismissalInProgress()) {
         return NO;

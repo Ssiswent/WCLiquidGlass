@@ -295,21 +295,22 @@ UIWindow *WCLiquidGlassApplicationWindow(void) {
     return fallbackWindow;
 }
 
+// The floating tab bar sheet is presented chrome, not content — resolve the
+// presentation chain past it to the real content controller.
+static UIViewController *WCLiquidGlassEffectivePresentedController(UIViewController *controller) {
+    UIViewController *presented = controller.presentedViewController;
+    while (presented &&
+           [NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
+        presented = presented.presentedViewController;
+    }
+    return presented;
+}
+
 static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *controller) {
     if (!controller) {
         return nil;
     }
-    UIViewController *presentedController = controller.presentedViewController;
-    if (presentedController &&
-        [NSStringFromClass(presentedController.class)
-            containsString:@"WCLiquidGlassFloatingTabBar"]) {
-        // Our floating tab bar sheet is chrome, not content: look through it.
-        UIViewController *above = presentedController.presentedViewController;
-        if (above) {
-            return WCLiquidGlassVisibleControllerFrom(above);
-        }
-        presentedController = nil;
-    }
+    UIViewController *presentedController = WCLiquidGlassEffectivePresentedController(controller);
     if (presentedController) {
         return WCLiquidGlassVisibleControllerFrom(presentedController);
     }
@@ -335,7 +336,8 @@ static UITabBarController *WCLiquidGlassFindTabController(UIViewController *cont
     if ([controller isKindOfClass:UITabBarController.class]) {
         return (UITabBarController *)controller;
     }
-    UITabBarController *presented = WCLiquidGlassFindTabController(controller.presentedViewController);
+    UITabBarController *presented =
+        WCLiquidGlassFindTabController(WCLiquidGlassEffectivePresentedController(controller));
     if (presented) {
         return presented;
     }
@@ -355,7 +357,8 @@ static id WCLiquidGlassFindMMTabController(UIViewController *controller) {
     if ([NSStringFromClass(controller.class) containsString:@"MMTabBarController"]) {
         return controller;
     }
-    id presented = WCLiquidGlassFindMMTabController(controller.presentedViewController);
+    id presented =
+        WCLiquidGlassFindMMTabController(WCLiquidGlassEffectivePresentedController(controller));
     if (presented) {
         return presented;
     }
@@ -507,7 +510,8 @@ BOOL WCLiquidGlassIsAtCurrentTabRoot(id tabController) {
     UIViewController *visibleController =
         WCLiquidGlassVisibleControllerFrom(WCLiquidGlassApplicationWindow().rootViewController);
     UIViewController *tabRootController = WCLiquidGlassCurrentTabRootController(tabController);
-    if (!visibleController || !tabRootController || tabRootController.presentedViewController) {
+    if (!visibleController || !tabRootController ||
+        WCLiquidGlassEffectivePresentedController(tabRootController)) {
         return NO;
     }
     if ([tabRootController isKindOfClass:UINavigationController.class]) {
