@@ -1,37 +1,10 @@
 # 更新日志
 
-## [2.2.18] - 2026-09-14
+## [2.2.19] - 2026-09-14
 
-- 修复搜索框点击无反应：我们的 sheet 占据了微信控制器的 present 位置，UIKit 会拒绝它们再 present 任何模态（全局搜索页因此从未弹出）。新增 present/dismiss 转发——这类 present 自动改由 sheet 链顶层发起（搜索页照常盖住底栏），对应的 dismiss 只关闭 sheet 之上的模态，不会误关 sheet。
-- 修复偶发"从聊天页返回后底栏消失"：压制循环每 0.25s 重算一次可见性，自愈掉不触发任何 hook 的自定义转场路径。
-
-## [2.2.17] - 2026-09-14
-
-- 修复"当前可见控制器"解析为 nil：2.2.16 的入口守卫会让 nav/tab/presented 分支在撞到 sheet 时直接返回 nil，遍历提前结束。现在分支为空时继续回退到子控制器遍历，保证解析到真实页面。
-- 可见性日志追加 root 与 selectedViewController 类名。
-
-## [2.2.16] - 2026-09-14
-
-- 修复底栏不显示与悬浮菜单只剩诊断项：2.2.15 的日志显示"当前可见控制器"仍解析为 sheet 本身——iOS 26/27 下 sheet 会出现在 presenter 的子控制器遍历里，只跳过 presentedViewController 链不够。现在所有控制器遍历（VisibleControllerFrom / FindTabController / FindMMTabController / 悬浮底栏自己的遍历）在入口直接把 sheet 当装饰层返回 nil。
-- 可见性日志追加当前解析出的 visible 控制器类名，便于继续定位。
-
-## [2.2.15] - 2026-09-14
-
-- 修复底栏完全不显示：可见性判定中移除 nativeHidden 一票否决——WCGlass 会长期保持原生 MMTabBar hidden，不应据此隐藏我们的 sheet；一级页面判断、覆盖判断不变。
-- 菜单只剩诊断项的诊断支持：新增状态日志（FloatingTabBar vis / Menu items filtered）记录 atRoot/cover/hidden 与过滤输入，下一次层级诊断可直接定位剩余问题。
-- presentedViewController 穿透循环加防环保护。
-
-## [2.2.14] - 2026-09-14
-
-- 修复 2.2.13 底栏完全不显示、悬浮菜单只剩诊断项：UIKit 会让 present 链上所有祖先/兄弟控制器的 presentedViewController 都返回我们的 sheet，导致"是否在一级页面/是否有内容弹出"的判定全部误判为有弹出页。新增统一的"有效 presented 控制器"解析（跳过 sheet 装饰层），应用于可见控制器遍历、IsAtCurrentTabRoot、tabRoot presented 检查、FindTabController/FindMMTabController。
-
-## [2.2.13] - 2026-09-14
-
-- 悬浮底栏改为与 WCGlass/FindMyAppTabBar 相同的宿主方式：sheet 直接 present 在微信自己的 tab 控制器上（不再使用独立 UIWindow）。微信全局搜索页作为更上层的 modal 自然覆盖底栏、返回时自然露出，彻底移除层级/时序判断；小横条与拖拽手势恢复为系统原生行为。
-- 点击底栏内搜索框不再收起 sheet，搜索页直接覆盖在上层。
-- 展开时点击外部收起改用窗口级 tap 手势（排除 sheet 及横条区域），不再拦截 hitTest。
-- 可见控制器判定把我们的 sheet 视为装饰层穿透查看，避免它被误判成"当前页面"。
-- 新增「隐藏 Tab 标题」开关（默认开启）：关闭后显示微信、通讯录、发现、我四个标题；开启时图标下移 6 pt，与 WCGlass 一致。
+- 回滚悬浮底栏架构至 2.2.12 独立 UIWindow 方案：移除将 sheet present 到微信 MainTabBarViewController 的实现（占据微信控制器 present 槽位导致微信自身弹层、键盘布局、页面呈现全面错乱），并移除 2.2.18 引入的 `presentViewController:animated:completion:` 全局转发 hook 与 dismiss 重定向。
+- 新增「隐藏 Tab 标题」开关（设置 → 悬浮底栏内，默认开）：开启后隐藏四个 Tab 标题、图标下移 6 pt；关闭后显示标题并带选中/未选中颜色。
+- 已知待办：搜索页覆盖与返回时机的 WCGlass 同款实现仍在重做中。
 
 ## [2.2.12] - 2026-09-14
 

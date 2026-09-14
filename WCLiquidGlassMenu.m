@@ -295,55 +295,18 @@ UIWindow *WCLiquidGlassApplicationWindow(void) {
     return fallbackWindow;
 }
 
-// The floating tab bar sheet is presented chrome, not content — resolve the
-// presentation chain past it to the real content controller.
-static UIViewController *WCLiquidGlassEffectivePresentedController(UIViewController *controller) {
-    UIViewController *presented = controller.presentedViewController;
-    for (NSUInteger depth = 0; presented && depth < 8; depth++) {
-        if (![NSStringFromClass(presented.class) containsString:@"WCLiquidGlassFloatingTabBar"]) {
-            return presented;
-        }
-        UIViewController *next = presented.presentedViewController;
-        if (next == presented) {
-            break;
-        }
-        presented = next;
-    }
-    return nil;
-}
-
-static BOOL WCLiquidGlassIsFloatingTabBarChrome(UIViewController *controller) {
-    return controller &&
-        [NSStringFromClass(controller.class) containsString:@"WCLiquidGlassFloatingTabBar"];
-}
-
 static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *controller) {
-    if (!controller || WCLiquidGlassIsFloatingTabBarChrome(controller)) {
+    if (!controller) {
         return nil;
     }
-    UIViewController *presentedController = WCLiquidGlassEffectivePresentedController(controller);
-    if (presentedController) {
-        UIViewController *presentedVisible =
-            WCLiquidGlassVisibleControllerFrom(presentedController);
-        if (presentedVisible) {
-            return presentedVisible;
-        }
+    if (controller.presentedViewController) {
+        return WCLiquidGlassVisibleControllerFrom(controller.presentedViewController);
     }
-    // A nil result means the branch led to our own chrome; fall through to the
-    // remaining traversal instead of reporting "no visible controller".
     if ([controller isKindOfClass:UINavigationController.class]) {
-        UIViewController *navVisible = WCLiquidGlassVisibleControllerFrom(
-            ((UINavigationController *)controller).visibleViewController);
-        if (navVisible) {
-            return navVisible;
-        }
+        return WCLiquidGlassVisibleControllerFrom(((UINavigationController *)controller).visibleViewController);
     }
     if ([controller isKindOfClass:UITabBarController.class]) {
-        UIViewController *tabVisible = WCLiquidGlassVisibleControllerFrom(
-            ((UITabBarController *)controller).selectedViewController);
-        if (tabVisible) {
-            return tabVisible;
-        }
+        return WCLiquidGlassVisibleControllerFrom(((UITabBarController *)controller).selectedViewController);
     }
     for (UIViewController *child in controller.childViewControllers) {
         UIViewController *visibleChild = WCLiquidGlassVisibleControllerFrom(child);
@@ -355,14 +318,13 @@ static UIViewController *WCLiquidGlassVisibleControllerFrom(UIViewController *co
 }
 
 static UITabBarController *WCLiquidGlassFindTabController(UIViewController *controller) {
-    if (!controller || WCLiquidGlassIsFloatingTabBarChrome(controller)) {
+    if (!controller) {
         return nil;
     }
     if ([controller isKindOfClass:UITabBarController.class]) {
         return (UITabBarController *)controller;
     }
-    UITabBarController *presented =
-        WCLiquidGlassFindTabController(WCLiquidGlassEffectivePresentedController(controller));
+    UITabBarController *presented = WCLiquidGlassFindTabController(controller.presentedViewController);
     if (presented) {
         return presented;
     }
@@ -376,14 +338,13 @@ static UITabBarController *WCLiquidGlassFindTabController(UIViewController *cont
 }
 
 static id WCLiquidGlassFindMMTabController(UIViewController *controller) {
-    if (!controller || WCLiquidGlassIsFloatingTabBarChrome(controller)) {
+    if (!controller) {
         return nil;
     }
     if ([NSStringFromClass(controller.class) containsString:@"MMTabBarController"]) {
         return controller;
     }
-    id presented =
-        WCLiquidGlassFindMMTabController(WCLiquidGlassEffectivePresentedController(controller));
+    id presented = WCLiquidGlassFindMMTabController(controller.presentedViewController);
     if (presented) {
         return presented;
     }
@@ -535,8 +496,7 @@ BOOL WCLiquidGlassIsAtCurrentTabRoot(id tabController) {
     UIViewController *visibleController =
         WCLiquidGlassVisibleControllerFrom(WCLiquidGlassApplicationWindow().rootViewController);
     UIViewController *tabRootController = WCLiquidGlassCurrentTabRootController(tabController);
-    if (!visibleController || !tabRootController ||
-        WCLiquidGlassEffectivePresentedController(tabRootController)) {
+    if (!visibleController || !tabRootController || tabRootController.presentedViewController) {
         return NO;
     }
     if ([tabRootController isKindOfClass:UINavigationController.class]) {
@@ -3143,17 +3103,6 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
             canPerform) {
             [visibleItems addObject:item];
         }
-    }
-    if (visibleItems.count <= 1) {
-        UIViewController *visibleController = WCLiquidGlassVisibleController();
-        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:
-            [NSString stringWithFormat:
-                @"Menu items filtered: count=%lu showsTab=%d visible=%@ tabCtl=%@ nav=%@",
-                (unsigned long)visibleItems.count, showsTabActions,
-                visibleController ? NSStringFromClass(visibleController.class) : @"nil",
-                tabController ? NSStringFromClass([tabController class]) : @"nil",
-                visibleController.navigationController
-                    ? NSStringFromClass(visibleController.navigationController.class) : @"nil"]];
     }
     return visibleItems.copy;
 }
