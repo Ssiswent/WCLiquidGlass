@@ -264,22 +264,26 @@ static void WCLiquidGlassFloatingTabBarNativeBadge(UITabBar *tabBar, NSInteger i
     if (dot) {
         *dot = NO;
     }
-    if (!tabBar || index < 0 || index >= (NSInteger)tabBar.items.count) {
+    if (!tabBar || index < 0) {
         return;
     }
-    UITabBarItem *item = tabBar.items[(NSUInteger)index];
-    if (item.badgeValue.length > 0) {
-        if (text) {
-            *text = item.badgeValue;
+    if (index < (NSInteger)tabBar.items.count) {
+        UITabBarItem *item = tabBar.items[(NSUInteger)index];
+        if (item.badgeValue.length > 0) {
+            if (text) {
+                *text = item.badgeValue;
+            }
+            if (dot) {
+                *dot = YES;
+            }
+            return;
         }
-        if (dot) {
-            *dot = YES;
-        }
-        return;
     }
     NSMutableArray<UIView *> *itemViews = [NSMutableArray array];
     for (UIView *subview in tabBar.subviews) {
-        if ([NSStringFromClass(subview.class) rangeOfString:@"TabBarButton"].location != NSNotFound) {
+        NSString *subviewClass = NSStringFromClass(subview.class);
+        if ([subviewClass rangeOfString:@"TabBarItemView"].location != NSNotFound ||
+            [subviewClass rangeOfString:@"TabBarButton"].location != NSNotFound) {
             [itemViews addObject:subview];
         }
     }
@@ -476,11 +480,28 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
     if (!sheetView || sheetView.window != self || sheetView.hidden) {
         return nil;
     }
-    CGPoint local = [self convertPoint:point toView:sheetView];
-    if (![sheetView pointInside:local withEvent:event]) {
+    // The sheet card (UIDropShadowView) also hosts UIKit's own chrome such as
+    // _UIGrabber, which is a sibling of the presented view rather than one of
+    // its descendants. Inside the card the native hit test must run so that
+    // chrome keeps its gestures; outside it we intercept or pass through.
+    UIView *card = sheetView;
+    while (card.superview && card.superview != self &&
+           card.superview != self.rootViewController.view) {
+        UIView *next = card.superview;
+        CGRect nextFrame = [next convertRect:next.bounds toView:self];
+        if (CGRectGetHeight(nextFrame) > CGRectGetHeight(self.bounds) * 0.95) {
+            break;
+        }
+        card = next;
+    }
+    CGRect cardFrame = [card convertRect:card.bounds toView:self];
+    if (!CGRectContainsPoint(cardFrame, point)) {
         return self.interceptsOutsideTouches ? self.rootViewController.view : nil;
     }
-    UIView *hitView = [sheetView hitTest:local withEvent:event];
+    UIView *hitView = [super hitTest:point withEvent:event];
+    if (hitView == self || hitView == self.rootViewController.view) {
+        hitView = nil;
+    }
     if (!hitView && self.interceptsOutsideTouches) {
         return self.rootViewController.view;
     }
@@ -724,8 +745,32 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 
 @implementation WCLiquidGlassFloatingNativeTabBar
 
+static void WCLiquidGlassFloatingTabBarRestoreItemLabels(UIView *view) {
+    if ([view isKindOfClass:UILabel.class] &&
+        [NSStringFromClass(view.class) rangeOfString:@"Label"].location != NSNotFound) {
+        UILabel *label = (UILabel *)view;
+        if (label.hidden) {
+            label.hidden = NO;
+        }
+        if (CGRectGetHeight(label.bounds) == 0.0) {
+            CGRect frame = label.frame;
+            frame.origin.y = 37.0;
+            frame.size.height = 16.0;
+            label.frame = frame;
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassFloatingTabBarRestoreItemLabels(subview);
+    }
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
+    // A stand-alone UITabBar leaves its item titles hidden with zero height, so
+    // restore them the way FindMyAppTabBar does.
+    if (!WCLiquidGlassPreferences.floatingTabBarHideTabTitles) {
+        WCLiquidGlassFloatingTabBarRestoreItemLabels(self);
+    }
     [self.sheetView wc_applyTabBarBackgroundOpacity];
 }
 
@@ -1050,7 +1095,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         NSString *text = nil;
         BOOL dot = NO;
         WCLiquidGlassFloatingTabBarNativeBadge(nativeTabBar, (NSInteger)index, &text, &dot);
-        [badgeValues addObject:text ?: (dot ? @"" : [NSNull null])];
+        [badgeValues addObject:text ?: (dot ? @" " : [NSNull null])];
     }
     if ([badgeValues isEqualToArray:self.appliedBadgeValues]) {
         return;
@@ -1085,13 +1130,11 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
         UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:hideTitles ? nil : titles[index]
                                                             image:image
                                                     selectedImage:image];
-        // WCGlass nudges icons down by 6pt when titles are hidden.
-        item.imageInsets = hideTitles ? UIEdgeInsetsMake(6.0, 0.0, -6.0, 0.0) : UIEdgeInsetsZero;
         item.tag = index;
         NSString *badgeText = nil;
         BOOL badgeDot = NO;
         WCLiquidGlassFloatingTabBarNativeBadge(tabBar, (NSInteger)index, &badgeText, &badgeDot);
-        item.badgeValue = badgeText ?: (badgeDot ? @"" : nil);
+        item.badgeValue = badgeText ?: (badgeDot ? @" " : nil);
         [items addObject:item];
     }
     BOOL itemsChanged = self.sheetView.tabBar.items.count != items.count;
