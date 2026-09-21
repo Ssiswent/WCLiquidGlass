@@ -1,5 +1,11 @@
 # 更新日志
 
+## [2.2.23] - 2026-09-21
+
+- Tab 图标改为微信主题原图：同 WCGlass 一样从原生 tab 按钮（getTabBarBtnViews/MMTabBarItemView）读取正常态与选中态图片并原样渲染，不再强制模板着色。
+- Tab 标题双通道：优先恢复 UIKit 原生 item 标题（FindMyAppTabBar 的 layoutSubviews 恢复做法），系统未渲染时才用自绘标签兜底，避免重复。
+- 修复上拉再收起后 Tab 栏位置变低：居中偏移改为在 Tab 栏自身 layoutSubviews 中按 platter 当前实测位置计算（wc_platterOffset），布局变化时主动重排，不再依赖 sheet 的单次快照。
+
 ## [2.2.22] - 2026-09-14
 
 - Tab 角标改为 WCGlass 同款自绘：不再使用系统 `UITabBarItem.badgeValue`，改为按 WCGlass 的 `applyBadge:dotView:label:` 几何自绘——有数字时为高 16、圆角 8、最小宽 16（文字宽 + 8）的胶囊，位置在图标 midX + 4 / 图标 minY - 6；仅小红点时为 8×8 圆点，位置在图标 maxX - 2 / minY - 2，配色为同款红底白字。

@@ -548,7 +548,9 @@ static NSArray<UIView *> *WCLiquidGlassNativeTabSources(UITabBarController *tabC
             continue;
         }
         NSString *className = NSStringFromClass(subview.class);
-        if (([subview isKindOfClass:UIControl.class] || [className containsString:@"TabBarButton"]) &&
+        if (([subview isKindOfClass:UIControl.class] ||
+             [className containsString:@"TabBarButton"] ||
+             [className containsString:@"TabBarItemView"]) &&
             WCLiquidGlassNativeImageViewInView(subview)) {
             [sources addObject:subview];
         }
@@ -633,6 +635,59 @@ UIImage *WCLiquidGlassNativeTabImage(id tabController, NSInteger index) {
         return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
     }
     return nil;
+}
+
+static UIImage *WCLiquidGlassImageForControlState(id source, UIControlState state) {
+    SEL selector = NSSelectorFromString(@"imageForState:");
+    if (![source respondsToSelector:selector]) {
+        return nil;
+    }
+    id image = ((id (*)(id, SEL, UIControlState))objc_msgSend)(source, selector, state);
+    return [image isKindOfClass:UIImage.class] ? image : nil;
+}
+
+static UIImage *WCLiquidGlassImageFromSelectorNames(id source, NSArray<NSString *> *selectorNames) {
+    for (NSString *selectorName in selectorNames) {
+        id candidate = WCLiquidGlassObjectFromSelector(source, selectorName);
+        if ([candidate isKindOfClass:UIImage.class]) {
+            return candidate;
+        }
+    }
+    return nil;
+}
+
+void WCLiquidGlassNativeTabThemeImages(id tabController, NSInteger index,
+                                       UIImage *__autoreleasing *normalImage,
+                                       UIImage *__autoreleasing *selectedImage) {
+    NSArray *sources = WCLiquidGlassPrivateTabSources(tabController);
+    if ((index < 0 || index >= (NSInteger)sources.count) &&
+        [tabController isKindOfClass:UITabBarController.class]) {
+        sources = WCLiquidGlassNativeTabSources(tabController);
+    }
+    if (index < 0 || index >= (NSInteger)sources.count) {
+        return;
+    }
+    id source = sources[index];
+    UIImage *normal = WCLiquidGlassImageForControlState(source, UIControlStateNormal) ?:
+        WCLiquidGlassImageFromSelectorNames(source, @[@"image", @"icon", @"iconImage"]);
+    UIImage *selected = WCLiquidGlassImageForControlState(source, UIControlStateSelected) ?:
+        WCLiquidGlassImageForControlState(source, UIControlStateHighlighted) ?:
+        WCLiquidGlassImageFromSelectorNames(source, @[@"highlightImage", @"selectedImage"]);
+    if (!normal && [source isKindOfClass:UIView.class]) {
+        normal = WCLiquidGlassNativeImageViewInView(source).image;
+    }
+    if (!normal) {
+        normal = selected;
+    }
+    if (!selected) {
+        selected = normal;
+    }
+    if (normalImage) {
+        *normalImage = [normal imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+    if (selectedImage) {
+        *selectedImage = [selected imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
 }
 
 static id WCLiquidGlassThemeManager(void) {
