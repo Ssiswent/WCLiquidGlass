@@ -1,5 +1,11 @@
 # 更新日志
 
+## [2.2.25] - 2026-09-21
+
+- 新增拖动跟随选中：Tab 栏挂零时长长按手势（不拦截触摸），拖动时按手指位置实时切换 selectedItem 使选中 pill 跟随，抬手后仍走原生 didSelect 切页；拖动期间暂停外部选中态同步避免回跳。
+- 修复标题仍不显示：恢复原生标题时只有"实际可见"（祖先链无 hidden/透明）的 UILabel 才计入，藏在隐藏容器里的系统标签不再抑制自绘兜底。
+- overlay 诊断行记录 title0/badge0/dot0 的 frame 与 hidden，便于定位角标。
+
 ## [2.2.24] - 2026-09-21
 
 - 修复卡顿与角标/标题消失：主题图标按原生图源指针缓存，stable 状态下不再每帧重建 UITabBar items（此前 isEqual 对比包装后的新对象恒不相等，30fps 全量重排）；overlay 层 zPosition 置顶防被 platter 私有层盖住；诊断行升级为 `FloatingTabBar overlay:` 记录 overlay/title/badge 的 frame 与 hidden。

@@ -703,6 +703,8 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
 @property(nonatomic, copy) NSArray *badgeValues;
 // Vertical offset that keeps the item platter centred inside the collapsed card.
 @property(nonatomic, readonly) CGFloat wc_platterOffset;
+// YES while the user is dragging a finger across the bar (live selection).
+@property(nonatomic, readonly) BOOL touchTracking;
 - (UIView *)wc_platterView;
 @end
 
@@ -760,6 +762,65 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     NSMutableArray<UILabel *> *_badgeLabels;
     NSMutableArray<UIView *> *_badgeDots;
     NSString *_loggedOverlayState;
+    UILongPressGestureRecognizer *_slideRecognizer;
+}
+
+// iOS's floating tab bar only follows the finger when the bar itself tracks the
+// touch sequence; emulate that with a zero-duration long press so the selected
+// pill follows the drag like in FindMyAppTabBar. Touches are not cancelled so
+// the native tap (didSelect) still fires on release.
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        _slideRecognizer = [[UILongPressGestureRecognizer alloc]
+            initWithTarget:self action:@selector(wc_handleSlide:)];
+        _slideRecognizer.minimumPressDuration = 0.0;
+        _slideRecognizer.cancelsTouchesInView = NO;
+        _slideRecognizer.delaysTouchesBegan = NO;
+        _slideRecognizer.allowableMovement = CGFLOAT_MAX;
+        [self addGestureRecognizer:_slideRecognizer];
+    }
+    return self;
+}
+
+- (NSInteger)wc_itemIndexAtX:(CGFloat)x {
+    NSUInteger count = self.items.count;
+    if (count == 0) {
+        return NSNotFound;
+    }
+    UIView *platter = [self wc_platterView];
+    CGRect area = platter ? [platter convertRect:platter.bounds toView:self]
+                          : self.bounds;
+    CGFloat slotWidth = CGRectGetWidth(area) / (CGFloat)count;
+    if (slotWidth <= 0.0) {
+        return NSNotFound;
+    }
+    NSInteger index = (NSInteger)floor((x - CGRectGetMinX(area)) / slotWidth);
+    return MIN(MAX(index, 0), (NSInteger)count - 1);
+}
+
+- (void)wc_handleSlide:(UILongPressGestureRecognizer *)recognizer {
+    switch (recognizer.state) {
+        case UIGestureRecognizerStateBegan:
+        case UIGestureRecognizerStateChanged: {
+            _touchTracking = YES;
+            NSInteger index = [self wc_itemIndexAtX:[recognizer locationInView:self].x];
+            if (index != NSNotFound && index < (NSInteger)self.items.count &&
+                self.selectedItem != self.items[index]) {
+                [UIView performWithoutAnimation:^{
+                    self.selectedItem = self.items[index];
+                }];
+            }
+            break;
+        }
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            _touchTracking = NO;
+            break;
+        default:
+            break;
+    }
 }
 
 static const CGFloat WCLiquidGlassFloatingTabBarIconSize = 27.0;
@@ -769,9 +830,21 @@ static UIColor *WCLiquidGlassFloatingTabBarBadgeColor(void) {
     return [UIColor colorWithRed:0.980 green:0.318 blue:0.318 alpha:1.0];
 }
 
+static BOOL WCLiquidGlassFloatingTabBarIsVisible(UIView *view, UIView *limit) {
+    for (UIView *v = view; v && v != limit; v = v.superview) {
+        if (v.hidden || v.alpha <= 0.01) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
 // UIKit collapses the item titles of a stand-alone tab bar to zero height, so
-// bring them back the way FindMyAppTabBar does and report how many are usable.
-static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView *skipped) {
+// bring them back the way FindMyAppTabBar does. Only labels that are actually
+// visible afterwards count, otherwise the fallback titles get suppressed by
+// labels trapped inside a hidden internal container.
+static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView *skipped,
+                                                         UIView *limit) {
     if (view == skipped) {
         return 0;
     }
@@ -786,11 +859,13 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
                 frame.size.height = 16.0;
                 label.frame = frame;
             }
-            restored += 1;
+            if (WCLiquidGlassFloatingTabBarIsVisible(label, limit)) {
+                restored += 1;
+            }
         }
     }
     for (UIView *subview in view.subviews) {
-        restored += WCLiquidGlassFloatingTabBarRestoreLabels(subview, skipped);
+        restored += WCLiquidGlassFloatingTabBarRestoreLabels(subview, skipped, limit);
     }
     return restored;
 }
@@ -900,7 +975,7 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     // Prefer UIKit's own item titles when it renders them; only fall back to
     // the self-drawn labels when it does not.
     NSUInteger nativeTitles = showsTitles
-        ? WCLiquidGlassFloatingTabBarRestoreLabels(self, _overlay)
+        ? WCLiquidGlassFloatingTabBarRestoreLabels(self, _overlay, self)
         : 0;
     BOOL drawsTitles = showsTitles && nativeTitles < count;
     CGFloat slotWidth = CGRectGetWidth(area) / (CGFloat)count;
@@ -1372,7 +1447,8 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     }
     self.sheetView.tabBar.itemTitles = [titles subarrayWithRange:NSMakeRange(0, count)];
     NSInteger selectedIndex = WCLiquidGlassCurrentTabIndex(tabController);
-    if (selectedIndex >= 0 && selectedIndex < (NSInteger)self.sheetView.tabBar.items.count &&
+    if (!self.sheetView.tabBar.touchTracking &&
+        selectedIndex >= 0 && selectedIndex < (NSInteger)self.sheetView.tabBar.items.count &&
         self.sheetView.tabBar.selectedItem != self.sheetView.tabBar.items[selectedIndex]) {
         [UIView performWithoutAnimation:^{
             self.sheetView.tabBar.selectedItem = self.sheetView.tabBar.items[selectedIndex];
