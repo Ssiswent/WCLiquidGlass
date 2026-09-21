@@ -682,11 +682,13 @@ void WCLiquidGlassNativeTabThemeImages(id tabController, NSInteger index,
     if (!selected) {
         selected = normal;
     }
+    // Returned unwrapped so callers can pointer-compare the cached source
+    // images; wrap with a rendering mode only when building a UITabBarItem.
     if (normalImage) {
-        *normalImage = [normal imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+        *normalImage = normal;
     }
     if (selectedImage) {
-        *selectedImage = [selected imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+        *selectedImage = selected;
     }
 }
 

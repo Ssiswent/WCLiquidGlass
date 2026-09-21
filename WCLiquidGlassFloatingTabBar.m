@@ -742,6 +742,9 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *actionItems;
 @property(nonatomic, copy) NSArray<NSString *> *actionIdentifiers;
 @property(nonatomic, copy) NSArray *appliedBadgeValues;
+@property(nonatomic, copy) NSArray *cachedTabImages;
+@property(nonatomic, copy) NSArray *cachedTabSelectedImages;
+@property(nonatomic, assign) BOOL cachedHideTitles;
 @property(nonatomic, assign) CGFloat measuredGridHeight;
 @property(nonatomic, assign) BOOL expanded;
 - (instancetype)initWithController:(WCLiquidGlassFloatingTabBarController *)controller;
@@ -838,6 +841,9 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     } else {
         [self bringSubviewToFront:_overlay];
     }
+    // Keep the overlay above any private sublayers UIKit may stack inside the
+    // bar; without this the drawn badges/titles can sit under the platter.
+    _overlay.layer.zPosition = 1000.0;
     _overlay.frame = self.bounds;
     while (_titleLabels.count < count) {
         UILabel *title = [UILabel new];
@@ -897,14 +903,6 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         ? WCLiquidGlassFloatingTabBarRestoreLabels(self, _overlay)
         : 0;
     BOOL drawsTitles = showsTitles && nativeTitles < count;
-    NSString *state = [NSString stringWithFormat:
-        @"FloatingTabBar titles: shows=%d native=%lu titles=%lu items=%lu area=%@",
-        showsTitles, (unsigned long)nativeTitles, (unsigned long)self.itemTitles.count,
-        (unsigned long)count, NSStringFromCGRect(area)];
-    if (![state isEqualToString:_loggedOverlayState]) {
-        _loggedOverlayState = state;
-        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:state];
-    }
     CGFloat slotWidth = CGRectGetWidth(area) / (CGFloat)count;
     CGFloat iconCenterY = CGRectGetMidY(area) -
         (showsTitles ? WCLiquidGlassFloatingTabBarTitleIconLift : 0.0);
@@ -948,6 +946,24 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
             CGFloat badgeWidth = MAX(ceil(textSize.width) + 8.0, 16.0);
             badge.frame = CGRectMake(iconMidX + 4.0, MAX(iconMinY - 6.0, 0.0), badgeWidth, 16.0);
         }
+    }
+    NSString *state = [NSString stringWithFormat:
+        @"FloatingTabBar overlay: shows=%d native=%lu draws=%d items=%lu area=%@ ov=%@ title0=%@ badge0=%@ dot0=%@",
+        showsTitles, (unsigned long)nativeTitles, drawsTitles,
+        (unsigned long)count, NSStringFromCGRect(area),
+        _overlay.hidden ? @"hidden" : NSStringFromCGRect(_overlay.frame),
+        _titleLabels.count > 0 ? NSStringFromCGRect(_titleLabels[0].frame) : @"-",
+        _badgeLabels.count > 0
+            ? [NSString stringWithFormat:@"%d %@", _badgeLabels[0].hidden,
+               NSStringFromCGRect(_badgeLabels[0].frame)]
+            : @"-",
+        _badgeDots.count > 0
+            ? [NSString stringWithFormat:@"%d %@", _badgeDots[0].hidden,
+               NSStringFromCGRect(_badgeDots[0].frame)]
+            : @"-"];
+    if (![state isEqualToString:_loggedOverlayState]) {
+        _loggedOverlayState = state;
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:state];
     }
 }
 
@@ -1085,9 +1101,11 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     self.emptyLabel.hidden = self.actionItems.count > 0;
     // UIKit lays the item platter out off-centre inside the 90 pt bar, so the
     // base offset comes from the platter (see wc_platterOffset) instead of the
-    // fixed 3 pt the reference implementation uses.
-    CGFloat offset = self.tabBar.wc_platterOffset +
-        9.0 * self.detentProgress - 11.0 * self.positionProgress;
+    // fixed 3 pt the reference implementation uses. Unlike the reference the
+    // +9 pt detent term is dropped so the bar stays equally centred in both
+    // collapsed and expanded states.
+    CGFloat offset = self.tabBar.wc_platterOffset -
+        11.0 * self.positionProgress;
     CGFloat tabBarY = height - 90.0 + offset;
     self.tabBar.frame = CGRectMake(0.0, tabBarY, width, 90.0);
     self.searchButton.hidden = !self.searchEnabled;
@@ -1303,43 +1321,54 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     }
     NSArray *viewControllers = WCLiquidGlassFloatingTabBarViewControllers(tabController);
     NSUInteger count = MIN(4U, viewControllers.count);
-    NSMutableArray<UITabBarItem *> *items = [NSMutableArray arrayWithCapacity:count];
     NSArray<NSString *> *symbols = @[@"message.fill", @"person.2.fill", @"safari.fill", @"person.fill"];
     NSArray<NSString *> *titles = @[@"微信", @"通讯录", @"发现", @"我"];
     BOOL hideTitles = WCLiquidGlassPreferences.floatingTabBarHideTabTitles;
+    // Collect the native source images first; they are compared by pointer so
+    // a stable WeChat tab bar never triggers a UITabBar items rebuild.
+    NSMutableArray<UIImage *> *rawImages = [NSMutableArray arrayWithCapacity:count];
+    NSMutableArray<UIImage *> *rawSelectedImages = [NSMutableArray arrayWithCapacity:count];
+    NSMutableArray<NSNumber *> *fallbackIcons = [NSMutableArray arrayWithCapacity:count];
     for (NSUInteger index = 0; index < count; index++) {
-        // WeChat draws its tab icons from the active theme package, so use the
-        // themed normal/selected images as-is instead of tinting a template.
         UIImage *image = nil;
         UIImage *selectedImage = nil;
         WCLiquidGlassNativeTabThemeImages(tabController, (NSInteger)index, &image, &selectedImage);
-        if (!image) {
-            image = [[UIImage systemImageNamed:symbols[index]]
-                imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        BOOL fallback = image == nil;
+        if (fallback) {
+            image = [UIImage systemImageNamed:symbols[index]];
         }
-        if (!selectedImage) {
-            selectedImage = image;
+        [fallbackIcons addObject:@(fallback)];
+        [rawImages addObject:image];
+        [rawSelectedImages addObject:selectedImage ?: image];
+    }
+    BOOL iconsChanged = hideTitles != self.cachedHideTitles ||
+        rawImages.count != self.cachedTabImages.count;
+    for (NSUInteger index = 0; !iconsChanged && index < rawImages.count; index++) {
+        iconsChanged = rawImages[index] != self.cachedTabImages[index] ||
+            rawSelectedImages[index] != self.cachedTabSelectedImages[index];
+    }
+    if (iconsChanged) {
+        NSMutableArray<UITabBarItem *> *items = [NSMutableArray arrayWithCapacity:count];
+        for (NSUInteger index = 0; index < count; index++) {
+            UIImage *image = [rawImages[index] imageWithRenderingMode:
+                fallbackIcons[index].boolValue ? UIImageRenderingModeAlwaysTemplate
+                                               : UIImageRenderingModeAlwaysOriginal];
+            UIImage *selectedImage =
+                [rawSelectedImages[index] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+            UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:hideTitles ? nil : titles[index]
+                                                               image:image
+                                                       selectedImage:selectedImage];
+            item.tag = index;
+            item.imageInsets = hideTitles
+                ? UIEdgeInsetsZero
+                : UIEdgeInsetsMake(-WCLiquidGlassFloatingTabBarTitleIconLift, 0.0,
+                                   WCLiquidGlassFloatingTabBarTitleIconLift, 0.0);
+            [items addObject:item];
         }
-        UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:hideTitles ? nil : titles[index]
-                                                           image:image
-                                                   selectedImage:selectedImage];
-        item.tag = index;
-        item.imageInsets = hideTitles
-            ? UIEdgeInsetsZero
-            : UIEdgeInsetsMake(-WCLiquidGlassFloatingTabBarTitleIconLift, 0.0,
-                               WCLiquidGlassFloatingTabBarTitleIconLift, 0.0);
-        [items addObject:item];
-    }
-    BOOL itemsChanged = self.sheetView.tabBar.items.count != items.count;
-    for (NSUInteger index = 0; !itemsChanged && index < items.count; index++) {
-        UITabBarItem *oldItem = self.sheetView.tabBar.items[index];
-        UITabBarItem *newItem = items[index];
-        itemsChanged = ![oldItem.image isEqual:newItem.image] ||
-            ![oldItem.selectedImage isEqual:newItem.selectedImage] ||
-            !UIEdgeInsetsEqualToEdgeInsets(oldItem.imageInsets, newItem.imageInsets);
-    }
-    if (itemsChanged) {
         self.sheetView.tabBar.items = items;
+        self.cachedTabImages = rawImages;
+        self.cachedTabSelectedImages = rawSelectedImages;
+        self.cachedHideTitles = hideTitles;
     }
     self.sheetView.tabBar.itemTitles = [titles subarrayWithRange:NSMakeRange(0, count)];
     NSInteger selectedIndex = WCLiquidGlassCurrentTabIndex(tabController);

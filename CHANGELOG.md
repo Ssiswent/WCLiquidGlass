@@ -1,5 +1,10 @@
 # 更新日志
 
+## [2.2.24] - 2026-09-21
+
+- 修复卡顿与角标/标题消失：主题图标按原生图源指针缓存，stable 状态下不再每帧重建 UITabBar items（此前 isEqual 对比包装后的新对象恒不相等，30fps 全量重排）；overlay 层 zPosition 置顶防被 platter 私有层盖住；诊断行升级为 `FloatingTabBar overlay:` 记录 overlay/title/badge 的 frame 与 hidden。
+- 修复 sheet 展开后 Tab 栏偏下：去掉参考实现的 +9pt detent 下移项，platter 在收起与展开态都按实测居中。
+
 ## [2.2.23] - 2026-09-21
 
 - Tab 图标改为微信主题原图：同 WCGlass 一样从原生 tab 按钮（getTabBarBtnViews/MMTabBarItemView）读取正常态与选中态图片并原样渲染，不再强制模板着色。
