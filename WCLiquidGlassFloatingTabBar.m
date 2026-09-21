@@ -47,6 +47,7 @@ static char WCLiquidGlassFloatingTabBarSavedUserInteractionEnabledKey;
 
 @interface WCLiquidGlassFloatingTabBarController ()
 @property(nonatomic, strong) UIView *searchStandInView;
+@property(nonatomic, copy) NSString *loggedStandInState;
 - (void)wc_suppressNativeContent:(UITabBar *)tabBar;
 - (void)wc_restoreNativeContent:(UITabBar *)tabBar;
 - (void)wc_trackSuppressedNativeView:(UIView *)view;
@@ -430,6 +431,21 @@ static void WCLiquidGlassFloatingTabBarSuppressNativeContent(UITabBar *tabBar) {
 
 static void WCLiquidGlassFloatingTabBarRestoreNativeContent(UITabBar *tabBar) {
     [WCLiquidGlassFloatingTabBarController.sharedController wc_restoreNativeContent:tabBar];
+}
+
+// Host for the search stand-in: the tab controller's own view, like WCGlass's
+// overlay. The tab bar's direct superview (_UITabBarContainerView) gets hidden
+// along with the bar itself, so anything inside it would vanish too.
+static UIView *WCLiquidGlassFloatingTabBarStandInHost(UITabBar *tabBar) {
+    if (!tabBar) {
+        return nil;
+    }
+    UIViewController *controller = WCLiquidGlassFloatingTabBarControllerForTabBar(tabBar);
+    UIView *controllerView = controller.viewIfLoaded;
+    if (controllerView && [tabBar isDescendantOfView:controllerView]) {
+        return controllerView;
+    }
+    return tabBar.superview;
 }
 
 static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, BOOL hidden) {
@@ -1416,13 +1432,21 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
             [window resizableSnapshotViewFromRect:card
                                 afterScreenUpdates:YES
                                       withCapInsets:UIEdgeInsetsZero];
-        UIView *host = WCLiquidGlassFloatingTabBarTrackedTabBar.superview;
+        UIView *host = WCLiquidGlassFloatingTabBarStandInHost(WCLiquidGlassFloatingTabBarTrackedTabBar);
         if (host && standIn) {
             standIn.userInteractionEnabled = NO;
             standIn.frame = [host convertRect:card fromView:nil];
             [host addSubview:standIn];
             controller.searchStandInView = standIn;
         }
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+            @"FloatingTabBar search stand-in: snap=%d host=%@ hostWindow=%d card=%@ frame=%@",
+            standIn != nil, NSStringFromClass(host.class), host.window != nil,
+            NSStringFromCGRect(card), NSStringFromCGRect(standIn.frame)]];
+    } else {
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[NSString stringWithFormat:
+            @"FloatingTabBar search stand-in skipped: window=%d card=%@",
+            window != nil, NSStringFromCGRect(card)]];
     }
     window.windowLevel = UIWindowLevelNormal - 5.0;
     if (!WCLiquidGlassFloatingTabBarOpenGlobalSearch()) {
@@ -1862,7 +1886,7 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     self.nativeSuppressionTicking = YES;
     WCLiquidGlassFloatingTabBarSuppressNativeContent(tracked);
     UIView *standIn = self.searchStandInView;
-    UIView *standInHost = tracked.superview;
+    UIView *standInHost = WCLiquidGlassFloatingTabBarStandInHost(tracked);
     if (standIn && standInHost) {
         [standInHost bringSubviewToFront:standIn];
     }
@@ -2087,9 +2111,20 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(tabBar, NO);
     }
     UIView *standIn = self.searchStandInView;
-    UIView *standInHost = WCLiquidGlassFloatingTabBarTrackedTabBar.superview;
+    UIView *standInHost = WCLiquidGlassFloatingTabBarStandInHost(WCLiquidGlassFloatingTabBarTrackedTabBar);
     if (standIn && standInHost) {
         [standInHost bringSubviewToFront:standIn];
+    }
+    if (standIn && hasPresentedController) {
+        NSString *state = [NSString stringWithFormat:
+            @"FloatingTabBar stand-in live: presented=%@ style=%ld inWindow=%d superHidden=%d frame=%@",
+            NSStringFromClass(presented.class), (long)presented.modalPresentationStyle,
+            standIn.window != nil, standIn.superview.hidden,
+            NSStringFromCGRect(standIn.frame)];
+        if (![state isEqualToString:self.loggedStandInState]) {
+            self.loggedStandInState = state;
+            [WCLiquidGlassCrashLogger.sharedLogger recordEvent:state];
+        }
     }
     if (!hasPresentedController && standIn) {
         self.window.windowLevel = UIWindowLevelNormal + 1.0;
