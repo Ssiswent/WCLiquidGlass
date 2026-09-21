@@ -2098,7 +2098,8 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
             [standIn removeFromSuperview];
             self.searchStandInView = nil;
         } else {
-            dispatch_async(dispatch_get_main_queue(), ^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
                 if (self.searchStandInView == standIn) {
                     [standIn removeFromSuperview];
                     self.searchStandInView = nil;
