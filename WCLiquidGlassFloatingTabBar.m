@@ -257,12 +257,16 @@ static UIView *WCLiquidGlassFloatingTabBarFindBadgeView(UIView *view, NSUInteger
 }
 
 static void WCLiquidGlassFloatingTabBarNativeBadge(UITabBar *tabBar, NSInteger index,
-                                                    NSString **text, BOOL *dot) {
+                                                    NSString **text, BOOL *dot,
+                                                    UIView **badgeView) {
     if (text) {
         *text = nil;
     }
     if (dot) {
         *dot = NO;
+    }
+    if (badgeView) {
+        *badgeView = nil;
     }
     if (!tabBar || index < 0) {
         return;
@@ -310,7 +314,29 @@ static void WCLiquidGlassFloatingTabBarNativeBadge(UITabBar *tabBar, NSInteger i
         if (text && badgeText.length > 0) {
             *text = badgeText;
         }
+        if (badgeView) {
+            *badgeView = badge;
+        }
     }
+}
+
+static UIImage *WCLiquidGlassFloatingTabBarSnapshotBadge(UIView *badge) {
+    if (!badge) {
+        return nil;
+    }
+    CGSize size = badge.bounds.size;
+    if (size.width <= 0.0 || size.height <= 0.0 ||
+        size.width > 80.0 || size.height > 40.0) {
+        return nil;
+    }
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+    format.opaque = NO;
+    format.scale = badge.window.screen.scale ?: UIScreen.mainScreen.scale;
+    UIGraphicsImageRenderer *renderer =
+        [[UIGraphicsImageRenderer alloc] initWithSize:size format:format];
+    return [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+        [badge.layer renderInContext:context.CGContext];
+    }];
 }
 
 static void WCLiquidGlassFloatingTabBarSuppressView(UIView *view, BOOL suppress);
@@ -701,8 +727,10 @@ static void WCLiquidGlassFloatingTabBarSetNativeTabBarHidden(UITabBar *tabBar, B
 // both itself.
 @property(nonatomic, copy) NSArray<NSString *> *itemTitles;
 @property(nonatomic, copy) NSArray *badgeValues;
+@property(nonatomic, copy) NSArray *badgeImages;
 // Vertical offset that keeps the item platter centred inside the collapsed card.
 @property(nonatomic, readonly) CGFloat wc_platterOffset;
+- (void)wc_layoutOverlay;
 - (UIView *)wc_platterView;
 @end
 
@@ -742,6 +770,7 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *actionItems;
 @property(nonatomic, copy) NSArray<NSString *> *actionIdentifiers;
 @property(nonatomic, copy) NSArray *appliedBadgeValues;
+@property(nonatomic, assign) CFTimeInterval lastBadgeSnapshot;
 @property(nonatomic, copy) NSArray *cachedTabImages;
 @property(nonatomic, copy) NSArray *cachedTabSelectedImages;
 @property(nonatomic, assign) BOOL cachedHideTitles;
@@ -759,14 +788,41 @@ static BOOL WCLiquidGlassFloatingTabBarShouldObserve(UITabBar *tabBar) {
     NSMutableArray<UILabel *> *_titleLabels;
     NSMutableArray<UILabel *> *_badgeLabels;
     NSMutableArray<UIView *> *_badgeDots;
+    NSMutableArray<UIImageView *> *_badgeImageViews;
     NSString *_loggedOverlayState;
 }
 
-static const CGFloat WCLiquidGlassFloatingTabBarIconSize = 27.0;
 static const CGFloat WCLiquidGlassFloatingTabBarTitleIconLift = 8.0;
 
 static UIColor *WCLiquidGlassFloatingTabBarBadgeColor(void) {
-    return [UIColor colorWithRed:0.980 green:0.318 blue:0.318 alpha:1.0];
+    return [UIColor colorWithRed:1.0 green:0.23 blue:0.28 alpha:1.0];
+}
+
+static BOOL WCLiquidGlassFloatingTabBarBadgeImagesEqual(NSArray *first, NSArray *second) {
+    if (first == second) {
+        return YES;
+    }
+    if (first.count != second.count) {
+        return NO;
+    }
+    for (NSUInteger index = 0; index < first.count; index++) {
+        id firstValue = first[index];
+        id secondValue = second[index];
+        if (firstValue == secondValue) {
+            continue;
+        }
+        if ([firstValue isKindOfClass:UIImage.class] &&
+            [secondValue isKindOfClass:UIImage.class]) {
+            NSData *firstData = UIImagePNGRepresentation(firstValue);
+            NSData *secondData = UIImagePNGRepresentation(secondValue);
+            if ((firstData || secondData) && ![firstData isEqual:secondData]) {
+                return NO;
+            }
+        } else if (![firstValue isEqual:secondValue]) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 static BOOL WCLiquidGlassFloatingTabBarIsVisible(UIView *view, UIView *limit) {
@@ -776,6 +832,28 @@ static BOOL WCLiquidGlassFloatingTabBarIsVisible(UIView *view, UIView *limit) {
         }
     }
     return YES;
+}
+
+static void WCLiquidGlassFloatingTabBarCollectIconViews(UIView *view,
+                                                         UIView *skipped,
+                                                         UIView *limit,
+                                                         NSUInteger depth,
+                                                         NSMutableArray<UIImageView *> *icons) {
+    if (!view || view == skipped || depth > 8U) {
+        return;
+    }
+    if ([view isKindOfClass:UIImageView.class] &&
+        ((UIImageView *)view).image &&
+        CGRectGetWidth(view.bounds) >= 14.0 &&
+        CGRectGetWidth(view.bounds) <= 48.0 &&
+        CGRectGetHeight(view.bounds) >= 14.0 &&
+        CGRectGetHeight(view.bounds) <= 48.0 &&
+        WCLiquidGlassFloatingTabBarIsVisible(view, limit)) {
+        [icons addObject:(UIImageView *)view];
+    }
+    for (UIView *subview in view.subviews) {
+        WCLiquidGlassFloatingTabBarCollectIconViews(subview, skipped, limit, depth + 1U, icons);
+    }
 }
 
 // UIKit collapses the item titles of a stand-alone tab bar to zero height, so
@@ -834,6 +912,15 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     [self setNeedsLayout];
 }
 
+- (void)setBadgeImages:(NSArray *)badgeImages {
+    if (_badgeImages == badgeImages ||
+        WCLiquidGlassFloatingTabBarBadgeImagesEqual(_badgeImages, badgeImages)) {
+        return;
+    }
+    _badgeImages = [badgeImages copy];
+    [self setNeedsLayout];
+}
+
 - (void)setItemTitles:(NSArray<NSString *> *)itemTitles {
     if (_itemTitles == itemTitles || [_itemTitles isEqualToArray:itemTitles]) {
         return;
@@ -849,6 +936,7 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         _titleLabels = [NSMutableArray array];
         _badgeLabels = [NSMutableArray array];
         _badgeDots = [NSMutableArray array];
+        _badgeImageViews = [NSMutableArray array];
     }
     // Host the overlay on the sheet view as a sibling above the tab bar: as a
     // subview of the bar itself it renders under UIKit's internal platter
@@ -859,7 +947,7 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     } else {
         [host bringSubviewToFront:_overlay];
     }
-    _overlay.frame = [self convertRect:self.bounds toView:host];
+    _overlay.frame = host.bounds;
     while (_titleLabels.count < count) {
         UILabel *title = [UILabel new];
         title.font = [UIFont systemFontOfSize:10.0];
@@ -883,6 +971,12 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         badge.layer.masksToBounds = YES;
         [_overlay addSubview:badge];
         [_badgeLabels addObject:badge];
+
+        UIImageView *badgeImageView = [[UIImageView alloc] initWithFrame:CGRectZero];
+        badgeImageView.contentMode = UIViewContentModeScaleAspectFit;
+        badgeImageView.userInteractionEnabled = NO;
+        [_overlay addSubview:badgeImageView];
+        [_badgeImageViews addObject:badgeImageView];
     }
 }
 
@@ -919,53 +1013,109 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         : 0;
     BOOL drawsTitles = showsTitles && nativeTitles < count;
     CGFloat slotWidth = CGRectGetWidth(area) / (CGFloat)count;
-    CGFloat iconCenterY = CGRectGetMidY(area) -
-        (showsTitles ? WCLiquidGlassFloatingTabBarTitleIconLift : 0.0);
-    CGFloat iconMinY = iconCenterY - WCLiquidGlassFloatingTabBarIconSize / 2.0;
-    CGFloat iconMaxY = iconCenterY + WCLiquidGlassFloatingTabBarIconSize / 2.0;
+    NSMutableArray<UIImageView *> *foundIcons = [NSMutableArray array];
+    WCLiquidGlassFloatingTabBarCollectIconViews(self, _overlay, self, 0U, foundIcons);
+    [foundIcons sortUsingComparator:^NSComparisonResult(UIImageView *first,
+                                                         UIImageView *second) {
+        CGFloat firstX = CGRectGetMidX([first convertRect:first.bounds toView:self]);
+        CGFloat secondX = CGRectGetMidX([second convertRect:second.bounds toView:self]);
+        if (firstX < secondX) {
+            return NSOrderedAscending;
+        }
+        if (firstX > secondX) {
+            return NSOrderedDescending;
+        }
+        return NSOrderedSame;
+    }];
+    NSMutableArray<UIImageView *> *icons = [NSMutableArray arrayWithCapacity:foundIcons.count];
+    CGFloat lastCenterX = -CGFLOAT_MAX;
+    for (UIImageView *icon in foundIcons) {
+        CGFloat centerX = CGRectGetMidX([icon convertRect:icon.bounds toView:self]);
+        if (icons.count > 0 && fabs(centerX - lastCenterX) < 6.0) {
+            continue;
+        }
+        [icons addObject:icon];
+        lastCenterX = centerX;
+    }
+    BOOL hasIconGeometry = icons.count == count;
     NSInteger selectedTag = self.selectedItem ? self.selectedItem.tag : -1;
     for (NSUInteger index = 0; index < _titleLabels.count; index++) {
         UILabel *title = _titleLabels[index];
         UILabel *badge = _badgeLabels[index];
         UIView *dot = _badgeDots[index];
+        UIImageView *badgeImageView = _badgeImageViews[index];
         if (index >= count) {
             title.hidden = YES;
             badge.hidden = YES;
             dot.hidden = YES;
+            badgeImageView.hidden = YES;
             continue;
         }
         CGFloat slotMinX = CGRectGetMinX(area) + slotWidth * (CGFloat)index;
-        CGFloat iconMidX = slotMinX + slotWidth / 2.0;
+        CGRect iconRect = hasIconGeometry
+            ? [icons[index] convertRect:icons[index].bounds toView:_overlay]
+            : [self convertRect:CGRectMake(slotMinX, CGRectGetMinY(area),
+                                            slotWidth, CGRectGetHeight(area))
+                           toView:_overlay];
         NSString *titleText = index < self.itemTitles.count ? self.itemTitles[index] : nil;
         title.hidden = !drawsTitles || titleText.length == 0;
         if (!title.hidden) {
             title.text = titleText;
             title.textColor = (NSInteger)index == selectedTag ? self.tintColor
                                                              : self.unselectedItemTintColor;
-            title.frame = CGRectMake(slotMinX, iconMaxY + 2.0, slotWidth, 14.0);
+            title.frame = CGRectMake(CGRectGetMidX(iconRect) - slotWidth / 2.0,
+                                     CGRectGetMaxY(iconRect) + 2.0,
+                                     slotWidth, 14.0);
         }
         id value = index < self.badgeValues.count ? self.badgeValues[index] : nil;
         NSString *badgeText = [value isKindOfClass:NSString.class] ? value : nil;
         BOOL hasBadge = badgeText != nil;
         BOOL hasText = [badgeText stringByTrimmingCharactersInSet:
                         NSCharacterSet.whitespaceAndNewlineCharacterSet].length > 0;
+        UIImage *badgeImage = index < self.badgeImages.count &&
+            [self.badgeImages[index] isKindOfClass:UIImage.class]
+            ? self.badgeImages[index] : nil;
+        badgeImageView.hidden = badgeImage == nil;
+        if (badgeImage) {
+            badgeImageView.image = badgeImage;
+            CGSize imageSize = badgeImage.size;
+            if (hasText) {
+                badgeImageView.frame = CGRectMake(CGRectGetMidX(iconRect) + 4.0,
+                                                  CGRectGetMinY(iconRect) + 2.0,
+                                                  imageSize.width, imageSize.height);
+            } else {
+                badgeImageView.frame = CGRectMake(CGRectGetMaxX(iconRect) + 2.0 -
+                                                  imageSize.width / 2.0,
+                                                  CGRectGetMinY(iconRect) + 2.0 -
+                                                  imageSize.height / 2.0,
+                                                  imageSize.width, imageSize.height);
+            }
+            badge.hidden = YES;
+            dot.hidden = YES;
+            continue;
+        }
         dot.hidden = !hasBadge || hasText;
         badge.hidden = !hasText;
         if (!dot.hidden) {
-            dot.frame = CGRectMake(iconMidX + WCLiquidGlassFloatingTabBarIconSize / 2.0 - 2.0,
-                                   MAX(iconMinY - 2.0, 0.0), 8.0, 8.0);
+            dot.frame = CGRectMake(CGRectGetMaxX(iconRect) - 2.0,
+                                   CGRectGetMinY(iconRect) - 2.0, 8.0, 8.0);
         }
         if (!badge.hidden) {
             badge.text = badgeText;
             CGSize textSize = [badgeText sizeWithAttributes:@{NSFontAttributeName: badge.font}];
             CGFloat badgeWidth = MAX(ceil(textSize.width) + 8.0, 16.0);
-            badge.frame = CGRectMake(iconMidX + 4.0, MAX(iconMinY - 6.0, 0.0), badgeWidth, 16.0);
+            badge.frame = CGRectMake(CGRectGetMidX(iconRect) + 4.0,
+                                     CGRectGetMinY(iconRect) - 6.0,
+                                     badgeWidth, 16.0);
         }
     }
     NSString *state = [NSString stringWithFormat:
-        @"FloatingTabBar overlay: shows=%d native=%lu draws=%d items=%lu area=%@ ov=%@ title0=%@ badge0=%@ dot0=%@",
+        @"FloatingTabBar overlay: shows=%d native=%lu draws=%d items=%lu icons=%lu icon0=%@ area=%@ ov=%@ title0=%@ badge0=%@ dot0=%@",
         showsTitles, (unsigned long)nativeTitles, drawsTitles,
-        (unsigned long)count, NSStringFromCGRect(area),
+        (unsigned long)count, (unsigned long)icons.count,
+        icons.count > 0 ? NSStringFromCGRect([icons[0] convertRect:icons[0].bounds
+                                                               toView:_overlay]) : @"-",
+        NSStringFromCGRect(area),
         _overlay.hidden ? @"hidden" : NSStringFromCGRect(_overlay.frame),
         _titleLabels.count > 0 ? NSStringFromCGRect(_titleLabels[0].frame) : @"-",
         _badgeLabels.count > 0
@@ -1123,6 +1273,7 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         11.0 * self.positionProgress;
     CGFloat tabBarY = height - 90.0 + offset;
     self.tabBar.frame = CGRectMake(0.0, tabBarY, width, 90.0);
+    [self.tabBar wc_layoutOverlay];
     self.searchButton.hidden = !self.searchEnabled;
     self.searchButton.frame = CGRectMake(20.0,
                                          tabBarY - WCLiquidGlassFloatingTabBarSearchSpacing -
@@ -1199,6 +1350,7 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
         _actionItems = @[];
         _actionIdentifiers = @[];
         _appliedBadgeValues = @[];
+        _lastBadgeSnapshot = 0.0;
         _measuredGridHeight = 0.0;
     }
     return self;
@@ -1317,17 +1469,41 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
     UITabBar *nativeTabBar = WCLiquidGlassFloatingTabBarTrackedTabBar;
     NSMutableArray *badgeValues =
         [NSMutableArray arrayWithCapacity:self.sheetView.tabBar.items.count];
+    NSMutableArray *badgeViews =
+        [NSMutableArray arrayWithCapacity:self.sheetView.tabBar.items.count];
+    CFTimeInterval now = CACurrentMediaTime();
+    BOOL valuesChanged = NO;
     for (NSUInteger index = 0; index < self.sheetView.tabBar.items.count; index++) {
         NSString *text = nil;
         BOOL dot = NO;
-        WCLiquidGlassFloatingTabBarNativeBadge(nativeTabBar, (NSInteger)index, &text, &dot);
+        UIView *badgeView = nil;
+        WCLiquidGlassFloatingTabBarNativeBadge(nativeTabBar, (NSInteger)index,
+                                               &text, &dot, &badgeView);
         [badgeValues addObject:text ?: (dot ? @" " : [NSNull null])];
+        [badgeViews addObject:badgeView ?: [NSNull null]];
     }
-    if ([badgeValues isEqualToArray:self.appliedBadgeValues]) {
+    valuesChanged = ![badgeValues isEqualToArray:self.appliedBadgeValues];
+    BOOL shouldSnapshot = valuesChanged ||
+        now - self.lastBadgeSnapshot >= 1.0;
+    if (!shouldSnapshot) {
         return;
     }
-    self.sheetView.tabBar.badgeValues = badgeValues;
-    self.appliedBadgeValues = badgeValues;
+    NSMutableArray *badgeImages =
+        [NSMutableArray arrayWithCapacity:badgeViews.count];
+    for (id value in badgeViews) {
+        UIView *badgeView = [value isKindOfClass:UIView.class] ? value : nil;
+        [badgeImages addObject:WCLiquidGlassFloatingTabBarSnapshotBadge(badgeView) ?:
+            [NSNull null]];
+    }
+    if (valuesChanged) {
+        self.sheetView.tabBar.badgeValues = badgeValues;
+        self.appliedBadgeValues = [badgeValues copy];
+    }
+    if (!WCLiquidGlassFloatingTabBarBadgeImagesEqual(self.sheetView.tabBar.badgeImages,
+                                                      badgeImages)) {
+        self.sheetView.tabBar.badgeImages = badgeImages;
+    }
+    self.lastBadgeSnapshot = now;
 }
 
 - (void)wc_updateForTabController:(id)tabController tabBar:(UITabBar *)tabBar {
