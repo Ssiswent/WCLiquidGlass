@@ -17,6 +17,7 @@
 #import "WCLiquidGlassPreferences.h"
 #import "WCLiquidGlassWCGlassLongPress.h"
 #import "WCLiquidGlassWCGlassSearchTabBar.h"
+#import "WCLiquidGlassFloatingTabBar.h"
 
 #ifndef WCLIQUIDGLASS_VERSION
 #define WCLIQUIDGLASS_VERSION "Unknown"
@@ -499,6 +500,7 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
             WCLiquidGlassInstallWCGlassReturnHooksIfNeeded();
             WCLiquidGlassInstallWCGlassLongPressHooks();
             WCLiquidGlassInstallWCGlassSearchTabBarHooks();
+            WCLiquidGlassInstallFloatingTabBarHooks();
             WCLiquidGlassInstallChatTimeGlassHooks();
             WCLiquidGlassInstallHomeCornersHooks();
             WCLiquidGlassInstallContactsIndexHooks();

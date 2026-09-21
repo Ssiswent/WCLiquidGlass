@@ -104,6 +104,12 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)setUnreadMessageTipGlassEnabled:(BOOL)enabled;
 + (BOOL)messageSwipeActionsEnabled;
 + (void)setMessageSwipeActionsEnabled:(BOOL)enabled;
++ (BOOL)floatingTabBarEnabled;
++ (void)setFloatingTabBarEnabled:(BOOL)enabled;
++ (BOOL)floatingTabBarSearchEnabled;
++ (void)setFloatingTabBarSearchEnabled:(BOOL)enabled;
++ (BOOL)floatingTabBarHideTabTitles;
++ (void)setFloatingTabBarHideTabTitles:(BOOL)hidden;
 + (WCLiquidGlassMenuElementSize)messageSwipeMenuElementSize;
 + (void)setMessageSwipeMenuElementSize:(WCLiquidGlassMenuElementSize)size;
 + (CGFloat)messageNotificationCornerRadius;

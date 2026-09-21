@@ -275,7 +275,7 @@ static CGFloat WCLiquidGlassButtonDiameter(void) {
     return WCLiquidGlassFloatingButtonDiameter;
 }
 
-static UIWindow *WCLiquidGlassApplicationWindow(void) {
+UIWindow *WCLiquidGlassApplicationWindow(void) {
     UIWindow *fallbackWindow = nil;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if (scene.activationState != UISceneActivationStateForegroundActive ||
@@ -425,7 +425,7 @@ static NSArray *WCLiquidGlassPrivateTabSources(id tabController) {
     return sources;
 }
 
-static NSInteger WCLiquidGlassCurrentTabIndex(id tabController) {
+NSInteger WCLiquidGlassCurrentTabIndex(id tabController) {
     for (NSString *selectorName in @[@"selectedIndex", @"currentIndex"]) {
         SEL selector = NSSelectorFromString(selectorName);
         if ([tabController respondsToSelector:selector]) {
@@ -492,7 +492,7 @@ static BOOL WCLiquidGlassControllerIsDescendantOf(UIViewController *controller,
     return NO;
 }
 
-static BOOL WCLiquidGlassIsAtCurrentTabRoot(id tabController) {
+BOOL WCLiquidGlassIsAtCurrentTabRoot(id tabController) {
     UIViewController *visibleController =
         WCLiquidGlassVisibleControllerFrom(WCLiquidGlassApplicationWindow().rootViewController);
     UIViewController *tabRootController = WCLiquidGlassCurrentTabRootController(tabController);
@@ -548,7 +548,9 @@ static NSArray<UIView *> *WCLiquidGlassNativeTabSources(UITabBarController *tabC
             continue;
         }
         NSString *className = NSStringFromClass(subview.class);
-        if (([subview isKindOfClass:UIControl.class] || [className containsString:@"TabBarButton"]) &&
+        if (([subview isKindOfClass:UIControl.class] ||
+             [className containsString:@"TabBarButton"] ||
+             [className containsString:@"TabBarItemView"]) &&
             WCLiquidGlassNativeImageViewInView(subview)) {
             [sources addObject:subview];
         }
@@ -606,7 +608,7 @@ static UIImage *WCLiquidGlassImageFromSource(id source) {
     return WCLiquidGlassImageFromSourceAtDepth(source, 0);
 }
 
-static UIImage *WCLiquidGlassNativeTabImage(id tabController, NSInteger index) {
+UIImage *WCLiquidGlassNativeTabImage(id tabController, NSInteger index) {
     NSArray *sources = WCLiquidGlassPrivateTabSources(tabController);
     if (index >= 0 && index < (NSInteger)sources.count) {
         UIImage *image = WCLiquidGlassImageFromSource(sources[index]);
@@ -633,6 +635,61 @@ static UIImage *WCLiquidGlassNativeTabImage(id tabController, NSInteger index) {
         return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
     }
     return nil;
+}
+
+static UIImage *WCLiquidGlassImageForControlState(id source, UIControlState state) {
+    SEL selector = NSSelectorFromString(@"imageForState:");
+    if (![source respondsToSelector:selector]) {
+        return nil;
+    }
+    id image = ((id (*)(id, SEL, UIControlState))objc_msgSend)(source, selector, state);
+    return [image isKindOfClass:UIImage.class] ? image : nil;
+}
+
+static UIImage *WCLiquidGlassImageFromSelectorNames(id source, NSArray<NSString *> *selectorNames) {
+    for (NSString *selectorName in selectorNames) {
+        id candidate = WCLiquidGlassObjectFromSelector(source, selectorName);
+        if ([candidate isKindOfClass:UIImage.class]) {
+            return candidate;
+        }
+    }
+    return nil;
+}
+
+void WCLiquidGlassNativeTabThemeImages(id tabController, NSInteger index,
+                                       UIImage *__autoreleasing *normalImage,
+                                       UIImage *__autoreleasing *selectedImage) {
+    NSArray *sources = WCLiquidGlassPrivateTabSources(tabController);
+    if ((index < 0 || index >= (NSInteger)sources.count) &&
+        [tabController isKindOfClass:UITabBarController.class]) {
+        sources = WCLiquidGlassNativeTabSources(tabController);
+    }
+    if (index < 0 || index >= (NSInteger)sources.count) {
+        return;
+    }
+    id source = sources[index];
+    UIImage *normal = WCLiquidGlassImageForControlState(source, UIControlStateNormal) ?:
+        WCLiquidGlassImageFromSelectorNames(source, @[@"image", @"icon", @"iconImage"]);
+    UIImage *selected = WCLiquidGlassImageForControlState(source, UIControlStateSelected) ?:
+        WCLiquidGlassImageForControlState(source, UIControlStateHighlighted) ?:
+        WCLiquidGlassImageFromSelectorNames(source, @[@"highlightImage", @"selectedImage"]);
+    if (!normal && [source isKindOfClass:UIView.class]) {
+        normal = WCLiquidGlassNativeImageViewInView(source).image;
+    }
+    if (!normal) {
+        normal = selected;
+    }
+    if (!selected) {
+        selected = normal;
+    }
+    // Returned unwrapped so callers can pointer-compare the cached source
+    // images; wrap with a rendering mode only when building a UITabBarItem.
+    if (normalImage) {
+        *normalImage = normal;
+    }
+    if (selectedImage) {
+        *selectedImage = selected;
+    }
 }
 
 static id WCLiquidGlassThemeManager(void) {
@@ -1635,7 +1692,7 @@ static NSString *WCLiquidGlassWCGlassControllerClassName(void) {
     }
 }
 
-static BOOL WCLiquidGlassCanSelectTab(id tabController, NSInteger index) {
+BOOL WCLiquidGlassCanSelectTab(id tabController, NSInteger index) {
     NSArray *sources = WCLiquidGlassPrivateTabSources(tabController);
     NSUInteger tabCount = sources.count;
     if ([tabController isKindOfClass:UITabBarController.class]) {
@@ -1730,6 +1787,20 @@ static NSSet<NSString *> *WCLiquidGlassAvailableActionIdentifiers(
     return availableActions.copy;
 }
 
+NSArray<NSDictionary<NSString *, id> *> *WCLiquidGlassFloatingTabBarActionItems(void) {
+    NSArray<NSDictionary<NSString *, id> *> *buttonItems = WCLiquidGlassPreferences.buttonItems;
+    NSSet<NSString *> *availableActions = WCLiquidGlassAvailableActionIdentifiers(buttonItems, NO);
+    NSMutableArray<NSDictionary<NSString *, id> *> *items = [NSMutableArray array];
+    for (NSDictionary<NSString *, id> *item in buttonItems) {
+        NSString *actionIdentifier = item[@"action"];
+        if ([actionIdentifier isKindOfClass:NSString.class] &&
+            [availableActions containsObject:actionIdentifier]) {
+            [items addObject:item];
+        }
+    }
+    return items.copy;
+}
+
 static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
     id tabController = WCLiquidGlassCurrentTabController();
     if ([actionIdentifier isEqualToString:WCLiquidGlassActionPageHierarchyDiagnostics]) {
@@ -1821,6 +1892,12 @@ static void WCLiquidGlassPerformAction(NSString *actionIdentifier) {
 
     WCLiquidGlassShowActionError([NSString stringWithFormat:@"当前页面不支持“%@”，请进入对应页面后重试。",
                                                             WCLiquidGlassActionTitle(actionIdentifier)]);
+}
+
+void WCLiquidGlassPerformActionIdentifier(NSString *actionIdentifier) {
+    if ([actionIdentifier isKindOfClass:NSString.class]) {
+        WCLiquidGlassPerformAction(actionIdentifier);
+    }
 }
 
 @interface WCLiquidGlassOrbView : UIVisualEffectView

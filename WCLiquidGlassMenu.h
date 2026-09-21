@@ -47,6 +47,16 @@ void WCLiquidGlassTraceChatTableInsetMutation(UITableView *tableView,
                                                UIEdgeInsets beforeInset,
                                                CGPoint beforeOffset);
 id _Nullable WCLiquidGlassCurrentTabController(void);
+NSInteger WCLiquidGlassCurrentTabIndex(id _Nullable tabController);
+BOOL WCLiquidGlassIsAtCurrentTabRoot(id _Nullable tabController);
+BOOL WCLiquidGlassCanSelectTab(id _Nullable tabController, NSInteger index);
+UIImage * _Nullable WCLiquidGlassNativeTabImage(id _Nullable tabController, NSInteger index);
+void WCLiquidGlassNativeTabThemeImages(id _Nullable tabController, NSInteger index,
+                                       UIImage * _Nullable __autoreleasing * _Nullable normalImage,
+                                       UIImage * _Nullable __autoreleasing * _Nullable selectedImage);
+UIWindow * _Nullable WCLiquidGlassApplicationWindow(void);
+void WCLiquidGlassPerformActionIdentifier(NSString *actionIdentifier);
+NSArray<NSDictionary<NSString *, id> *> *WCLiquidGlassFloatingTabBarActionItems(void);
 extern NSString *const WCLiquidGlassManualTextEditNotification;
 
 #ifdef __cplusplus
