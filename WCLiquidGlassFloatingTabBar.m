@@ -1081,7 +1081,8 @@ static NSUInteger WCLiquidGlassFloatingTabBarRestoreLabels(UIView *view, UIView 
             CGSize imageSize = badgeImage.size;
             if (hasText) {
                 badgeImageView.frame = CGRectMake(CGRectGetMidX(iconRect) + 4.0,
-                                                  CGRectGetMinY(iconRect) + 2.0,
+                                                  CGRectGetMinY(iconRect) + 2.0 -
+                                                  imageSize.height / 2.0,
                                                   imageSize.width, imageSize.height);
             } else {
                 badgeImageView.frame = CGRectMake(CGRectGetMaxX(iconRect) + 2.0 -
