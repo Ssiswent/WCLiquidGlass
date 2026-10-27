@@ -20,8 +20,39 @@ static BOOL WCLiquidGlassMessageSwipeHookRetryScheduled = NO;
 static NSUInteger WCLiquidGlassMessageSwipeHookAttempts = 0;
 static NSHashTable<UIView *> *WCLiquidGlassMessageSwipeCells;
 
+static NSMutableArray<NSString *> *WCLiquidGlassMessageSwipePendingEvents;
+static BOOL WCLiquidGlassMessageSwipeFlushScheduled = NO;
+static BOOL WCLiquidGlassMessageSwipeTracking = NO;
+
+static void WCLiquidGlassMessageSwipeScheduleFlush(void) {
+    if (WCLiquidGlassMessageSwipeFlushScheduled) {
+        return;
+    }
+    WCLiquidGlassMessageSwipeFlushScheduled = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        WCLiquidGlassMessageSwipeFlushScheduled = NO;
+        if (WCLiquidGlassMessageSwipeTracking) {
+            WCLiquidGlassMessageSwipeScheduleFlush();
+            return;
+        }
+        if (WCLiquidGlassMessageSwipePendingEvents.count == 0) {
+            return;
+        }
+        NSString *events = [WCLiquidGlassMessageSwipePendingEvents componentsJoinedByString:@"\n  "];
+        [WCLiquidGlassMessageSwipePendingEvents removeAllObjects];
+        [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[@"MessageSwipe\n  " stringByAppendingString:events]];
+    });
+}
+
 static void WCLiquidGlassMessageSwipeRecord(NSString *event) {
-    [WCLiquidGlassCrashLogger.sharedLogger recordEvent:[@"MessageSwipe " stringByAppendingString:event]];
+    if (!WCLiquidGlassMessageSwipePendingEvents) {
+        WCLiquidGlassMessageSwipePendingEvents = [NSMutableArray array];
+    }
+    if (WCLiquidGlassMessageSwipePendingEvents.count >= 40) {
+        [WCLiquidGlassMessageSwipePendingEvents removeObjectAtIndex:0];
+    }
+    [WCLiquidGlassMessageSwipePendingEvents addObject:event];
+    WCLiquidGlassMessageSwipeScheduleFlush();
 }
 
 static void WCLiquidGlassMessageSwipeRecordThrottled(NSString *key, NSString *event) {
@@ -54,17 +85,6 @@ static void WCLiquidGlassSetMessageSwipeFeedbackTriggered(UIView *view, BOOL tri
                              WCLiquidGlassMessageSwipeFeedbackTriggeredKey,
                              @(triggered),
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-static UIView *WCLiquidGlassMessageSwipeOuterMessageCell(UIView *view) {
-    Class baseClass = NSClassFromString(@"CommonMessageCellView");
-    UIView *outerCell = nil;
-    for (UIView *current = view.superview; current && baseClass; current = current.superview) {
-        if ([current isKindOfClass:baseClass]) {
-            outerCell = current;
-        }
-    }
-    return outerCell;
 }
 
 static NSArray<UIView *> *WCLiquidGlassMessageSwipeRelatedViews(UIView *view) {
@@ -391,6 +411,7 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
     if (WCLiquidGlassMessageSwipeShouldIgnore(translation)) {
         WCLiquidGlassMessageSwipeApplyTransform(CGAffineTransformIdentity, views);
         if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled) {
+            WCLiquidGlassMessageSwipeTracking = NO;
             WCLiquidGlassMessageSwipeReset(view, YES);
         }
         return;
@@ -399,6 +420,7 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
     CGFloat threshold = WCLiquidGlassMessageSwipeThreshold(view);
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
+            WCLiquidGlassMessageSwipeTracking = YES;
             [WCLiquidGlassMessageSwipeFeedback(view) prepare];
             WCLiquidGlassSetMessageSwipeFeedbackTriggered(view, NO);
             break;
@@ -419,6 +441,7 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
         }
         case UIGestureRecognizerStateEnded:
         case UIGestureRecognizerStateCancelled:
+            WCLiquidGlassMessageSwipeTracking = NO;
             WCLiquidGlassMessageSwipeRecord([NSString stringWithFormat:@"end cell=%@ state=%ld translation=(%.0f,%.0f) velocity=(%.0f,%.0f) threshold=%.0f",
                                                                        NSStringFromClass(view.class),
                                                                        (long)gesture.state,
@@ -434,6 +457,7 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
             WCLiquidGlassMessageSwipeReset(view, YES);
             break;
         case UIGestureRecognizerStateFailed:
+            WCLiquidGlassMessageSwipeTracking = NO;
             WCLiquidGlassMessageSwipeReset(view, NO);
             break;
         default:
@@ -568,16 +592,6 @@ static void WCLiquidGlassMessageSwipeRecordClassIfNeeded(UIView *view) {
 static void WCLiquidGlassMessageSwipeSetup(UIView *view) {
     [WCLiquidGlassMessageSwipeCells addObject:view];
     UIPanGestureRecognizer *gesture = WCLiquidGlassMessageSwipeGesture(view);
-    UIView *outerCell = view.window ? WCLiquidGlassMessageSwipeOuterMessageCell(view) : nil;
-    if (outerCell) {
-        gesture.enabled = NO;
-        WCLiquidGlassMessageSwipeReset(view, NO);
-        WCLiquidGlassMessageSwipeRecordThrottled([@"nested." stringByAppendingString:NSStringFromClass(view.class)],
-                                                 [NSString stringWithFormat:@"skip nested cell=%@ outer=%@",
-                                                                            NSStringFromClass(view.class),
-                                                                            NSStringFromClass(outerCell.class)]);
-        return;
-    }
     if (!WCLiquidGlassPreferences.messageSwipeActionsEnabled) {
         gesture.enabled = NO;
         WCLiquidGlassMessageSwipeReset(view, NO);
