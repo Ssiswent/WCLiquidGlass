@@ -34,18 +34,6 @@ BOOL WCLiquidGlassCurrentChatInputHasText(void);
 BOOL WCLiquidGlassShouldReportManualTextEdit(void);
 void WCLiquidGlassRefreshDoutuConfiguration(void);
 void WCLiquidGlassUpdateDoutuButtonVisibility(id inputToolView);
-void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView);
-void WCLiquidGlassApplyPendingChatTableAnchor(UITableView *tableView);
-void WCLiquidGlassTraceChatToolbarForInput(id inputToolView, NSString *source);
-UIEdgeInsets WCLiquidGlassChatTableInsetForHost(UITableView *tableView,
-                                                 UIEdgeInsets inset,
-                                                 BOOL indicatorInset);
-void WCLiquidGlassTraceChatTableInsetMutation(UITableView *tableView,
-                                               NSString *source,
-                                               UIEdgeInsets requested,
-                                               UIEdgeInsets applied,
-                                               UIEdgeInsets beforeInset,
-                                               CGPoint beforeOffset);
 id _Nullable WCLiquidGlassCurrentTabController(void);
 extern NSString *const WCLiquidGlassManualTextEditNotification;
 

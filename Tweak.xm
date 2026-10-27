@@ -391,54 +391,11 @@ static void WCLiquidGlassTryRegisterPlugin(void) {
 - (void)layoutSubviews {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
-    WCLiquidGlassLayoutChatToolbarForInput(self);
 }
 
 - (void)updateToolViewHeight:(BOOL)animated {
     %orig;
     WCLiquidGlassUpdateDoutuButtonVisibility(self);
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-- (void)didMoveToWindow {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-- (void)didMoveToSuperview {
-    %orig;
-    WCLiquidGlassLayoutChatToolbarForInput(self);
-}
-
-%end
-
-%hook MMTableView
-
-- (void)setContentInset:(UIEdgeInsets)inset {
-    UITableView *table = (UITableView *)self;
-    UIEdgeInsets beforeInset = table.contentInset;
-    CGPoint beforeOffset = table.contentOffset;
-    UIEdgeInsets applied = WCLiquidGlassChatTableInsetForHost(table, inset, NO);
-    %orig(applied);
-    WCLiquidGlassTraceChatTableInsetMutation(table, @"setContentInset", inset, applied, beforeInset, beforeOffset);
-}
-
-- (void)setVerticalScrollIndicatorInsets:(UIEdgeInsets)insets {
-    UITableView *table = (UITableView *)self;
-    UIEdgeInsets beforeInset = table.verticalScrollIndicatorInsets;
-    CGPoint beforeOffset = table.contentOffset;
-    UIEdgeInsets applied = WCLiquidGlassChatTableInsetForHost(table, insets, YES);
-    %orig(applied);
-    WCLiquidGlassTraceChatTableInsetMutation(table, @"setVerticalScrollIndicatorInsets", insets, applied, beforeInset, beforeOffset);
-}
-
-- (void)setScrollIndicatorInsets:(UIEdgeInsets)insets {
-    UITableView *table = (UITableView *)self;
-    UIEdgeInsets beforeInset = table.verticalScrollIndicatorInsets;
-    CGPoint beforeOffset = table.contentOffset;
-    UIEdgeInsets applied = WCLiquidGlassChatTableInsetForHost(table, insets, YES);
-    %orig(applied);
-    WCLiquidGlassTraceChatTableInsetMutation(table, @"setScrollIndicatorInsets", insets, applied, beforeInset, beforeOffset);
 }
 
 %end

@@ -96,8 +96,6 @@ typedef NS_ENUM(NSInteger, WCLiquidGlassFloatingMenuStrategy) {
 + (void)setWCGlassLongPressMenuEnabled:(BOOL)enabled;
 + (WCLiquidGlassGlassAppearance)wcGlassLongPressMenuAppearance;
 + (void)setWCGlassLongPressMenuAppearance:(WCLiquidGlassGlassAppearance)appearance;
-+ (BOOL)chatToolbarEnabled;
-+ (void)setChatToolbarEnabled:(BOOL)enabled;
 + (BOOL)messageNotificationGlassEnabled;
 + (void)setMessageNotificationGlassEnabled:(BOOL)enabled;
 + (BOOL)unreadMessageTipGlassEnabled;

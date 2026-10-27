@@ -2,9 +2,10 @@
 
 ## [2.1.18] - 2026-10-27
 
-### 性能优化
+### 移除
 
-- 聊天工具栏关闭时，输入栏每次布局直接跳过，不再读取和校验按钮配置。
+- 移除“聊天输入工具栏”功能及全部相关代码：设置页开关、偏好项、`WCLiquidGlassChatToolbarView`、聊天表格底部 inset 叠加，以及 `MMTableView` 的 inset hook 和 `MMInputToolView` 的 `didMoveToWindow`/`didMoveToSuperview` hook。
+- 输入栏布局只保留斗图按钮显隐更新，打字和键盘弹起时不再执行工具栏相关逻辑。
 
 ## [2.1.17] - 2026-10-27
 

@@ -41,7 +41,6 @@ static NSString *const WCLiquidGlassMenuStylePresentationKey = @"WCLiquidGlass.M
 static NSString *const WCLiquidGlassMenuElementSizeKey = @"WCLiquidGlass.MenuElementSize";
 static NSString *const WCLiquidGlassFloatingMenuStrategyKey = @"WCLiquidGlass.FloatingMenuStrategy";
 static NSString *const WCLiquidGlassChatTimeGlassEnabledKey = @"WCLiquidGlass.ChatTimeGlassEnabled";
-static NSString *const WCLiquidGlassChatToolbarEnabledKey = @"WCLiquidGlass.ChatToolbarEnabled";
 static NSString *const WCLiquidGlassContactsIndexGlassEnabledKey = @"WCLiquidGlass.ContactsIndexGlassEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuEnabledKey = @"WCLiquidGlass.WCGlass.LongPressMenuEnabled";
 static NSString *const WCLiquidGlassWCGlassLongPressMenuAppearanceKey = @"WCLiquidGlass.WCGlass.LongPressMenu.Appearance";
@@ -98,7 +97,6 @@ static NSArray<NSString *> *WCLiquidGlassConfigurationKeys(void) {
             WCLiquidGlassMenuElementSizeKey,
             WCLiquidGlassFloatingMenuStrategyKey,
             WCLiquidGlassChatTimeGlassEnabledKey,
-            WCLiquidGlassChatToolbarEnabledKey,
             WCLiquidGlassContactsIndexGlassEnabledKey,
             WCLiquidGlassWCGlassLongPressMenuEnabledKey,
             WCLiquidGlassWCGlassLongPressMenuAppearanceKey,
@@ -400,7 +398,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
         WCLiquidGlassMenuElementSizeKey: @(WCLiquidGlassMenuElementSizeAutomatic),
         WCLiquidGlassFloatingMenuStrategyKey: @(WCLiquidGlassFloatingMenuStrategyPreflightSpring),
         WCLiquidGlassChatTimeGlassEnabledKey: @YES,
-        WCLiquidGlassChatToolbarEnabledKey: @YES,
         WCLiquidGlassContactsIndexGlassEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuEnabledKey: @YES,
         WCLiquidGlassWCGlassLongPressMenuAppearanceKey: storedGlassAppearance,
@@ -543,15 +540,6 @@ NSArray<NSString *> *WCLiquidGlassActionAssetNames(NSString *actionIdentifier) {
 
 + (void)setChatTimeGlassEnabled:(BOOL)enabled {
     [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatTimeGlassEnabledKey];
-    WCLiquidGlassNotifyPreferencesChanged();
-}
-
-+ (BOOL)chatToolbarEnabled {
-    return [NSUserDefaults.standardUserDefaults boolForKey:WCLiquidGlassChatToolbarEnabledKey];
-}
-
-+ (void)setChatToolbarEnabled:(BOOL)enabled {
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:WCLiquidGlassChatToolbarEnabledKey];
     WCLiquidGlassNotifyPreferencesChanged();
 }
 
