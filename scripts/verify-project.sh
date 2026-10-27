@@ -87,7 +87,7 @@ grep -Fq -- '- (void)layoutSubviews' Tweak.xm || fail "MMInputToolView layout ho
 grep -Fq -- '- (void)didMoveToWindow' Tweak.xm || fail "MMInputToolView window migration synchronization is missing"
 grep -Fq -- '- (void)didMoveToSuperview' Tweak.xm || fail "MMInputToolView reparent synchronization is missing"
 grep -Fq 'WCLiquidGlassChatToolbarEnabledKey' WCLiquidGlassPreferences.m || fail "chat toolbar preference definition is missing"
-grep -Fq 'BOOL inputAvailable = WCLiquidGlassPreferences.enabled &&' WCLiquidGlassMenu.m || fail "chat toolbar master preference gate is missing"
+grep -Fq 'if (!WCLiquidGlassPreferences.enabled || !WCLiquidGlassPreferences.chatToolbarEnabled) {' WCLiquidGlassMenu.m || fail "chat toolbar master preference gate is missing"
 grep -Fq 'WCLiquidGlassUpdateChatTableBottomInset' WCLiquidGlassMenu.m || fail "chat table bottom inset integration is missing"
 grep -Fq 'WCLiquidGlassChatTableInsetForHost' WCLiquidGlassMenu.h || fail "chat table host inset composition API is missing"
 grep -Fq '%hook MMTableView' Tweak.xm || fail "chat table inset hook is missing"

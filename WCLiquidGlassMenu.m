@@ -2689,6 +2689,13 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
     UIView *inputView = (UIView *)inputToolView;
     WCLiquidGlassChatToolbarView *toolbar = objc_getAssociatedObject(inputView,
                                                                       &WCLiquidGlassChatToolbarAssociationKey);
+    if (!WCLiquidGlassPreferences.enabled || !WCLiquidGlassPreferences.chatToolbarEnabled) {
+        if (toolbar) {
+            WCLiquidGlassHideChatToolbar(toolbar,
+                                         WCLiquidGlassChatToolbarShouldClearInset(toolbar));
+        }
+        return;
+    }
     NSArray<NSDictionary<NSString *, id> *> *buttonItems = toolbar
         ? nil
         : WCLiquidGlassPreferences.buttonItems;
@@ -2704,9 +2711,7 @@ void WCLiquidGlassLayoutChatToolbarForInput(id inputToolView) {
             }
         }
     }
-    BOOL inputAvailable = WCLiquidGlassPreferences.enabled &&
-        WCLiquidGlassPreferences.chatToolbarEnabled &&
-        (toolbar ? toolbar.buttons.count > 0 : hasButtonItems) &&
+    BOOL inputAvailable = (toolbar ? toolbar.buttons.count > 0 : hasButtonItems) &&
         inputView.window != nil && !inputView.hidden &&
         inputView.alpha > 0.01;
     if (!inputAvailable) {
