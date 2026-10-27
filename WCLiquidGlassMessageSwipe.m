@@ -468,7 +468,6 @@ static NSString *WCLiquidGlassMessageSwipeClassChain(Class cls) {
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
-    UIView *cell = gestureRecognizer.view;
     WCLiquidGlassMessageSwipeTouchStart = [touch locationInView:nil];
     return YES;
 }
