@@ -253,7 +253,14 @@ static void WCLiquidGlassRecordEvent(NSString *event) {
     }
     NSString *eventsPath = WCLiquidGlassRecentEventsPath;
     if (eventsPath.length > 0 && eventsText.length > 0) {
-        [eventsText writeToFile:eventsPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        static dispatch_queue_t writeQueue;
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            writeQueue = dispatch_queue_create("com.ssiswent.wcliquidglass.recent-events", DISPATCH_QUEUE_SERIAL);
+        });
+        dispatch_async(writeQueue, ^{
+            [eventsText writeToFile:eventsPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        });
     }
 }
 
