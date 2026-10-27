@@ -23,6 +23,8 @@ static NSHashTable<UIView *> *WCLiquidGlassMessageSwipeCells;
 static NSMutableArray<NSString *> *WCLiquidGlassMessageSwipePendingEvents;
 static BOOL WCLiquidGlassMessageSwipeFlushScheduled = NO;
 static BOOL WCLiquidGlassMessageSwipeTracking = NO;
+static CGPoint WCLiquidGlassMessageSwipeTouchStart;
+static CFTimeInterval WCLiquidGlassMessageSwipeTouchTime = 0.0;
 
 static void WCLiquidGlassMessageSwipeScheduleFlush(void) {
     if (WCLiquidGlassMessageSwipeFlushScheduled) {
@@ -406,8 +408,10 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
     }
 
     NSArray<UIView *> *views = WCLiquidGlassMessageSwipeRelatedViews(view);
-    CGPoint translation = [gesture translationInView:view];
-    CGPoint velocity = [gesture velocityInView:view];
+    CGPoint location = [gesture locationInView:nil];
+    CGPoint translation = CGPointMake(location.x - WCLiquidGlassMessageSwipeTouchStart.x,
+                                      location.y - WCLiquidGlassMessageSwipeTouchStart.y);
+    CGPoint velocity = [gesture velocityInView:nil];
     if (WCLiquidGlassMessageSwipeShouldIgnore(translation)) {
         WCLiquidGlassMessageSwipeApplyTransform(CGAffineTransformIdentity, views);
         if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled) {
@@ -421,6 +425,13 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
             WCLiquidGlassMessageSwipeTracking = YES;
+            WCLiquidGlassMessageSwipeRecord([NSString stringWithFormat:@"began cell=%@ delay=%.0fms translation=(%.0f,%.0f) panTranslation=(%.0f,%.0f)",
+                                                                       NSStringFromClass(view.class),
+                                                                       (CACurrentMediaTime() - WCLiquidGlassMessageSwipeTouchTime) * 1000.0,
+                                                                       translation.x,
+                                                                       translation.y,
+                                                                       [gesture translationInView:nil].x,
+                                                                       [gesture translationInView:nil].y]);
             [WCLiquidGlassMessageSwipeFeedback(view) prepare];
             WCLiquidGlassSetMessageSwipeFeedbackTriggered(view, NO);
             break;
@@ -522,6 +533,8 @@ static NSString *WCLiquidGlassMessageSwipeTouchSummary(UIView *cell, UIView *tou
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
     UIView *cell = gestureRecognizer.view;
+    WCLiquidGlassMessageSwipeTouchStart = [touch locationInView:nil];
+    WCLiquidGlassMessageSwipeTouchTime = CACurrentMediaTime();
     WCLiquidGlassMessageSwipeRecordThrottled([@"touch." stringByAppendingString:NSStringFromClass(cell.class)],
                                              [NSString stringWithFormat:@"touch cell=%@ chain=%@",
                                                                WCLiquidGlassMessageSwipeClassChain(cell.class),
@@ -551,7 +564,18 @@ static NSString *WCLiquidGlassMessageSwipeTouchSummary(UIView *cell, UIView *tou
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
     shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
-    return [otherGestureRecognizer isKindOfClass:UITapGestureRecognizer.class];
+    if ([otherGestureRecognizer isKindOfClass:UITapGestureRecognizer.class]) {
+        UITapGestureRecognizer *tap = (UITapGestureRecognizer *)otherGestureRecognizer;
+        WCLiquidGlassMessageSwipeRecordThrottled([NSString stringWithFormat:@"tap.%@.%@",
+                                                                            NSStringFromClass(gestureRecognizer.view.class),
+                                                                            NSStringFromClass(tap.view.class)],
+                                                 [NSString stringWithFormat:@"tap cell=%@ other=%@ taps=%lu otherView=%@",
+                                                                   NSStringFromClass(gestureRecognizer.view.class),
+                                                                   WCLiquidGlassMessageSwipeGestureSummary(tap),
+                                                                   (unsigned long)tap.numberOfTapsRequired,
+                                                                   NSStringFromClass(tap.view.class)]);
+    }
+    return NO;
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
