@@ -56,6 +56,17 @@ static void WCLiquidGlassSetMessageSwipeFeedbackTriggered(UIView *view, BOOL tri
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
+static UIView *WCLiquidGlassMessageSwipeOuterMessageCell(UIView *view) {
+    Class baseClass = NSClassFromString(@"CommonMessageCellView");
+    UIView *outerCell = nil;
+    for (UIView *current = view.superview; current && baseClass; current = current.superview) {
+        if ([current isKindOfClass:baseClass]) {
+            outerCell = current;
+        }
+    }
+    return outerCell;
+}
+
 static NSArray<UIView *> *WCLiquidGlassMessageSwipeRelatedViews(UIView *view) {
     return view ? @[view] : @[];
 }
@@ -394,6 +405,13 @@ static void WCLiquidGlassMessageSwipeHandle(id self, SEL selector, UIPanGestureR
         case UIGestureRecognizerStateChanged: {
             CGFloat distance = WCLiquidGlassMessageSwipeClampedTranslation(translation.x, threshold);
             WCLiquidGlassMessageSwipeApplyTransform(CGAffineTransformMakeTranslation(-distance, 0.0), views);
+            WCLiquidGlassMessageSwipeRecordThrottled([@"changed." stringByAppendingString:NSStringFromClass(view.class)],
+                                                     [NSString stringWithFormat:@"changed cell=%@ distance=%.0f tx=%.0f frame=%@ superview=%@",
+                                                                                NSStringFromClass(view.class),
+                                                                                distance,
+                                                                                view.transform.tx,
+                                                                                NSStringFromCGRect(view.frame),
+                                                                                NSStringFromClass(view.superview.class)]);
             if (!WCLiquidGlassMessageSwipeFeedbackTriggered(view) && translation.x <= -threshold) {
                 WCLiquidGlassMessageSwipeTriggerFeedback(view);
             }
@@ -550,6 +568,16 @@ static void WCLiquidGlassMessageSwipeRecordClassIfNeeded(UIView *view) {
 static void WCLiquidGlassMessageSwipeSetup(UIView *view) {
     [WCLiquidGlassMessageSwipeCells addObject:view];
     UIPanGestureRecognizer *gesture = WCLiquidGlassMessageSwipeGesture(view);
+    UIView *outerCell = view.window ? WCLiquidGlassMessageSwipeOuterMessageCell(view) : nil;
+    if (outerCell) {
+        gesture.enabled = NO;
+        WCLiquidGlassMessageSwipeReset(view, NO);
+        WCLiquidGlassMessageSwipeRecordThrottled([@"nested." stringByAppendingString:NSStringFromClass(view.class)],
+                                                 [NSString stringWithFormat:@"skip nested cell=%@ outer=%@",
+                                                                            NSStringFromClass(view.class),
+                                                                            NSStringFromClass(outerCell.class)]);
+        return;
+    }
     if (!WCLiquidGlassPreferences.messageSwipeActionsEnabled) {
         gesture.enabled = NO;
         WCLiquidGlassMessageSwipeReset(view, NO);
