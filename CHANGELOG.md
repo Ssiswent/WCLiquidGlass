@@ -1,5 +1,13 @@
 # 更新日志
 
+## [2.1.13] - 2026-10-27
+
+### 修复左滑引用/复读只在文字消息生效
+
+- 左滑手势改用插件独立的 `UIGestureRecognizerDelegate`，不再依赖 `CommonMessageCellView` 自身的手势代理方法，避免图片、视频、链接等子类重写这些方法后拦截插件手势。
+- 启动时扫描 `CommonMessageCellView` 的全部子类，对自行重写 `didMoveToWindow` 或 `gestureRecognizerShouldBegin:` 的子类单独 Hook，确保左滑手势能挂上且不会被子类直接拒绝；运行中遇到新的子类时按需补 Hook。
+- 新增左滑诊断记录（写入日志的最近事件）：挂载的 cell 类链、触摸点视图链上的其他手势、`shouldBegin` 的速度判断结果、竞争手势、结束时的位移和速度，以及触发时 `viewModel` / `messageWrap` 是否取到；同类记录 1.5 秒内只写一次。
+
 ## [2.1.12] - 2026-08-30
 
 ### 恢复通知圆角与液态
